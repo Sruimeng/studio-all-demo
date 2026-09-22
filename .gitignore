@@ -15,3 +15,4 @@ dist
 !vendor/**/
 !vendor/**/dist/
 !vendor/**/dist/**
+.env*.local
