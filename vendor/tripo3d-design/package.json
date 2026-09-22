@@ -1,0 +1,77 @@
+{
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "embla-carousel-autoplay": "^8.6.0",
+    "embla-carousel-vue": "^8.6.0",
+    "lodash-es": "^4.17.23",
+    "reka-ui": "^2.8.2",
+    "tailwind-merge": "^3.5.0",
+    "vaul-vue": "^0.4.1",
+    "vue-component-type-helpers": "^3.2.5",
+    "vue-sonner": "^2.0.9",
+    "@tripo3d/utils": "file:../tripo3d-utils-0.4.0"
+  },
+  "devDependencies": {
+    "@nuxt/kit": "^4.5.2",
+    "@nuxt/schema": "^4.5.2",
+    "@types/lodash-es": "^4.17.12",
+    "@unocss/core": "^66.6.2",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vueuse/core": "^14.2.1",
+    "sass-embedded": "^1.97.3",
+    "unocss": "^66.6.2",
+    "unplugin-dts": "^1.0.0",
+    "vite": "^8.2.1",
+    "vue": "^3.5.29",
+    "vue-tsc": "^3.2.5",
+    "vitest": "^4.1.10",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^17.6.2"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./config": {
+      "import": "./dist/config.js",
+      "types": "./dist/config.d.ts"
+    },
+    "./nuxt": {
+      "import": "./dist/nuxt.js",
+      "types": "./dist/nuxt.d.ts"
+    },
+    "./preset": {
+      "import": "./dist/preset.js",
+      "types": "./dist/preset.d.ts"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist",
+    "llmdoc"
+  ],
+  "name": "@tripo3d/design",
+  "peerDependencies": {
+    "@vueuse/core": ">= 13.9.0",
+    "unocss": ">= 66.5.1",
+    "vue": ">= 3.5.17"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tripo3d/design.git"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "version": "0.12.1",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "lint": "eslint . --fix",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  }
+}

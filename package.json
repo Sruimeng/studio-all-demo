@@ -17,9 +17,9 @@
   },
   "dependencies": {
     "@tresjs/core": "^5.8.1",
-    "@tripo3d/design": "0.12.1",
-    "@tripo3d/engine": "^0.2.12",
-    "@tripo3d/utils": "^0.4.0",
+    "@tripo3d/design": "file:vendor/tripo3d-design",
+    "@tripo3d/engine": "file:vendor/tripo3d-engine",
+    "@tripo3d/utils": "file:vendor/tripo3d-utils-0.4.0",
     "@vueuse/core": "^14.3.0",
     "fflate": "^0.8.3",
     "nuxt": "4.5.1",

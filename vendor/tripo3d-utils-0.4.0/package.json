@@ -1,0 +1,47 @@
+{
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1000.0",
+    "@aws-sdk/lib-storage": "^3.1000.0"
+  },
+  "devDependencies": {
+    "dayjs": "^1.11.19",
+    "tsdown": "^0.20.3"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./date": {
+      "import": "./dist/date/index.mjs",
+      "types": "./dist/date/index.d.mts"
+    },
+    "./resource": {
+      "import": "./dist/resource/index.mjs",
+      "types": "./dist/resource/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "name": "@tripo3d/utils",
+  "peerDependencies": {
+    "dayjs": ">= 1.11.18"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tripo3d/utils.git"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "version": "0.4.0",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "eslint . --fix",
+    "typecheck": "tsc --noEmit"
+  }
+}

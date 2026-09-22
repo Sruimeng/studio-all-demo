@@ -1,0 +1,51 @@
+{
+  "dependencies": {
+    "@tripo3d/utils": "file:../tripo3d-utils-0.2.9",
+    "@vueuse/core": "^14.2.1",
+    "three-viewport-gizmo": "^2.2.0"
+  },
+  "devDependencies": {
+    "@tresjs/core": "^5.5.0",
+    "@types/three": "^0.183.1",
+    "camera-controls": "^3.1.2",
+    "pinia": "^3.0.4",
+    "three": "^0.183.1",
+    "tsdown": "^0.20.3",
+    "unplugin-vue": "^7.1.1",
+    "vue": "^3.5.29",
+    "vue-tsc": "^3.2.5"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "name": "@tripo3d/engine",
+  "packageManager": "pnpm@10.5.2",
+  "peerDependencies": {
+    "@tresjs/core": ">=5.1.0",
+    "pinia": ">=3.0.0",
+    "three": ">=0.181.0",
+    "vue": ">=3.5.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tripo3d/engine.git"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "eslint . --fix",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "version": "0.2.12"
+}

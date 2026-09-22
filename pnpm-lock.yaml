@@ -12,14 +12,14 @@ importers:
         specifier: ^5.8.1
         version: 5.8.1(three@0.183.2)(vue@3.5.40(typescript@6.0.3))
       '@tripo3d/design':
-        specifier: 0.12.1
-        version: 0.12.1(9ffdc469bb334f10f36eebdd14121d22)
+        specifier: file:vendor/tripo3d-design
+        version: file:vendor/tripo3d-design(9ffdc469bb334f10f36eebdd14121d22)
       '@tripo3d/engine':
-        specifier: ^0.2.12
-        version: 0.2.12(@tresjs/core@5.8.1(three@0.183.2)(vue@3.5.40(typescript@6.0.3)))(dayjs@1.11.21)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.40(typescript@6.0.3)))(three@0.183.2)(vue@3.5.40(typescript@6.0.3))
+        specifier: file:vendor/tripo3d-engine
+        version: file:vendor/tripo3d-engine(@tresjs/core@5.8.1(three@0.183.2)(vue@3.5.40(typescript@6.0.3)))(dayjs@1.11.21)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.40(typescript@6.0.3)))(three@0.183.2)(vue@3.5.40(typescript@6.0.3))
       '@tripo3d/utils':
-        specifier: ^0.4.0
-        version: 0.4.0(dayjs@1.11.21)
+        specifier: file:vendor/tripo3d-utils-0.4.0
+        version: file:vendor/tripo3d-utils-0.4.0(dayjs@1.11.21)
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.40(typescript@6.0.3))
@@ -1931,28 +1931,28 @@ packages:
       three: '>=0.133'
       vue: '>=3.4'
 
-  '@tripo3d/design@0.12.1':
-    resolution: {integrity: sha512-KgpjrAlwGGepN3yLW+kxEUqaLUaR5CXEFjTKT+enA3Hy4JR3ZUSmrdhX3Dc9dGn8D/RJVoSbjWBWkIMElSEKxQ==, tarball: https://npm.pkg.github.com/download/@tripo3d/design/0.12.1/7590e7c359570d08b7829477250882ea25714cb4}
+  '@tripo3d/design@file:vendor/tripo3d-design':
+    resolution: {directory: vendor/tripo3d-design, type: directory}
     peerDependencies:
       '@vueuse/core': '>= 13.9.0'
       unocss: '>= 66.5.1'
       vue: '>= 3.5.17'
 
-  '@tripo3d/engine@0.2.12':
-    resolution: {integrity: sha512-inxwfFgq3lXLUphtHwaKRrbpcyd2BB93KbFIyHTHjnQ0E/Iz+U3UlAgrsJAEI7u+yEUbxEp6YfNhkX9GEnwoRw==, tarball: https://npm.pkg.github.com/download/@tripo3d/engine/0.2.12/ea07da4166c81885f906b561299cdb4766d0bf4d}
+  '@tripo3d/engine@file:vendor/tripo3d-engine':
+    resolution: {directory: vendor/tripo3d-engine, type: directory}
     peerDependencies:
       '@tresjs/core': '>=5.1.0'
       pinia: '>=3.0.0'
       three: '>=0.181.0'
       vue: '>=3.5.0'
 
-  '@tripo3d/utils@0.2.9':
-    resolution: {integrity: sha512-VkrEGTT1ir67q9dLYxQawZrc832JTovIosXAGO39HLwA70t0xzn8LZLnAr/HfjAPuEVrXJqq/ZQ+W3QYbQ2qOA==, tarball: https://npm.pkg.github.com/download/@tripo3d/utils/0.2.9/ec8ebd870e16a69e28b7ce8d664a4926cdc3bb93}
+  '@tripo3d/utils@file:vendor/tripo3d-utils-0.2.9':
+    resolution: {directory: vendor/tripo3d-utils-0.2.9, type: directory}
     peerDependencies:
       dayjs: '>= 1.11.18'
 
-  '@tripo3d/utils@0.4.0':
-    resolution: {integrity: sha512-NQEf126gTDKHXh9/CGUcFJvuluQpJphvTaYshMKYtgY9knBt6hhkbFhaB0AT4qYEXDBX9j73qOPpASLUYEcxyQ==, tarball: https://npm.pkg.github.com/download/@tripo3d/utils/0.4.0/75bb524092ffac4a464827d2796f1a94ee88391b}
+  '@tripo3d/utils@file:vendor/tripo3d-utils-0.4.0':
+    resolution: {directory: vendor/tripo3d-utils-0.4.0, type: directory}
     peerDependencies:
       dayjs: '>= 1.11.18'
 
@@ -7779,9 +7779,9 @@ snapshots:
       three: 0.183.2
       vue: 3.5.40(typescript@6.0.3)
 
-  '@tripo3d/design@0.12.1(9ffdc469bb334f10f36eebdd14121d22)':
+  '@tripo3d/design@file:vendor/tripo3d-design(9ffdc469bb334f10f36eebdd14121d22)':
     dependencies:
-      '@tripo3d/utils': 0.4.0(dayjs@1.11.21)
+      '@tripo3d/utils': file:vendor/tripo3d-utils-0.4.0(dayjs@1.11.21)
       '@vueuse/core': 14.3.0(vue@3.5.40(typescript@6.0.3))
       clsx: 2.1.1
       embla-carousel-autoplay: 8.6.0(embla-carousel@8.6.0)
@@ -7803,10 +7803,10 @@ snapshots:
       - embla-carousel
       - nuxt
 
-  '@tripo3d/engine@0.2.12(@tresjs/core@5.8.1(three@0.183.2)(vue@3.5.40(typescript@6.0.3)))(dayjs@1.11.21)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.40(typescript@6.0.3)))(three@0.183.2)(vue@3.5.40(typescript@6.0.3))':
+  '@tripo3d/engine@file:vendor/tripo3d-engine(@tresjs/core@5.8.1(three@0.183.2)(vue@3.5.40(typescript@6.0.3)))(dayjs@1.11.21)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.40(typescript@6.0.3)))(three@0.183.2)(vue@3.5.40(typescript@6.0.3))':
     dependencies:
       '@tresjs/core': 5.8.1(three@0.183.2)(vue@3.5.40(typescript@6.0.3))
-      '@tripo3d/utils': 0.2.9(dayjs@1.11.21)
+      '@tripo3d/utils': file:vendor/tripo3d-utils-0.2.9(dayjs@1.11.21)
       '@vueuse/core': 14.3.0(vue@3.5.40(typescript@6.0.3))
       pinia: 3.0.4(typescript@6.0.3)(vue@3.5.40(typescript@6.0.3))
       three: 0.183.2
@@ -7816,7 +7816,7 @@ snapshots:
       - aws-crt
       - dayjs
 
-  '@tripo3d/utils@0.2.9(dayjs@1.11.21)':
+  '@tripo3d/utils@file:vendor/tripo3d-utils-0.2.9(dayjs@1.11.21)':
     dependencies:
       '@aws-sdk/client-s3': 3.1045.0
       '@aws-sdk/lib-storage': 3.1045.0(@aws-sdk/client-s3@3.1045.0)
@@ -7824,7 +7824,7 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@tripo3d/utils@0.4.0(dayjs@1.11.21)':
+  '@tripo3d/utils@file:vendor/tripo3d-utils-0.4.0(dayjs@1.11.21)':
     dependencies:
       '@aws-sdk/client-s3': 3.1045.0
       '@aws-sdk/lib-storage': 3.1045.0(@aws-sdk/client-s3@3.1045.0)
