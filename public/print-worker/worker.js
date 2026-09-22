@@ -29,6 +29,8 @@ const PREC = { // 精细程度 1..6
   lambda: [0.014, 0.01, 0.007, 0.005, 0.003, 0.0015], // 邻域一致性权重（OKLab²）
 };
 const SIGMA2 = 0.07 * 0.07; // 保边平滑的颜色尺度
+// BaseColor maps can contain baked highlights; keep luminance secondary to hue/chroma.
+const COLOR_LIGHTNESS_WEIGHT = 0.25;
 
 async function decodeImage(blob, max) {
   const bmp = await createImageBitmap(blob);
@@ -232,8 +234,8 @@ function getLevels(wL, protect) {
 // ---------------- palette ----------------
 // m: {mode:'free'|'owned'|'plans', N, protect, cands:[{id,hex}], locked:[id], plans:[{key,cands:[{id,hex,penalty}]}]}
 function palette(m, reqId) {
-  const wL = m.shadeTol ? 0.5 : 1;
-  const kL = m.shadeTol ? 2 : 1;
+  const wL = COLOR_LIGHTNESS_WEIGHT;
+  const kL = COLOR_LIGHTNESS_WEIGHT;
   const levels = getLevels(wL, m.protect);
   const points = getBase(wL).base; // 细粒度点
   const K0 = points.length;
@@ -344,7 +346,7 @@ function labelHigh(m, reqId) {
   const regionMap = m.regionMap || slotHex.map((_, i) => i);
   const ns = m.slotCount || n;        // 耗材色槽数
   const nf = S.nf;
-  const wL = m.shadeTol ? 0.5 : 1, w2 = wL * wL;
+  const wL = COLOR_LIGHTNESS_WEIGHT, w2 = wL * wL;
   const p = Math.max(1, Math.min(6, precision)) - 1;
   const P = slotOk(slotHex);
   S.nSlots = n;
@@ -557,11 +559,11 @@ function lowpoly(m, reqId) {
   const nr = slotHex.length;
   const regionMap = m.regionMap || slotHex.map((_, i) => i);
   const n = m.slotCount || nr;
-  const lut = makeLut(slotHex, m.shadeTol ? 0.5 : 1);
+  const lut = makeLut(slotHex, COLOR_LIGHTNESS_WEIGHT);
   S.lut = lut; S.nSlots = n;
   const p = Math.max(1, Math.min(6, precision)) - 1;
   pr(0.62, "量化贴图");
-  const wL = m.shadeTol ? 0.5 : 1;
+  const wL = COLOR_LIGHTNESS_WEIGHT;
   const P = slotOk(slotHex);
   low.den = low.den || [];
   const maps = low.hasUv ? S.mapTex.map((t, i) => {

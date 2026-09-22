@@ -50,6 +50,23 @@ function model() {
 
 const options = { slotHex: ['#FF0000', '#0000FF'], precision: 6, scale: 80 };
 
+function baseColorModel() {
+  const colors = [20, 80, 140, 200, 240];
+  const positions = [];
+  const indices = [];
+  const vertexColors = [];
+  for (let face = 0; face < colors.length; face += 1) {
+    const vertex = face * 3;
+    positions.push(face, 0, 0, face + 0.8, 0, 0, face + 0.4, 0.7, 0);
+    indices.push(vertex, vertex + 1, vertex + 2);
+    vertexColors.push(...Array(3).fill([colors[face], colors[face], colors[face]]).flat());
+  }
+  return {
+    positions: new Float32Array(positions), indices: new Uint32Array(indices), faceMat: new Uint16Array(colors.length),
+    uvs: null, colors: new Float32Array(vertexColors), materials: [{ image: -1, factor: [1, 1, 1] }], images: [],
+  };
+}
+
 async function labeledRuntime() {
   const runtime = createRuntime();
   assert.equal((await runtime.request('init', model())).type, 'init');
@@ -86,6 +103,15 @@ test('paint, connected fill, undo and reset preserve the automatic regions', asy
   const filled = await request('fillHigh', { seed: 0, label: 1, tol: 0 });
   assert.deepEqual(Array.from(filled.faces), [0]);
   assert.deepEqual(Array.from((await request('reset')).label), [0, 1]);
+});
+
+test('segmentation is independent of the legacy lightness tolerance flag', async () => {
+  const { request } = createRuntime();
+  assert.equal((await request('init', baseColorModel())).type, 'init');
+  const palette = { slotHex: ['#2F7D57', '#217D0B', '#D8CEC3'], precision: 6, scale: 80 };
+  const baseColor = await request('label', { ...palette, shadeTol: false });
+  const legacyFlag = await request('label', { ...palette, shadeTol: true });
+  assert.deepEqual(Array.from(legacyFlag.label), Array.from(baseColor.label));
 });
 
 test('snapshot restores overrides and rejects a different mesh with the same face count', async () => {

@@ -27,7 +27,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const selected = computed(() => regions.value[selectedRegion.value]?.material ?? materials.value[0] ?? null);
   const surfaces = computed(() => regions.value.map(region => draft.value && region.index === selectedRegion.value ? draft.value : region.material));
   const scale = computed(() => settings.value.height / ((modelInfo.value?.bbox.maxY ?? 1) - (modelInfo.value?.bbox.minY ?? 0) || 1));
-  const labelOptions = () => ({ slotHex: regions.value.map(region => region.sourceHex), slotCount: regions.value.length, regionMap: regions.value.map((_, i) => i), precision: precision.value, scale: scale.value, shadeTol: true });
+  const labelOptions = () => ({ slotHex: regions.value.map(region => region.sourceHex), slotCount: regions.value.length, regionMap: regions.value.map((_, i) => i), precision: precision.value, scale: scale.value });
   const materialData = (items = materials.value) => ({ version: 1, colorSpace: 'srgb', renderRule: RENDER_RULE, materials: items, project: project.value ? { id: project.value.id, name: project.value.name, heightMM: settings.value.height, regions: regions.value } : null });
   function report(error: unknown) { failure.value = error instanceof Error ? error.message : String(error); }
   async function operation(action: () => Promise<void>) {
@@ -46,7 +46,7 @@ export const useWorkspace = defineStore('workspace', () => {
   async function segmentInternal() {
     if (!client) return;
     const started = performance.now(); advance();
-    const palette = await client.request('palette', { mode: 'free', N: colorCount.value, shadeTol: true, protect: true });
+    const palette = await client.request('palette', { mode: 'free', N: colorCount.value, protect: true });
     regions.value = palette.slots.map((slot, index) => {
       const previous = regions.value[index]?.material;
       const material = previous ?? { id: crypto.randomUUID(), materialId: `REG-${String(index + 1).padStart(2, '0')}`, name: `${t('Region', '区域')} ${index + 1}`, hex: slot.hex, transparency: 0, metalness: 0, roughness: 0.35, colorSpace: 'srgb', renderRule: RENDER_RULE } as MaterialRecord;
@@ -83,9 +83,9 @@ export const useWorkspace = defineStore('workspace', () => {
           if (!nextLow && !result.label) throw new Error('Project has no region labels');
           nextDisplay = nextLow ? { positions: nextLow.leaves, labels: nextLow.leafLab, faceMap: nextLow.leafFace } : { positions: mesh.positions, labels: result.label! };
         } else {
-          const palette = await candidate.request('palette', { mode: 'free', N: 4, shadeTol: true, protect: true });
+          const palette = await candidate.request('palette', { mode: 'free', N: 4, protect: true });
           nextRegions = palette.slots.map((slot, index) => ({ index, sourceHex: slot.hex, material: { id: crypto.randomUUID(), materialId: `REG-${String(index + 1).padStart(2, '0')}`, name: `${t('Region', '区域')} ${index + 1}`, hex: slot.hex, transparency: 0, metalness: 0, roughness: 0.35, colorSpace: 'srgb', renderRule: RENDER_RULE } }));
-          const result = await candidate.request('label', { slotHex: nextRegions.map(region => region.sourceHex), precision: 4, scale: 80 / (info.bbox.maxY - info.bbox.minY || 1), shadeTol: true });
+          const result = await candidate.request('label', { slotHex: nextRegions.map(region => region.sourceHex), precision: 4, scale: 80 / (info.bbox.maxY - info.bbox.minY || 1) });
           nextDisplay = { positions: mesh.positions, labels: result.label };
         }
         if (own !== generation) return;

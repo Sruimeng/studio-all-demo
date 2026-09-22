@@ -39,7 +39,6 @@ export interface PaletteOptions {
   mode: 'free' | 'owned';
   N: number;
   protect?: boolean;
-  shadeTol?: boolean;
   cands?: Array<{ id: string; hex: string; penalty?: number }>;
   locked?: string[];
 }
@@ -60,7 +59,6 @@ export interface LabelOptions {
   slotHex: string[];
   precision: number;
   scale: number;
-  shadeTol?: boolean;
   unifyParts?: boolean;
   regionMap?: number[];
   slotCount?: number;
