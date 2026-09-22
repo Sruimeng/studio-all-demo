@@ -1,0 +1,47 @@
+{
+  "name": "tripo-material-studio",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.3+sha512.c961d1e0a2d8e354ecaa5166b822516668b7f44cb5bd95122d590dd81922f606f5473b6d23ec4a5be05e7fcd18e8488d47d978bbe981872f1145d06e9a740017",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "nuxt dev --host 127.0.0.1 --port 3100",
+    "build": "nuxt generate",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint app scripts nuxt.config.ts uno.config.ts vitest.config.ts",
+    "test": "vitest run",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@tresjs/core": "^5.8.1",
+    "@tripo3d/design": "0.12.1",
+    "@tripo3d/engine": "^0.2.12",
+    "@tripo3d/utils": "^0.4.0",
+    "@vueuse/core": "^14.3.0",
+    "fflate": "^0.8.3",
+    "nuxt": "4.5.1",
+    "pinia": "^3.0.4",
+    "three": "^0.183.2",
+    "three-mesh-bvh": "^0.9.10",
+    "three-viewport-gizmo": "^2.2.0",
+    "vue": "^3.5.35",
+    "vue-router": "^5.1.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@pinia/nuxt": "^0.11.3",
+    "@types/three": "^0.183.1",
+    "@unocss/nuxt": "^66.7.0",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "eslint": "^9.39.4",
+    "eslint-plugin-vue": "^10.9.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
+    "unocss": "^66.7.0",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.3.3"
+  }
+}

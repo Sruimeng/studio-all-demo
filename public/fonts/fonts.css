@@ -1,0 +1,49 @@
+/* Noto Sans KR — self-hosted (latin + korean), weights 400/500/700. */
+/* noto-sans-kr-latin-400-normal */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(./noto-sans-kr-latin-400-normal.woff2) format('woff2'), url(./noto-sans-kr-latin-400-normal.woff) format('woff');
+}
+/* noto-sans-kr-latin-500-normal */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url(./noto-sans-kr-latin-500-normal.woff2) format('woff2'), url(./noto-sans-kr-latin-500-normal.woff) format('woff');
+}
+/* noto-sans-kr-latin-700-normal */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url(./noto-sans-kr-latin-700-normal.woff2) format('woff2'), url(./noto-sans-kr-latin-700-normal.woff) format('woff');
+}
+/* noto-sans-kr-korean-400-normal */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url(./noto-sans-kr-korean-400-normal.woff2) format('woff2'), url(./noto-sans-kr-korean-400-normal.woff) format('woff');
+}
+/* noto-sans-kr-korean-500-normal */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url(./noto-sans-kr-korean-500-normal.woff2) format('woff2'), url(./noto-sans-kr-korean-500-normal.woff) format('woff');
+}
+/* noto-sans-kr-korean-700-normal */
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url(./noto-sans-kr-korean-700-normal.woff2) format('woff2'), url(./noto-sans-kr-korean-700-normal.woff) format('woff');
+}
