@@ -9,3 +9,9 @@ artifacts
 
 dist
 .vercel
+
+# Vendored runtime packages are required by Vercel's clean install.
+!vendor/
+!vendor/**/
+!vendor/**/dist/
+!vendor/**/dist/**
