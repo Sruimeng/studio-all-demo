@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { readRecord, writeRecord, downloadFile } from '~/@base/storage';
 import { useLocale } from '~/@base/locale';
-import { importUSDAMaterials, type MaterialImportResult, initialMaterials, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
+import { importUSDAMaterials, type MaterialImportResult, withoutLegacySamples, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
 import { collectModelResources, disposeModelResources } from '~/@engine/model';
 import { loadLocalModel } from '~/@engine/import';
 import { toPrintMesh, uvHit } from '~/@engine/print-mesh';
@@ -19,7 +19,7 @@ const paletteOptions = (N: number): PaletteOptions => ({ mode: 'owned', N, prote
 
 export const useWorkspace = defineStore('workspace', () => {
   const { t } = useLocale();
-  const materials = ref<MaterialRecord[]>(initialMaterials.map(item => ({ ...item })));
+  const materials = ref<MaterialRecord[]>([]);
   const supplierEdits = ref<MaterialRecord[]>([]);
   const allMaterials = computed(() => [...materials.value, ...supplierMaterials.map(material => {
     const edit = supplierEdits.value.find(item => item.id === material.id);
@@ -292,13 +292,13 @@ export const useWorkspace = defineStore('workspace', () => {
       data.regions.forEach(validateRegion);
       const files = data.files.map((item: { name: string; path: string; type: string; entry: string }) => { if (typeof item.name !== 'string' || typeof item.path !== 'string' || !entries[item.entry]) throw new Error('Missing project asset'); const value = new File([entries[item.entry]! as Uint8Array<ArrayBuffer>], item.name, { type: item.type }); Object.defineProperty(value, 'webkitRelativePath', { value: item.path }); return value; });
       const restored: PrintProject = { ...data, files: files.map((file: File) => ({ name: file.name, path: file.webkitRelativePath, type: file.type, data: file })) };
-      const catalog = Array.isArray(data.materials) ? data.materials as MaterialRecord[] : [];
+      const catalog = withoutLegacySamples(Array.isArray(data.materials) ? data.materials as MaterialRecord[] : []);
       for (const material of catalog) { const error = validateMaterial(material, catalog); if (error) throw new Error(error); }
       const edits = Array.isArray(data.supplierEdits) ? data.supplierEdits as MaterialRecord[] : [];
       for (const material of edits) { const error = validateMaterial(material, edits); if (error || !material.supplier) throw new Error(error ?? 'Invalid supplier edit'); }
       await loadFiles(files, restored);
       if (!failure.value) saved.value = false;
-      if (!failure.value && catalog.length) { await writeRecord('materials', catalog); materials.value = catalog; saved.value = false; }
+      if (!failure.value && Array.isArray(data.materials)) { await writeRecord('materials', catalog); materials.value = catalog; saved.value = false; }
       if (!failure.value && data.version === 2) { await writeRecord('supplier-overrides', edits); supplierEdits.value = edits; }
     } catch (error) { report(error); }
   }
@@ -312,7 +312,12 @@ export const useWorkspace = defineStore('workspace', () => {
   async function initialize() {
     try {
       const stored = await readRecord<MaterialRecord[]>('materials');
-      if (stored) { for (const material of stored) { const error = validateMaterial(material, stored); if (error) throw new Error(error); } materials.value = stored; }
+      if (stored) {
+        for (const material of stored) { const error = validateMaterial(material, stored); if (error) throw new Error(error); }
+        const catalog = withoutLegacySamples(stored);
+        if (catalog.length !== stored.length) await writeRecord('materials', JSON.parse(JSON.stringify(catalog)));
+        materials.value = catalog;
+      }
       const edits = await readRecord<MaterialRecord[]>('supplier-overrides');
       if (edits) { for (const material of edits) { const error = validateMaterial(material, edits); if (error) throw new Error(error); } supplierEdits.value = edits; }
       projects.value = await readRecord('projects') ?? [];

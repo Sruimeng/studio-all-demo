@@ -1,5 +1,6 @@
+import { initialMaterials } from './fixtures/materials';
 import { describe, expect, it } from 'vitest';
-import { initialMaterials, validateMaterial, materialsCSV } from '../app/@feature/materials/catalog';
+import { validateMaterial, materialsCSV } from '../app/@feature/materials/catalog';
 import { MeshPhysicalMaterial } from 'three';
 import { applySurface } from '../app/@engine/viewer/material';
 describe('material data contract', () => {

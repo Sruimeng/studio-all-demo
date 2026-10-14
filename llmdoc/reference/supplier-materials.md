@@ -48,6 +48,8 @@ type: reference
 
 IndexedDB 的 `materials` 保存本地材质，`supplier-overrides` 保存供应商调整。取消清草稿；恢复参数后仍需显式保存。
 
+本地库默认空。初始化与 ZIP 恢复移除旧六个内置样例，仅匹配原内部 ID 与 PLA-001–006；用户创建与 USDA 导入记录保留，区域和项目中的材质快照不改写。
+
 `useWorkspace.deleteMaterial(id)` 仅删除本地库记录，持久化成功后更新库与导出勾选。保存失败保持原状态；区域、验证材质和已存项目持有独立快照，删除不改变其外观或标签。供应商档案不可删除；MaterialPanel 的本地卡片提供垃圾桶和确认/取消。
 
 项目 v2 保存 ViewerSettings、验证材质、区域快照；v1 缺省恢复为区域应用及 Studio 环境。ZIP 加入模型、本地库、供应商覆盖；恢复 v2 替换两类库。

@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
+import { initialMaterials } from './fixtures/materials';
 import { Group } from 'three';
 import { unzipSync, strFromU8, zipSync, strToU8 } from 'fflate';
 
@@ -30,6 +31,11 @@ vi.mock('~/@engine/multicolor', () => ({ MulticolorClient: class {
   }
 } }));
 const { useWorkspace } = await import('../app/@feature/workspace/use-workspace');
+const workspaceWithMaterials = () => {
+  const store = useWorkspace();
+  store.materials = structuredClone(initialMaterials);
+  return store;
+};
 
 beforeEach(() => {
   setActivePinia(createPinia()); mocks.records.clear(); mocks.clients.length = 0;
@@ -44,14 +50,14 @@ const supplier = async (sku = 'CA19017') => {
 };
 
 it('failed replacement keeps the active model and worker usable', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); const id = store.project!.id;
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); const id = store.project!.id;
   mocks.load.mockRejectedValueOnce(new Error('Invalid GLB'));
   await store.loadFiles(files()); expect(store.failure).toBe('Invalid GLB');
   expect(store.project!.id).toBe(id); expect(mocks.clients[0]!.disposed).toBe(false);
   await store.save(); expect(mocks.records.get('active-project')).toBe(id);
 });
 it('loads and regenerates regions with supplier SKU matches and keeps source colors for labels', async () => {
-  const store = useWorkspace(); await store.loadFiles(files());
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
   const palette = mocks.request.mock.calls.find(([type]) => type === 'palette');
   expect(palette?.[1]).toMatchObject({ mode: 'owned', N: 4, protect: true });
   const candidates = (palette?.[1] as { cands: Array<{ id: string; hex: string }> }).cands;
@@ -70,7 +76,7 @@ it('loads and regenerates regions with supplier SKU matches and keeps source col
   expect(store.regions[0]!.match).toBeDefined();
 });
 it('canonical candidates ignore local colors, supplier copies and preview overrides', async () => {
-  const store = useWorkspace(); await store.loadFiles(files());
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
   const material = await supplier('CA19001'); const hex = material.supplier!.catalogHex!;
   store.materials.push({ ...material, id: 'local-supplier-copy', materialId: 'COPY' });
   material.hex = '#123456'; material.roughness = 0.2;
@@ -84,7 +90,7 @@ it('canonical candidates ignore local colors, supplier copies and preview overri
   expect(store.regions[0]!.material.roughness).toBe(0.2);
 });
 it('failed material writes leave saved catalog and bindings intact', async () => {
-  const store = useWorkspace(); await store.loadFiles(files());
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
   const original = store.regions[0]!.material;
   mocks.write.mockRejectedValueOnce(new Error('Quota exceeded'));
   expect(await store.saveMaterial({ ...store.materials[0]!, roughness: 0.9 })).toBe(false);
@@ -93,7 +99,7 @@ it('failed material writes leave saved catalog and bindings intact', async () =>
   expect(store.failure).toBe('Quota exceeded');
 });
 it('binding and shared material updates preserve region labels and distinct same-color IDs', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); const labels = store.display!.labels;
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); const labels = store.display!.labels;
   const a = { ...store.materials[0]!, id: 'a', materialId: 'A' };
   const b = { ...a, id: 'b', materialId: 'B', metalness: 1 };
   await store.saveMaterial(a); store.selectedRegion = 1; await store.saveMaterial(b);
@@ -104,7 +110,7 @@ it('binding and shared material updates preserve region labels and distinct same
   expect(store.display!.labels).toBe(labels);
 });
 it('save and reopen restore the edited settings and active project', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); store.setHeight(123); await store.save();
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.setHeight(123); await store.save();
   const id = store.project!.id;
   const matches = structuredClone((mocks.records.get(`project:${id}`) as { regions: unknown }).regions);
   await store.loadFiles(files()); expect(mocks.clients[0]!.disposed).toBe(true);
@@ -116,7 +122,7 @@ it('save and reopen restore the edited settings and active project', async () =>
   store.setHeight(900); expect(store.settings.height).toBe(320);
 });
 it('ZIP export and restore retain canonical match evidence and manual assignments', async () => {
-  const store = useWorkspace(); await store.loadFiles(files());
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
   store.selectedRegion = 1; store.apply(store.materials[0]!);
   const expected = JSON.parse(JSON.stringify(store.regions));
   await store.backup();
@@ -130,7 +136,7 @@ it('ZIP export and restore retain canonical match evidence and manual assignment
   expect(store.regions[1]!.match).toBeUndefined();
 });
 it('backup roundtrip restores model, catalog and bindings; malformed archives leave project intact', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); await store.save();
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.save();
   const data = mocks.records.get(`project:${store.project!.id}`) as Record<string, unknown>;
   const catalog = [{ ...store.materials[0]!, id: 'backup-material', materialId: 'BACKUP' }];
   const archive = zipSync({ 'project.json': strToU8(JSON.stringify({ ...data, materials: catalog, files: [{ name: 'test.glb', path: 'test.glb', type: '', entry: 'assets/0' }] })), 'assets/0': strToU8('model') });
@@ -142,12 +148,12 @@ it('backup roundtrip restores model, catalog and bindings; malformed archives le
 });
 
 it('3MF dispatch clones the reactive material catalog and bindings for Worker transfer', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); store.apply(store.materials[0]!);
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.apply(store.materials[0]!);
   await store.export3mf(); expect(store.failure).toBe(''); expect(mocks.download).toHaveBeenCalled();
 });
 
 it('validation and region assignment change appearance without requesting new labels', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); const labels = store.display!.labels;
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); const labels = store.display!.labels;
   mocks.request.mockClear();
   store.setWorkflow('validation'); store.apply(await supplier());
   expect(store.selected!.materialId).toBe('CA19017'); expect(store.settings.layers).toBe(false);
@@ -159,7 +165,7 @@ it('validation and region assignment change appearance without requesting new la
 });
 
 it('supplier overrides use separate storage and survive project save and reopen', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); store.setWorkflow('validation');
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.setWorkflow('validation');
   const material = await supplier(); material.roughness = 0.12;
   expect(await store.saveMaterial(material)).toBe(true);
   expect(mocks.records.has('supplier-overrides')).toBe(true); expect(mocks.records.has('materials')).toBe(false);
@@ -172,7 +178,7 @@ it('supplier overrides use separate storage and survive project save and reopen'
 });
 
 it('legacy projects reopen under Studio rules and invalid new settings leave the active project intact', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); await store.save();
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.save();
   const id = store.project!.id;
   const data = mocks.records.get(`project:${id}`) as Record<string, unknown>;
   data.version = 1; delete data.viewerSettings; delete data.validationMaterial;
@@ -184,7 +190,7 @@ it('legacy projects reopen under Studio rules and invalid new settings leave the
 });
 
 it('failed supplier writes leave both the local override and current assignment unchanged', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); const material = await supplier(); store.apply(material);
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); const material = await supplier(); store.apply(material);
   mocks.write.mockRejectedValueOnce(new Error('Quota exceeded')); material.roughness = 0.1;
   expect(await store.saveMaterial(material)).toBe(false);
   expect(store.selected!.roughness).toBe(0.45);
@@ -192,7 +198,7 @@ it('failed supplier writes leave both the local override and current assignment 
 });
 
 it('exports actual supplier material type, brand and revision and blocks unmatched SKU assignment', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); const material = await supplier();
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); const material = await supplier();
   material.supplier!.materialType = 'PETG'; store.apply(material);
   await store.export3mf();
   const call = mocks.request.mock.calls.find(([type]) => type === 'export3mf')!;
@@ -203,7 +209,7 @@ it('exports actual supplier material type, brand and revision and blocks unmatch
 
 const materialFile = async () => new File([`#usda 1.0\n${(await supplier()).supplier!.source.materialUSDA}`], 'sample.usda');
 it('imports a mixed batch locally, avoids duplicate IDs and leaves assignments and candidates intact', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); const labels = store.display!.labels;
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); const labels = store.display!.labels;
   const regions = JSON.stringify(store.regions); mocks.request.mockClear();
   const result = await store.importMaterials([await materialFile(), new File(['bad'], 'bad.usda'), await materialFile()]);
   expect(result.imported).toBe(2); expect(result.errors).toHaveLength(1);
@@ -216,14 +222,14 @@ it('imports a mixed batch locally, avoids duplicate IDs and leaves assignments a
   expect(mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands).toHaveLength(26);
 });
 it('keeps the library and assignments intact if importing cannot be persisted', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); const before = JSON.stringify(store.materials);
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); const before = JSON.stringify(store.materials);
   const regions = JSON.stringify(store.regions); mocks.write.mockRejectedValueOnce(new Error('Quota exceeded'));
   const result = await store.importMaterials([await materialFile()]);
   expect(result).toEqual({ imported: 0, errors: ['Quota exceeded'] });
   expect(JSON.stringify(store.materials)).toBe(before); expect(JSON.stringify(store.regions)).toBe(regions);
 });
 it('retains imported source data across editing, project reopening and ZIP restoration', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); await store.importMaterials([await materialFile()]);
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.importMaterials([await materialFile()]);
   const material = store.materials.at(-1)!; const source = JSON.stringify(material.supplier!.source);
   const edited = { ...material, roughness: 0.2 }; expect(await store.saveMaterial(edited)).toBe(true);
   expect(mocks.records.has('supplier-overrides')).toBe(false);
@@ -238,7 +244,7 @@ it('retains imported source data across editing, project reopening and ZIP resto
 });
 
 it('deletes local records persistently while retaining applied snapshots and cleaning export selection', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); await store.importMaterials([await materialFile()]);
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.importMaterials([await materialFile()]);
   const material = store.materials.at(-1)!; store.apply(material); store.checked = [material.id, 'porcelain'];
   const before = JSON.stringify(store.regions); const labels = store.display!.labels; mocks.request.mockClear();
   expect(await store.deleteMaterial(material.id)).toBe(true);
@@ -252,11 +258,40 @@ it('deletes local records persistently while retaining applied snapshots and cle
   expect(store.allMaterials.some(item => item.materialId === 'CA19017')).toBe(true);
 });
 it('a failed deletion preserves the local library, selection and validation appearance', async () => {
-  const store = useWorkspace(); await store.loadFiles(files()); store.setWorkflow('validation');
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.setWorkflow('validation');
   const material = store.materials[0]!; store.apply(material); store.checked = [material.id];
   const before = JSON.stringify(store.materials); mocks.write.mockRejectedValueOnce(new Error('Storage failed'));
   expect(await store.deleteMaterial(material.id)).toBe(false);
   expect(JSON.stringify(store.materials)).toBe(before); expect(store.checked).toEqual([material.id]);
   expect(store.selected!.id).toBe(material.id); expect(store.failure).toBe('Storage failed');
   expect(await store.deleteMaterial(material.id)).toBe(true); expect(store.selected!.id).toBe(material.id);
+});
+
+
+it('starts with an empty local library and keeps supplier SKU matching available', async () => {
+  const store = useWorkspace();
+  expect(store.materials).toEqual([]); expect(store.allMaterials).toHaveLength(28);
+  await store.loadFiles(files()); await store.save(); await store.initialize();
+  expect(store.failure).toBe(''); expect(store.materials).toEqual([]);
+  expect(store.regions.every(region => region.material.supplier?.vendor === 'Polymaker')).toBe(true);
+});
+it('removes legacy samples from persisted libraries without deleting user materials or applied snapshots', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.apply(store.materials[0]!); await store.save();
+  const custom = { ...initialMaterials[0]!, id: 'user-porcelain', materialId: 'USER-PLA' };
+  await store.importMaterials([await materialFile()]);
+  const imported = structuredClone((mocks.records.get('materials') as typeof store.materials).at(-1)!);
+  mocks.records.set('materials', [...structuredClone(initialMaterials), custom, imported]);
+  await store.initialize();
+  expect(store.failure).toBe(''); expect(store.materials.map(item => item.id)).toEqual([custom.id, imported.id]);
+  expect(mocks.records.get('materials')).toEqual([custom, imported]);
+  expect(store.selected!.id).toBe('porcelain');
+  await store.initialize(); expect(store.materials).toHaveLength(2);
+});
+it('restores old backups without repopulating the local library with samples', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.apply(store.materials[0]!);
+  await store.backup(); const blob = mocks.download.mock.calls.at(-1)![0] as Blob;
+  await store.restoreBackup(new File([blob], 'legacy.tripo.zip'));
+  expect(store.failure).toBe(''); expect(store.materials).toEqual([]);
+  expect(mocks.records.get('materials')).toEqual([]); expect(store.selected!.id).toBe('porcelain');
 });
