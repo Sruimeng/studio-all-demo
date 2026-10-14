@@ -11,7 +11,8 @@ export interface SupplierProfile {
   catalogHex: string | null;
   pantone: string | null;
   d65Lab: [number, number, number] | null;
-  status: 'paired' | 'color-only' | 'unmatched';
+  status: 'paired' | 'color-only' | 'unmatched' | 'imported';
+  origin?: 'local-usda';
   issues: string[];
   source: {
     spreadsheet: string;
@@ -25,6 +26,7 @@ export interface SupplierProfile {
   };
 }
 export interface SupplierCatalog { version: 1; vendor: string; records: SupplierProfile[] }
+export interface MaterialImportResult { imported: number; errors: string[] }
 export interface MaterialOverrides {
   hex?: string;
   transparency?: number;

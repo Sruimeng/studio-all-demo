@@ -34,6 +34,5 @@ const colorName = (region: RegionAssignment) => region.material.supplier
 </template>
 
 <style scoped>
-.region-slot { flex-basis: 158px; width: 158px; }
 .region-name { display: block; overflow: hidden; margin: 0 4px 4px; color: #aaaeb4; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 </style>

@@ -29,7 +29,7 @@ export function validateMaterial(material: MaterialRecord, catalog: MaterialReco
   }
   if (material.supplier) {
     const supplier = material.supplier;
-    if (!supplier || typeof supplier.sku !== 'string' || typeof supplier.vendor !== 'string' || !['paired', 'color-only', 'unmatched'].includes(supplier.status) || !Array.isArray(supplier.issues) || !supplier.issues.every(issue => typeof issue === 'string') || !supplier.source || typeof supplier.source.parameters !== 'object' || !supplier.source.parameters) return 'Invalid supplier profile';
+    if (!supplier || typeof supplier.sku !== 'string' || typeof supplier.vendor !== 'string' || !['paired', 'color-only', 'unmatched', 'imported'].includes(supplier.status) || !Array.isArray(supplier.issues) || !supplier.issues.every(issue => typeof issue === 'string') || !supplier.source || typeof supplier.source.parameters !== 'object' || !supplier.source.parameters) return 'Invalid supplier profile';
     const color = supplier.source.parameters.base_color;
     if (supplier.source.file && (!Array.isArray(color) || color.length !== 3 || !color.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0))) return 'Invalid source base color';
   }
@@ -47,7 +47,7 @@ export function materialsCSV(materials: MaterialRecord[]): string {
   const rows: unknown[][] = [['material_id', 'name', 'hex', 'r', 'g', 'b', 'transparency', 'metalness', 'roughness', 'color_space', 'render_rule', 'vendor', 'material_type', 'catalog_hex', 'pantone', 'd65_l', 'd65_a', 'd65_b', 'ior', 'color_interpretation', 'source_file', 'source_sha256', 'issues', 'status']];
   for (const item of materials) {
     const hex = item.supplier?.status === 'unmatched' ? '' : materialHex(item);
-    rows.push([item.materialId, item.name, hex, ...(hex ? rgb(hex) : ['', '', '']), item.transparency, item.metalness, item.roughness, item.colorSpace, item.renderRule, item.supplier?.vendor ?? '', item.supplier?.materialType ?? '', item.supplier?.catalogHex ?? '', item.supplier?.pantone ?? '', ...(item.supplier?.d65Lab ?? ['', '', '']), item.ior ?? '', item.overrides?.colorMode ?? 'catalog', item.supplier?.source.file ?? '', item.supplier?.source.sha256 ?? '', item.supplier?.issues.join('; ') ?? '', item.supplier?.status ?? 'local']);
+    rows.push([item.materialId, item.name, hex, ...(hex ? rgb(hex) : ['', '', '']), item.transparency, item.metalness, item.roughness, item.colorSpace, item.renderRule, item.supplier?.vendor ?? '', item.supplier?.materialType ?? '', item.supplier?.catalogHex ?? '', item.supplier?.pantone ?? '', ...(item.supplier?.d65Lab ?? ['', '', '']), item.ior ?? '', item.overrides?.colorMode ?? (item.supplier?.origin === 'local-usda' ? 'linear-srgb' : 'catalog'), item.supplier?.source.file ?? '', item.supplier?.source.sha256 ?? '', item.supplier?.issues.join('; ') ?? '', item.supplier?.status ?? 'local']);
   }
   return '\uFEFF' + rows.map(row => row.map(escape).join(',')).join('\r\n');
 }

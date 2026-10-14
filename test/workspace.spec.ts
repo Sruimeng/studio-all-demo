@@ -6,7 +6,7 @@ import { unzipSync, strFromU8, zipSync, strToU8 } from 'fflate';
 const mocks = vi.hoisted(() => ({ records: new Map<string, unknown>(), write: vi.fn(), download: vi.fn(), load: vi.fn(), request: vi.fn(), clients: [] as Array<{ disposed: boolean }> }));
 vi.mock('~/@base/storage', () => ({ readRecord: async (key: string) => mocks.records.get(key), writeRecord: mocks.write, downloadFile: mocks.download }));
 vi.mock('~/@base/locale', () => ({ useLocale: () => ({ t: (en: string) => en }) }));
-vi.mock('~/@feature/materials', async () => ({ ...await import('../app/@feature/materials/catalog'), ...await import('../app/@feature/materials/types'), ...await import('../app/@feature/materials/supplier') }));
+vi.mock('~/@feature/materials', async () => ({ ...await import('../app/@feature/materials/catalog'), ...await import('../app/@feature/materials/types'), ...await import('../app/@feature/materials/supplier'), ...await import('../app/@feature/materials/usda') }));
 vi.mock('~/@engine/import', () => ({ loadLocalModel: mocks.load }));
 vi.mock('~/@engine/model', () => ({ collectModelResources: () => ({}), disposeModelResources: vi.fn() }));
 vi.mock('~/@engine/print-mesh', () => ({ toPrintMesh: async () => ({ positions: new Float32Array(9) }), uvHit: vi.fn() }));
@@ -199,4 +199,64 @@ it('exports actual supplier material type, brand and revision and blocks unmatch
   expect(call[1].filaments[0]).toMatchObject({ id: 'CA19017', type: 'PETG', vendor: 'Polymaker', materialVersion: material.supplier!.source.sha256 });
   store.apply(await supplier('CA19010')); expect(store.failure).toContain('未对应');
   expect(store.selected!.materialId).toBe('CA19017');
+});
+
+const materialFile = async () => new File([`#usda 1.0\n${(await supplier()).supplier!.source.materialUSDA}`], 'sample.usda');
+it('imports a mixed batch locally, avoids duplicate IDs and leaves assignments and candidates intact', async () => {
+  const store = useWorkspace(); await store.loadFiles(files()); const labels = store.display!.labels;
+  const regions = JSON.stringify(store.regions); mocks.request.mockClear();
+  const result = await store.importMaterials([await materialFile(), new File(['bad'], 'bad.usda'), await materialFile()]);
+  expect(result.imported).toBe(2); expect(result.errors).toHaveLength(1);
+  const imported = store.materials.filter(item => item.supplier?.origin === 'local-usda');
+  expect(imported.map(item => item.materialId)).toEqual(['CA19017-IMPORT-1', 'CA19017-IMPORT-2']);
+  expect(imported[0]!.id).not.toBe(imported[1]!.id);
+  expect(JSON.stringify(store.regions)).toBe(regions); expect(store.display!.labels).toBe(labels);
+  expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.records.has('supplier-overrides')).toBe(false);
+  await store.segment();
+  expect(mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands).toHaveLength(26);
+});
+it('keeps the library and assignments intact if importing cannot be persisted', async () => {
+  const store = useWorkspace(); await store.loadFiles(files()); const before = JSON.stringify(store.materials);
+  const regions = JSON.stringify(store.regions); mocks.write.mockRejectedValueOnce(new Error('Quota exceeded'));
+  const result = await store.importMaterials([await materialFile()]);
+  expect(result).toEqual({ imported: 0, errors: ['Quota exceeded'] });
+  expect(JSON.stringify(store.materials)).toBe(before); expect(JSON.stringify(store.regions)).toBe(regions);
+});
+it('retains imported source data across editing, project reopening and ZIP restoration', async () => {
+  const store = useWorkspace(); await store.loadFiles(files()); await store.importMaterials([await materialFile()]);
+  const material = store.materials.at(-1)!; const source = JSON.stringify(material.supplier!.source);
+  const edited = { ...material, roughness: 0.2 }; expect(await store.saveMaterial(edited)).toBe(true);
+  expect(mocks.records.has('supplier-overrides')).toBe(false);
+  expect((mocks.records.get('materials') as typeof store.materials).at(-1)!.roughness).toBe(0.2);
+  await store.save(); const id = store.project!.id; await store.openProject(id);
+  expect(store.selected!.id).toBe(material.id); expect(store.selected!.roughness).toBe(0.2);
+  expect(JSON.stringify(store.selected!.supplier!.source)).toBe(source);
+  await store.backup(); const blob = mocks.download.mock.calls.at(-1)![0] as Blob;
+  store.materials = []; await store.restoreBackup(new File([blob], 'import.tripo.zip'));
+  expect(store.failure).toBe(''); expect(store.materials.at(-1)!.id).toBe(material.id);
+  expect(JSON.stringify(store.materials.at(-1)!.supplier!.source)).toBe(source);
+});
+
+it('deletes local records persistently while retaining applied snapshots and cleaning export selection', async () => {
+  const store = useWorkspace(); await store.loadFiles(files()); await store.importMaterials([await materialFile()]);
+  const material = store.materials.at(-1)!; store.apply(material); store.checked = [material.id, 'porcelain'];
+  const before = JSON.stringify(store.regions); const labels = store.display!.labels; mocks.request.mockClear();
+  expect(await store.deleteMaterial(material.id)).toBe(true);
+  expect(store.materials.some(item => item.id === material.id)).toBe(false);
+  expect((mocks.records.get('materials') as typeof store.materials).some(item => item.id === material.id)).toBe(false);
+  expect(store.checked).toEqual(['porcelain']); expect(JSON.stringify(store.regions)).toBe(before);
+  expect(store.display!.labels).toBe(labels); expect(mocks.request).not.toHaveBeenCalled();
+  await store.save(); await store.openProject(store.project!.id); expect(store.selected!.id).toBe(material.id);
+  expect(await store.deleteMaterial('porcelain')).toBe(true);
+  expect(await store.deleteMaterial((await supplier()).id)).toBe(false);
+  expect(store.allMaterials.some(item => item.materialId === 'CA19017')).toBe(true);
+});
+it('a failed deletion preserves the local library, selection and validation appearance', async () => {
+  const store = useWorkspace(); await store.loadFiles(files()); store.setWorkflow('validation');
+  const material = store.materials[0]!; store.apply(material); store.checked = [material.id];
+  const before = JSON.stringify(store.materials); mocks.write.mockRejectedValueOnce(new Error('Storage failed'));
+  expect(await store.deleteMaterial(material.id)).toBe(false);
+  expect(JSON.stringify(store.materials)).toBe(before); expect(store.checked).toEqual([material.id]);
+  expect(store.selected!.id).toBe(material.id); expect(store.failure).toBe('Storage failed');
+  expect(await store.deleteMaterial(material.id)).toBe(true); expect(store.selected!.id).toBe(material.id);
 });

@@ -22,6 +22,14 @@ type: reference
 
 源问题不修正：CA19006 Black 的 L=95.46；CA19027 Cold White 的 L=33.34；CA19024 Azure Blue 的中文名为绿色；CA19009 颜色 R=1.0947。自动匹配使用表格 HEX 推导的 sRGB/D65 Lab；测量 Lab 仍待复核。
 
+## 本地 USDA 导入
+
+`importUSDAMaterials(File)`：UTF-8 USDA → 绑定 OpenPBR 常量节点 → `MaterialRecord`。单文件上限 20 MB、1–100 个 Material；忽略几何。导入档案 `origin=local-usda`、`status=imported`，保留文件名、SHA256、源参数与材质文本；不从文件名推断厂家、SKU 类型或色卡。默认假设 linear-srgb，可改为 srgb 或导入时预览 HEX。
+
+`MaterialImport` 提供多文件入口与逐文件反馈；`useWorkspace.importMaterials` 解析、展示 ID 去重、写入 IndexedDB 后更新本地库。文件解析失败不影响其他文件；持久化失败不更新库和绑定。内部 ID 独立，同名展示 ID 添加 `-IMPORT-N`。导入和参数编辑不重算标签，不增加自动分色候选。
+
+复用现有 OpenPBR 子集检查，拒绝外部资源、组合、未知输入、有效连接与未支持的 lobe；本批无各向异性时忽略 geometry_tangent 连接。编辑、恢复源参数、项目/ZIP 保留导入身份与原值。
+
 ## 分色匹配
 
 新模型加载与“生成分色”使用 `palette` 的 `owned` 模式。26 个候选取自内置供应商档案，须通过六位 HEX 与可应用检查；本地副本、预览调整及未对应 SKU 不参与选色。Worker 接收稳定内部 ID 与 canonical HEX，用标准 CIEDE2000（kL=1）优化面积加权近似，返回模型代表色、采样面积比例和平均色差。Feature 解析 ID 并绑定含本地覆盖的材质快照。
@@ -39,6 +47,8 @@ type: reference
 ## 保存与导出
 
 IndexedDB 的 `materials` 保存本地材质，`supplier-overrides` 保存供应商调整。取消清草稿；恢复参数后仍需显式保存。
+
+`useWorkspace.deleteMaterial(id)` 仅删除本地库记录，持久化成功后更新库与导出勾选。保存失败保持原状态；区域、验证材质和已存项目持有独立快照，删除不改变其外观或标签。供应商档案不可删除；MaterialPanel 的本地卡片提供垃圾桶和确认/取消。
 
 项目 v2 保存 ViewerSettings、验证材质、区域快照；v1 缺省恢复为区域应用及 Studio 环境。ZIP 加入模型、本地库、供应商覆盖；恢复 v2 替换两类库。
 

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { readRecord, writeRecord, downloadFile } from '~/@base/storage';
 import { useLocale } from '~/@base/locale';
-import { initialMaterials, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
+import { importUSDAMaterials, type MaterialImportResult, initialMaterials, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
 import { collectModelResources, disposeModelResources } from '~/@engine/model';
 import { loadLocalModel } from '~/@engine/import';
 import { toPrintMesh, uvHit } from '~/@engine/print-mesh';
@@ -189,9 +189,10 @@ export const useWorkspace = defineStore('workspace', () => {
       const message = validateMaterial(material, allMaterials.value); if (message) throw new Error(message);
       const nextMaterial = withOverrides(material);
       const problem = materialProblem(nextMaterial); if (problem) throw new Error(problem);
-      const records = material.supplier ? supplierEdits : materials;
+      const isSupplier = material.supplier && material.supplier.origin !== 'local-usda';
+      const records = isSupplier ? supplierEdits : materials;
       const next = [...records.value.filter(item => item.id !== material.id), nextMaterial];
-      await writeRecord(material.supplier ? 'supplier-overrides' : 'materials', JSON.parse(JSON.stringify(next)));
+      await writeRecord(isSupplier ? 'supplier-overrides' : 'materials', JSON.parse(JSON.stringify(next)));
       records.value = next;
       let found = false; for (const region of regions.value) if (region.material.id === material.id) { assignMaterial(region, nextMaterial); found = true; }
       if (settings.value.workflow === 'validation') validationMaterial.value = cloneMaterial(nextMaterial);
@@ -199,6 +200,47 @@ export const useWorkspace = defineStore('workspace', () => {
       saved.value = false; success = true; status.value = t('Material saved locally', '材质已保存到本地');
     });
     return success;
+  }
+  async function deleteMaterial(id: string): Promise<boolean> {
+    let success = false;
+    await operation(async () => {
+      const material = materials.value.find(item => item.id === id);
+      if (!material || (material.supplier && material.supplier.origin !== 'local-usda')) throw new Error(t('Only local materials can be deleted.', '只能删除本地材质。'));
+      const next = materials.value.filter(item => item.id !== id);
+      await writeRecord('materials', JSON.parse(JSON.stringify(next)));
+      materials.value = next;
+      checked.value = checked.value.filter(value => value !== id);
+      if (draft.value?.id === id) draft.value = null;
+      success = true;
+      status.value = t('Removed from the library. Applied materials are retained.', '已从材质库删除，已应用的材质保持不变。');
+    });
+    return success;
+  }
+  async function importMaterials(files: File[]): Promise<MaterialImportResult> {
+    const result: MaterialImportResult = { imported: 0, errors: [] };
+    if (busy.value) return result;
+    await operation(async () => {
+      const additions: MaterialRecord[] = [];
+      for (const file of files) {
+        try {
+          const parsed = await importUSDAMaterials(file);
+          for (const material of parsed) {
+            const base = material.materialId; let suffix = 1;
+            while ([...allMaterials.value, ...additions].some(item => item.materialId.toLowerCase() === material.materialId.toLowerCase())) material.materialId = `${base}-IMPORT-${suffix++}`;
+            const error = validateMaterial(material, [...allMaterials.value, ...additions]);
+            if (error) throw new Error(error);
+            additions.push(material);
+          }
+        } catch (error) { result.errors.push(`${file.name}: ${error instanceof Error ? error.message : String(error)}`); }
+      }
+      if (!additions.length) return;
+      const next = [...materials.value, ...additions];
+      try { await writeRecord('materials', JSON.parse(JSON.stringify(next))); }
+      catch (error) { result.errors.push(error instanceof Error ? error.message : String(error)); return; }
+      materials.value = next; result.imported = additions.length;
+      status.value = t(`Imported ${result.imported} materials`, `已导入 ${result.imported} 个材质`);
+    });
+    return result;
   }
   function setHeight(value: number) {
     if (!Number.isFinite(value) || value <= 0) return;
@@ -281,7 +323,7 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   onScopeDispose(() => { generation++; client?.dispose(); });
   return { materials, allMaterials, validationMaterial, validationSurface, checked, content, display, regions, selectedRegion, selected, surfaces, draft, project, projects, busy, status, failure, progress, warnings, colorCount, precision, scheme, settings, undoCount, saved, modelInfo, durations,
-    loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, saveMaterial, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
+    loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, saveMaterial, deleteMaterial, importMaterials, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
 });
 
 function validateRegion(region: RegionAssignment, index: number) {

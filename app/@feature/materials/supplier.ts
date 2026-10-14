@@ -13,7 +13,7 @@ export function supplierMaterial(profile: SupplierProfile): MaterialRecord {
   return {
     version: 2, id: `${profile.vendor.toLowerCase()}:${profile.sku}`, materialId: profile.sku,
     name: [profile.colorNameCN || profile.colorNameEN || profile.sku, profile.colorNameEN].filter(Boolean).join(' · '),
-    hex: profile.catalogHex ?? '#808080', transparency: 1 - numeric(profile, 'geometry_opacity', 1),
+    hex: profile.catalogHex ?? (profile.origin === 'local-usda' && Array.isArray(profile.source.parameters.base_color) ? `#${new Color().setRGB(...profile.source.parameters.base_color as [number, number, number], LinearSRGBColorSpace).getHexString().toUpperCase()}` : '#808080'), transparency: 1 - numeric(profile, 'geometry_opacity', 1),
     metalness: numeric(profile, 'base_metalness', 0), roughness: numeric(profile, 'specular_roughness', 0.35),
     ior: numeric(profile, 'specular_ior', 1.5), colorSpace: 'srgb',
     renderRule: profile.source.file ? OPENPBR_RULE : RENDER_RULE,
@@ -24,7 +24,7 @@ export const supplierMaterials = supplierCatalog.records.map(supplierMaterial);
 
 export function restoreSupplier(material: MaterialRecord): MaterialRecord {
   if (!material.supplier) return cloneMaterial(material);
-  return { ...supplierMaterial(material.supplier), referenceImage: material.referenceImage };
+  return { ...supplierMaterial(material.supplier), ...(material.supplier.origin === 'local-usda' ? { id: material.id, materialId: material.materialId, name: material.name } : {}), referenceImage: material.referenceImage };
 }
 export function withOverrides(material: MaterialRecord): MaterialRecord {
   if (!material.supplier) return cloneMaterial(material);
@@ -39,7 +39,7 @@ export function withOverrides(material: MaterialRecord): MaterialRecord {
 export function materialSurface(material: MaterialRecord): SurfaceValues {
   const value = { ...material, ...material.overrides };
   const surface: SurfaceValues = { hex: value.hex, transparency: value.transparency, metalness: value.metalness, roughness: value.roughness, ior: value.ior, renderRule: value.renderRule };
-  const mode = material.overrides?.colorMode ?? 'catalog';
+  const mode = material.overrides?.colorMode ?? (material.supplier?.origin === 'local-usda' ? 'linear-srgb' : 'catalog');
   const color = material.supplier?.source.parameters.base_color;
   if (mode !== 'catalog' && Array.isArray(color) && color.length === 3 && !material.overrides?.hex) {
     surface.baseColor = color as [number, number, number];
