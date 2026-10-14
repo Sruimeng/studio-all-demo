@@ -164,13 +164,13 @@
   }
 
   // 从 PAM 结果整理槽位：按面积降序；去掉没分到面积的非锁定项
-  function slotsFromPam(points, cands, res, lockedIds) {
+  function slotsFromPam(points, cands, res, lockedIds, kL = 1) {
     const slots = res.chosen.map((m) => ({ cand: cands[m], w: 0, ok: [0, 0, 0], de: 0 }));
     points.forEach((p, i) => {
       const s = slots[res.assign[i]];
       s.w += p.w; s.ok[0] += p.ok[0] * p.w; s.ok[1] += p.ok[1] * p.w; s.ok[2] += p.ok[2] * p.w;
       const cl = s.cand.lab;
-      s.de += MC.deltaE00(p.lab[0], p.lab[1], p.lab[2], cl[0], cl[1], cl[2]) * p.w;
+      s.de += MC.deltaE00(p.lab[0], p.lab[1], p.lab[2], cl[0], cl[1], cl[2], kL) * p.w;
     });
     const out = [];
     slots.forEach((s) => {

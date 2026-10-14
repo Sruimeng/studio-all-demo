@@ -12,7 +12,7 @@ import { createViewerRuntime } from './runtime';
 import { applySurface, cloneStudioMaterial, createPrintMaterial } from './material';
 import type { ViewerContent, ViewerSettings, PrintDisplay, SurfaceValues, ViewerHit } from './types';
 
-const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings }>();
+const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings; validationSurface?: SurfaceValues | null }>();
 const emit = defineEmits<{ ready: []; error: [message: string]; stroke: [hits: ViewerHit[]]; fill: [hit: ViewerHit] }>();
 const host = useTemplateRef<HTMLDivElement>('host');
 const error = shallowRef('');
@@ -50,6 +50,8 @@ onMounted(() => {
     engine.addSystem('model', () => ({ controller: markRaw(controller) }));
     let activeRoot: ViewerContent['root'] | null = null;
     let printMesh: Mesh | null = null;
+    let validationRoot: ViewerContent['root'] | null = null;
+    let validationMaterial: ReturnType<typeof createPrintMaterial> | null = null;
     let sourceKey: string | null = null;
     let currentPrint: PrintDisplay | null = null;
     let closed = false;
@@ -80,9 +82,23 @@ onMounted(() => {
     function clearPrint() {
       if (printMesh) { printMesh.removeFromParent(); printMesh.geometry.dispose(); printMesh = null; }
       printMaterials.forEach(entry => entry.material.dispose()); printMaterials = []; currentPrint = null;
+      validationRoot?.removeFromParent(); validationRoot = null;
+      validationMaterial?.material.dispose(); validationMaterial = null;
     }
     function updatePrint() {
       if (!activeRoot || !props.display) { clearPrint(); return; }
+      if (props.settings.workflow === 'validation' && props.validationSurface) {
+        if (!validationRoot) {
+          // Share source geometry so calibration retains its authored normals.
+          validationRoot = markRaw(activeRoot.clone(true));
+          validationMaterial = createPrintMaterial(props.validationSurface);
+          validationRoot.traverse(object => { if (object instanceof Mesh) object.material = validationMaterial!.material; });
+          mount.add(validationRoot);
+        }
+        applySurface(validationMaterial!.material, props.validationSurface);
+        validationMaterial!.uniforms.printLayers.value = props.settings.layers ? 1 : 0;
+        return;
+      }
       renderSurface = props.surfaces;
       if (printMaterials.length !== renderSurface.length) {
         printMaterials.forEach(entry => entry.material.dispose());
@@ -115,7 +131,17 @@ onMounted(() => {
       // vPrintHeight already uses world millimeters.
       printMaterials.forEach(entry => { entry.uniforms.printScale.value = 1; });
     }
-    fit = () => { const height = props.settings.height; controls.target.set(0, height * 0.48, 0); camera.position.set(height * 1.3, height * 0.95, height * 2.05); controls.update(); };
+    fit = () => {
+      const height = props.settings.height;
+      const size = sourceBounds.getSize(new Vector3()).multiplyScalar(height / (sourceBounds.max.y - sourceBounds.min.y || 1));
+      const split = props.settings.mode === 'compare' ? Math.min(props.settings.compareSplit, 1 - props.settings.compareSplit) : 1;
+      const aspect = Math.max(0.1, (host.value?.clientWidth ?? 1) * split / (host.value?.clientHeight || 1));
+      const angle = Math.min(camera.fov * Math.PI / 360, Math.atan(Math.tan(camera.fov * Math.PI / 360) * aspect));
+      const distance = Math.max(height, size.length() * 0.5 / Math.sin(angle)) * 1.08;
+      controls.target.set(0, height * 0.5, 0);
+      camera.position.copy(new Vector3(1.3, 0.6, 2.05).normalize().multiplyScalar(distance).add(controls.target));
+      controls.update();
+    };
     const context = Symbol('demo-workspace');
     watch(() => props.content, async content => {
       if (!content || content.id === sourceKey) return;
@@ -126,14 +152,23 @@ onMounted(() => {
       if (result.kind === ModelResultKind.Failed) { error.value = result.failure.error.message; emit('error', error.value); }
       else if (result.kind === ModelResultKind.Applied) { updatePrint(); emit('ready'); }
     }, { immediate: true });
-    watch(() => [props.display, props.surfaces, props.settings.layers] as const, updatePrint, { deep: false });
+    watch(() => [props.display, props.surfaces, props.settings.layers, props.settings.workflow, props.validationSurface] as const, updatePrint, { deep: false });
     watch(() => props.settings.height, () => { updateHeight(); fit(); });
+    watch(() => props.settings.mode, fit);
     watch(() => props.settings.tool, tool => { controls.enabled = tool === 'orbit'; renderer.domElement.style.cursor = tool === 'orbit' ? 'grab' : 'crosshair'; });
     watch(() => props.settings.grid, visible => { grid.visible = visible; });
+    const updateLighting = () => {
+      const preview = props.settings.preview;
+      const fixed = preview?.preset === 'validation-v1';
+      renderer.toneMappingExposure = fixed ? 1 : preview?.exposure ?? 1;
+      scene.environmentIntensity = fixed ? 1 : preview?.environmentIntensity ?? 1;
+      scene.environmentRotation.set(0, fixed ? 0 : (preview?.environmentRotation ?? 0) * Math.PI / 180, 0);
+    };
+    watch(() => props.settings.preview, updateLighting, { deep: true, immediate: true });
     let stroke: ViewerHit[] = []; let drawing = false;
     const raycaster = new Raycaster(); raycaster.firstHitOnly = true; const mouse = new Vector2();
     function hit(event: PointerEvent): ViewerHit | null {
-      if (!printMesh || props.settings.mode === 'original' || !currentPrint) return null;
+      if (!printMesh || props.settings.workflow === 'validation' || props.settings.mode === 'original' || !currentPrint) return null;
       const rect = renderer.domElement.getBoundingClientRect(); let x = event.clientX - rect.left; let width = rect.width;
       if (props.settings.mode === 'compare') {
         const split = Math.min(0.8, Math.max(0.2, props.settings.compareSplit));
@@ -171,8 +206,10 @@ onMounted(() => {
       const width = renderer.domElement.clientWidth; const height = renderer.domElement.clientHeight;
       if (!height) return;
       const draw = (left: number, w: number, print: boolean) => {
-        if (activeRoot) activeRoot.visible = !print || !printMesh;
-        if (printMesh) printMesh.visible = print;
+        const validation = props.settings.workflow === 'validation' && !!validationRoot;
+        if (activeRoot) activeRoot.visible = !print || !(validation ? validationRoot : printMesh);
+        if (printMesh) printMesh.visible = print && !validation;
+        if (validationRoot) validationRoot.visible = print && validation;
         camera.aspect = w / height; camera.updateProjectionMatrix(); renderer.setViewport(left, 0, w, height); renderer.setScissor(left, 0, w, height);
         renderer.render(scene, camera);
       };
@@ -187,9 +224,9 @@ onMounted(() => {
         orientationGizmo.update(); orientationGizmo.render();
       });
     }
-    inspect = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, triangles: renderer.info.render.triangles, frameMS: frameTimes.length ? frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length : 0 });
+    inspect = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, triangles: renderer.info.render.triangles, workflow: props.settings.workflow, exposure: renderer.toneMappingExposure, environmentIntensity: scene.environmentIntensity, validationRoughness: validationMaterial?.material.roughness, studioRoughness: validationMaterial?.uniforms.studioRoughness.value, frameMS: frameTimes.length ? frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length : 0 });
     fit(); render();
-    new HDRLoader().load('/studio.hdr', texture => { if (closed) { texture.dispose(); return; } texture.mapping = EquirectangularReflectionMapping; scene.environment = texture; scene.environmentIntensity = 1; }, undefined, () => {});
+    new HDRLoader().load('/studio.hdr', texture => { if (closed) { texture.dispose(); return; } texture.mapping = EquirectangularReflectionMapping; scene.environment = texture; updateLighting(); }, undefined, () => {});
     teardown = () => {
       closed = true; cancelAnimationFrame(frame); resize.disconnect(); controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointercancel', up);

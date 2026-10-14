@@ -1,0 +1,1809 @@
+{
+  "version": 1,
+  "vendor": "Polymaker",
+  "records": [
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19001",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "White",
+      "colorNameCN": "暖白",
+      "materialType": "PLA",
+      "catalogHex": "#F9FBFA",
+      "pantone": "Pantone White C",
+      "d65Lab": [
+        95.77,
+        -0.96,
+        1.01
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 2,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19002",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Grey",
+      "colorNameCN": "灰色",
+      "materialType": "PLA",
+      "catalogHex": "#87948E",
+      "pantone": "Pantone 428 C",
+      "d65Lab": [
+        50.33,
+        -0.5,
+        -1.69
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 3,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19003",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Steel Grey",
+      "colorNameCN": "钢铁灰",
+      "materialType": "PLA",
+      "catalogHex": "#95A39D",
+      "pantone": "Pantone 877 C",
+      "d65Lab": [
+        63.68,
+        -1.01,
+        -2.17
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 4,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19004",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Red",
+      "colorNameCN": "红色",
+      "materialType": "PLA",
+      "catalogHex": "#EC564F",
+      "pantone": "Pantone 032 C",
+      "d65Lab": [
+        85.16,
+        2.66,
+        41.27
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 5,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19005",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Blue",
+      "colorNameCN": "蓝色",
+      "materialType": "PLA",
+      "catalogHex": "#174185",
+      "pantone": "Pantone 294 C",
+      "d65Lab": [
+        32.15,
+        3.45,
+        -31.79
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 6,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19006",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Black",
+      "colorNameCN": "黑色",
+      "materialType": "PLA",
+      "catalogHex": "#252523",
+      "pantone": "Pantone Black 3C",
+      "d65Lab": [
+        95.46,
+        -0.84,
+        1.43
+      ],
+      "status": "color-only",
+      "issues": [
+        "lab-conflicts-with-color-name",
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 7,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19007",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Green",
+      "colorNameCN": "绿色",
+      "materialType": "PLA",
+      "catalogHex": "#33AB55",
+      "pantone": "Pantone 7482C",
+      "d65Lab": [
+        53.56,
+        -43.0,
+        23.01
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 8,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19008",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Orange",
+      "colorNameCN": "橙色",
+      "materialType": "PLA",
+      "catalogHex": "#FA8234",
+      "pantone": "Pantone 1575 C",
+      "d65Lab": [
+        64.46,
+        46.14,
+        59.74
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 9,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19009",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Pink",
+      "colorNameCN": "粉红",
+      "materialType": "PLA",
+      "catalogHex": "#F7B7C2",
+      "pantone": "Pantone 1905 C",
+      "d65Lab": [
+        74.51,
+        29.58,
+        -3.85
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown",
+        "base-color-outside-unit-range"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 10,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19009.usda",
+        "sha256": "0cc6aa662674472c766516c9c93044cd0bedfbd7aa9eb52b4d4a04557ba2b06c",
+        "materialName": "CA19009",
+        "parameters": {
+          "base_color": [
+            1.0947,
+            0.246051,
+            0.742067
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            1.0947,
+            0.246051,
+            0.742067
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            1.0947,
+            0.246051,
+            0.742067
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19009\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19009/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19009/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19009\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (1.0946952, 0.24605083, 0.7420672)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (1.0947, 0.246051, 0.742067)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19009/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (1.0947, 0.246051, 0.742067)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (1.0947, 0.246051, 0.742067)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19009/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19009/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19009/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19009/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19009/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19009/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19011",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Yellow",
+      "colorNameCN": "黄色",
+      "materialType": "PLA",
+      "catalogHex": "#FCC212",
+      "pantone": "Pantone 122 C",
+      "d65Lab": [
+        77.68,
+        16.71,
+        73.64
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 11,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19013",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Jungle Green",
+      "colorNameCN": "绿色",
+      "materialType": "PLA",
+      "catalogHex": "#749E44",
+      "pantone": "Pantone 7490 C",
+      "d65Lab": [
+        52.35,
+        -17.5,
+        30.72
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 12,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19013.usda",
+        "sha256": "d4c96b5465f6f8e2dc1717257d809660ff6077b5f995185db2ec41ee7ee1d33d",
+        "materialName": "CA19013",
+        "parameters": {
+          "base_color": [
+            0.0558295,
+            0.254111,
+            0.00241577
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.0558295,
+            0.254111,
+            0.00241577
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.0558295,
+            0.254111,
+            0.00241577
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19013\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19013/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19013/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19013\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.055829514, 0.2541108, 0.0024157658)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.0558295, 0.254111, 0.00241577)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19013/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.0558295, 0.254111, 0.00241577)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.0558295, 0.254111, 0.00241577)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19013/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19013/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19013/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19013/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19013/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19013/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19014",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Olive Green",
+      "colorNameCN": "绿色",
+      "materialType": "PLA",
+      "catalogHex": "#A0A33B",
+      "pantone": "Pantone 7746 C",
+      "d65Lab": [
+        58.44,
+        -6.81,
+        41.0
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 13,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19014.usda",
+        "sha256": "a1209746a2927946ff5c0f4c7fd20c6434251c0e07597038ef1859db984fac3d",
+        "materialName": "CA19014",
+        "parameters": {
+          "base_color": [
+            0.304256,
+            0.309043,
+            0.0147761
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.304256,
+            0.309043,
+            0.0147761
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.304256,
+            0.309043,
+            0.0147761
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19014\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19014/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19014/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19014\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.3042561, 0.30904332, 0.014776081)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.304256, 0.309043, 0.0147761)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19014/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.304256, 0.309043, 0.0147761)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.304256, 0.309043, 0.0147761)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19014/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19014/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19014/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19014/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19014/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19014/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19015",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Beige",
+      "colorNameCN": "米色",
+      "materialType": "PLA",
+      "catalogHex": "#CECF86",
+      "pantone": "Pantone 4545 C",
+      "d65Lab": [
+        73.49,
+        -1.05,
+        26.15
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 14,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19015.usda",
+        "sha256": "319381accb88758e37a8b3efc2ae4932e8bdde63a3bd08f80448f12d0b8ce651",
+        "materialName": "CA19015",
+        "parameters": {
+          "base_color": [
+            0.816528,
+            0.800588,
+            0.107544
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.816528,
+            0.800588,
+            0.107544
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.816528,
+            0.800588,
+            0.107544
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19015\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19015/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19015/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19015\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.8165282, 0.8005883, 0.10754393)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.816528, 0.800588, 0.107544)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19015/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.816528, 0.800588, 0.107544)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.816528, 0.800588, 0.107544)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19015/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19015/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19015/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19015/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19015/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19015/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19016",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Aqua Blue",
+      "colorNameCN": "蓝色",
+      "materialType": "PLA",
+      "catalogHex": "#72E7F2",
+      "pantone": "Pantone 297 C",
+      "d65Lab": [
+        77.94,
+        -19.84,
+        -19.17
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 15,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19016.usda",
+        "sha256": "668e70d7cecc35b6510ccf633b236f1e5e4d912d00eaf31ec622516c94732c29",
+        "materialName": "CA19016",
+        "parameters": {
+          "base_color": [
+            0.0502771,
+            0.772565,
+            0.816543
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.0502771,
+            0.772565,
+            0.816543
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.0502771,
+            0.772565,
+            0.816543
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19016\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19016/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19016/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19016\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.05027714, 0.77256453, 0.81654346)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.0502771, 0.772565, 0.816543)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19016/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.0502771, 0.772565, 0.816543)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.0502771, 0.772565, 0.816543)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19016/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19016/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19016/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19016/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19016/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19016/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19017",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Stone Blue",
+      "colorNameCN": "蓝色",
+      "materialType": "PLA",
+      "catalogHex": "#5F9FB8",
+      "pantone": "Pantone 646 C",
+      "d65Lab": [
+        53.17,
+        -7.34,
+        -18.09
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 16,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19017.usda",
+        "sha256": "a80594ea95a30b2800c0457ded9a0aa469465d7996e1df9b267c56002adc3ecf",
+        "materialName": "CA19017",
+        "parameters": {
+          "base_color": [
+            0.0330598,
+            0.219725,
+            0.354378
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.0330598,
+            0.219725,
+            0.354378
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.0330598,
+            0.219725,
+            0.354378
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19017\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19017/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19017/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19017\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.033059787, 0.21972516, 0.354378)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.0330598, 0.219725, 0.354378)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19017/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.0330598, 0.219725, 0.354378)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.0330598, 0.219725, 0.354378)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19017/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19017/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19017/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19017/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19017/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19017/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19018",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Brown",
+      "colorNameCN": "棕色",
+      "materialType": "PLA",
+      "catalogHex": "#6B433A",
+      "pantone": "Pantone 4625 C",
+      "d65Lab": [
+        32.96,
+        9.39,
+        11.67
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 17,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19019",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Lemon Yellow",
+      "colorNameCN": "柠檬黄",
+      "materialType": "PLA",
+      "catalogHex": "#FAF643",
+      "pantone": "Pantone 101 C",
+      "d65Lab": [
+        85.72,
+        -10.72,
+        76.86
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 18,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19019.usda",
+        "sha256": "c9802ef0ace896013fc6ee1a3a35cb1f438ebc5ca98b31a4fa2a65b049d7ce4f",
+        "materialName": "CA19019",
+        "parameters": {
+          "base_color": [
+            0.881936,
+            0.694995,
+            0.0
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.881936,
+            0.694995,
+            0.0
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.881936,
+            0.694995,
+            0.0
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19019\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19019/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19019/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19019\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.88193595, 0.69499487, 0)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.881936, 0.694995, 0)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19019/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.881936, 0.694995, 0)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.881936, 0.694995, 0)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19019/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19019/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19019/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19019/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19019/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19019/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19020",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Polymaker Teal",
+      "colorNameCN": "天青色",
+      "materialType": "PLA",
+      "catalogHex": "#79E0CC",
+      "pantone": "Pantone 319 C",
+      "d65Lab": [
+        71.27,
+        -31.31,
+        -6.38
+      ],
+      "status": "color-only",
+      "issues": [
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 19,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19021",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Cream",
+      "colorNameCN": "黄色",
+      "materialType": "PLA",
+      "catalogHex": "#E8DEB3",
+      "pantone": "Pantone 7506 C",
+      "d65Lab": [
+        85.3,
+        3.0,
+        20.76
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 20,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19021.usda",
+        "sha256": "ca6f4f1d00e11dab60d952382fd3b9497105d3d98fd63df8f7ea0163b76b0284",
+        "materialName": "CA19021",
+        "parameters": {
+          "base_color": [
+            1.0,
+            0.886698,
+            0.285613
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            1.0,
+            0.886698,
+            0.285613
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            1.0,
+            0.886698,
+            0.285613
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19021\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19021/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19021/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19021\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (1, 0.88669777, 0.285613)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (1, 0.886698, 0.285613)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19021/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (1, 0.886698, 0.285613)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (1, 0.886698, 0.285613)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19021/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19021/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19021/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19021/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19021/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19021/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19022",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Lime Green",
+      "colorNameCN": "绿色",
+      "materialType": "PLA",
+      "catalogHex": "#D6EB44",
+      "pantone": "Pantone 389 C",
+      "d65Lab": [
+        79.75,
+        -15.58,
+        69.92
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 21,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19022.usda",
+        "sha256": "c7c5ac1c0cfd146b78be7154d8663834069c16976bf3600b2c18c28a8bd2fd3e",
+        "materialName": "CA19022",
+        "parameters": {
+          "base_color": [
+            0.493414,
+            0.483651,
+            0.0
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.493414,
+            0.483651,
+            0.0
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.493414,
+            0.483651,
+            0.0
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19022\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19022/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19022/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19022\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.4934144, 0.48365098, 0)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.493414, 0.483651, 0)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19022/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.493414, 0.483651, 0)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.493414, 0.483651, 0)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19022/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19022/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19022/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19022/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19022/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19022/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19023",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Magenta",
+      "colorNameCN": "红色",
+      "materialType": "PLA",
+      "catalogHex": "#FA6191",
+      "pantone": "Pantone 213 C",
+      "d65Lab": [
+        55.08,
+        60.32,
+        -1.95
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 22,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19023.usda",
+        "sha256": "0695e25bee304a350a0094fc233874469e0748036b07ba9a63b7f302f0edacc6",
+        "materialName": "CA19023",
+        "parameters": {
+          "base_color": [
+            0.700233,
+            0.0,
+            0.102705
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.700233,
+            0.0,
+            0.102705
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.700233,
+            0.0,
+            0.102705
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19023\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19023/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19023/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19023\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.7002329, 0, 0.1027053)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.700233, 0, 0.102705)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19023/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.700233, 0, 0.102705)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.700233, 0, 0.102705)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19023/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19023/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19023/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19023/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19023/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19023/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19024",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Azure Blue",
+      "colorNameCN": "绿色",
+      "materialType": "PLA",
+      "catalogHex": "#1F74CC",
+      "pantone": "Pantone 2145 C",
+      "d65Lab": [
+        44.78,
+        -4.04,
+        -43.72
+      ],
+      "status": "paired",
+      "issues": [
+        "color-name-conflict",
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 23,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19024.usda",
+        "sha256": "029776671e90897e298d3bde4fecf248a2f4cd7067e7921330f22d3c1f41931e",
+        "materialName": "CA19024",
+        "parameters": {
+          "base_color": [
+            0.0,
+            0.107783,
+            0.552567
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.0,
+            0.107783,
+            0.552567
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.0,
+            0.107783,
+            0.552567
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19024\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19024/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19024/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19024\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0, 0.10778323, 0.5525672)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0, 0.107783, 0.552567)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19024/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0, 0.107783, 0.552567)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0, 0.107783, 0.552567)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19024/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19024/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19024/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19024/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19024/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19024/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19025",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Tan",
+      "colorNameCN": "橄榄棕",
+      "materialType": "PLA",
+      "catalogHex": "#9E9473",
+      "pantone": "Pantone 2336 C",
+      "d65Lab": [
+        51.32,
+        2.93,
+        11.99
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 24,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19025.usda",
+        "sha256": "7ca73d123bc714390b57eb63b994ad06907a4b1daa83c14efbf0b8fd1842caf5",
+        "materialName": "CA19025",
+        "parameters": {
+          "base_color": [
+            0.254111,
+            0.153551,
+            0.0754497
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.254111,
+            0.153551,
+            0.0754497
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.254111,
+            0.153551,
+            0.0754497
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19025\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19025/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19025/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19025\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.2541108, 0.15355079, 0.07544971)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.254111, 0.153551, 0.0754497)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19025/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.254111, 0.153551, 0.0754497)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.254111, 0.153551, 0.0754497)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19025/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19025/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19025/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19025/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19025/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19025/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19026",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Dark Olive Drab",
+      "colorNameCN": "深灰",
+      "materialType": "PLA",
+      "catalogHex": "#595643",
+      "pantone": "Pantone 4230 C",
+      "d65Lab": [
+        35.7,
+        0.48,
+        5.03
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 25,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19026.usda",
+        "sha256": "c47cb4235768c03adb142cf169ca7e3c334a1150edc0327d7aee69eb7b916ab8",
+        "materialName": "CA19026",
+        "parameters": {
+          "base_color": [
+            0.00558174,
+            0.00312504,
+            0.000443925
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.454919,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.00558174,
+            0.00312504,
+            0.000443925
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.00558174,
+            0.00312504,
+            0.000443925
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19026\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19026/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19026/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19026\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.0055817435, 0.0031250366, 0.00044392503)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45491922\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.00558174, 0.00312504, 0.000443925)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19026/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.454919\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.00558174, 0.00312504, 0.000443925)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.00558174, 0.00312504, 0.000443925)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19026/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19026/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19026/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19026/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19026/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19026/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19027",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Cold White",
+      "colorNameCN": "冷白",
+      "materialType": "PLA",
+      "catalogHex": "#FCFFFE",
+      "pantone": "Pantone White C",
+      "d65Lab": [
+        33.34,
+        9.49,
+        11.81
+      ],
+      "status": "color-only",
+      "issues": [
+        "lab-conflicts-with-color-name",
+        "openpbr-missing"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 26,
+        "colorSpace": "unknown",
+        "file": null,
+        "sha256": null,
+        "materialName": null,
+        "parameters": {},
+        "materialUSDA": null
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19028",
+      "product": "Panchroma™ PLA",
+      "colorNameEN": "Dark Grey",
+      "colorNameCN": "深灰",
+      "materialType": "PLA",
+      "catalogHex": "#4E5251",
+      "pantone": "Pantone Cool Gray 10 C",
+      "d65Lab": [
+        31.86,
+        -0.29,
+        -1.24
+      ],
+      "status": "paired",
+      "issues": [
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": 27,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19028.usda",
+        "sha256": "529aa45484843b7593aec21436f55733664cac971fb4af5664650af8d22c609e",
+        "materialName": "CA19028",
+        "parameters": {
+          "base_color": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.454919,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19028\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19028/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19028/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19028\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0, 0, 0)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45491922\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0, 0, 0)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19028/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.454919\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0, 0, 0)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0, 0, 0)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19028/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19028/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19028/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19028/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19028/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19028/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19010",
+      "product": "",
+      "colorNameEN": "",
+      "colorNameCN": "",
+      "materialType": "",
+      "catalogHex": null,
+      "pantone": null,
+      "d65Lab": null,
+      "status": "unmatched",
+      "issues": [
+        "sku-not-in-spreadsheet",
+        "source-color-space-unknown",
+        "material-name-needs-confirmation"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": null,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19010.001.usda",
+        "sha256": "67daeae846fc716fd8a52dd5c55e0129351f5f68af98e740b021a68d755574bc",
+        "materialName": "CA19010_001",
+        "parameters": {
+          "base_color": [
+            0.301534,
+            0.0434634,
+            0.80004
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.301534,
+            0.0434634,
+            0.80004
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.301534,
+            0.0434634,
+            0.80004
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19010_001\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19010_001/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19010_001/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19010.001\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.30153418, 0.043463357, 0.8000395)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.301534, 0.0434634, 0.80004)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19010_001/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.301534, 0.0434634, 0.80004)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.301534, 0.0434634, 0.80004)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19010_001/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19010_001/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19010_001/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19010_001/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19010_001/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19010_001/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    },
+    {
+      "vendor": "Polymaker",
+      "sku": "CA19012",
+      "product": "",
+      "colorNameEN": "",
+      "colorNameCN": "",
+      "materialType": "",
+      "catalogHex": null,
+      "pantone": null,
+      "d65Lab": null,
+      "status": "unmatched",
+      "issues": [
+        "sku-not-in-spreadsheet",
+        "source-color-space-unknown"
+      ],
+      "source": {
+        "spreadsheet": "Polymaker部分SKU颜色数据_Polymaker部分SKU颜色数据_标准产品(1).xlsx",
+        "row": null,
+        "colorSpace": "unknown",
+        "file": "PLA_Basic/CA19012.usda",
+        "sha256": "4bafed063359ea5d24a326768c6cc83bde74ca2f560f502ab3375aee1965ffb2",
+        "materialName": "CA19012",
+        "parameters": {
+          "base_color": [
+            0.573177,
+            0.0,
+            0.00125726
+          ],
+          "base_diffuse_roughness": 0.0,
+          "base_metalness": 0.0,
+          "base_weight": 1.0,
+          "coat_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "coat_ior": 1.5,
+          "coat_roughness": 0.03,
+          "coat_weight": 0.0,
+          "emission_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "emission_luminance": 0.0,
+          "fuzz_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "fuzz_roughness": 0.5,
+          "fuzz_weight": 0.0,
+          "geometry_opacity": 1.0,
+          "specular_color": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "specular_ior": 1.5,
+          "specular_roughness": 0.45,
+          "specular_roughness_anisotropy": 0.0,
+          "specular_weight": 1.0,
+          "subsurface_color": [
+            0.573177,
+            0.0,
+            0.00125726
+          ],
+          "subsurface_radius": 0.05,
+          "subsurface_radius_scale": [
+            1.0,
+            0.2,
+            0.1
+          ],
+          "subsurface_scatter_anisotropy": 0.0,
+          "subsurface_weight": 0.0,
+          "thin_film_ior": 1.33,
+          "thin_film_thickness": 0.0,
+          "thin_film_weight": 0.0,
+          "transmission_color": [
+            0.573177,
+            0.0,
+            0.00125726
+          ],
+          "transmission_weight": 0.0
+        },
+        "materialUSDA": "    def Scope \"_materials\"\n    {\n        def Material \"CA19012\" (\n            prepend apiSchemas = [\"MaterialXConfigAPI\"]\n        )\n        {\n            string config:mtlx:version = \"1.39\"\n            token outputs:mtlx:surface.connect = </root/_materials/CA19012/bnode____________BSDF.outputs:surface>\n            token outputs:surface.connect = </root/_materials/CA19012/原理化_BSDF.outputs:surface>\n            custom string userProperties:blender:data_name = \"CA19012\"\n\n            def Shader \"原理化_BSDF\"\n            {\n                uniform token info:id = \"UsdPreviewSurface\"\n                float inputs:clearcoat = 0\n                float inputs:clearcoatRoughness = 0.03\n                color3f inputs:diffuseColor = (0.57317656, 0, 0.0012572586)\n                float inputs:ior = 1.5\n                float inputs:metallic = 0\n                float inputs:opacity = 1\n                float inputs:roughness = 0.45\n                float inputs:specular = 0.5\n                token outputs:surface\n            }\n\n            def Shader \"bnode____________BSDF\"\n            {\n                uniform token info:id = \"ND_open_pbr_surface_surfaceshader\"\n                color3f inputs:base_color = (0.573177, 0, 0.00125726)\n                float inputs:base_diffuse_roughness = 0\n                float inputs:base_metalness = 0\n                float inputs:base_weight = 1\n                color3f inputs:coat_color = (1, 1, 1)\n                float inputs:coat_darkening\n                float inputs:coat_ior = 1.5\n                float inputs:coat_roughness = 0.03\n                float inputs:coat_roughness_anisotropy\n                float inputs:coat_weight = 0\n                color3f inputs:emission_color = (1, 1, 1)\n                float inputs:emission_luminance = 0\n                color3f inputs:fuzz_color = (1, 1, 1)\n                float inputs:fuzz_roughness = 0.5\n                float inputs:fuzz_weight = 0\n                float3 inputs:geometry_coat_normal\n                float3 inputs:geometry_coat_tangent\n                float3 inputs:geometry_normal\n                float inputs:geometry_opacity = 1\n                float3 inputs:geometry_tangent.connect = </root/_materials/CA19012/NodeGraphs.outputs:node_003_out>\n                bool inputs:geometry_thin_walled\n                color3f inputs:specular_color = (1, 1, 1)\n                float inputs:specular_ior = 1.5\n                float inputs:specular_roughness = 0.45\n                float inputs:specular_roughness_anisotropy = 0\n                float inputs:specular_weight = 1\n                color3f inputs:subsurface_color = (0.573177, 0, 0.00125726)\n                float inputs:subsurface_radius = 0.05\n                color3f inputs:subsurface_radius_scale = (1, 0.2, 0.1)\n                float inputs:subsurface_scatter_anisotropy = 0\n                float inputs:subsurface_weight = 0\n                float inputs:thin_film_ior = 1.33\n                float inputs:thin_film_thickness = 0\n                float inputs:thin_film_weight = 0\n                color3f inputs:transmission_color = (0.573177, 0, 0.00125726)\n                float inputs:transmission_depth\n                float inputs:transmission_dispersion_abbe_number\n                float inputs:transmission_dispersion_scale\n                color3f inputs:transmission_scatter\n                float inputs:transmission_scatter_anisotropy\n                float inputs:transmission_weight = 0\n                token outputs:surface\n            }\n\n            def NodeGraph \"NodeGraphs\"\n            {\n                float3 outputs:node_003_out.connect = </root/_materials/CA19012/NodeGraphs/node_003.outputs:out>\n\n                def Shader \"node\"\n                {\n                    uniform token info:id = \"ND_normal_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_001\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19012/NodeGraphs/node.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_002\"\n                {\n                    uniform token info:id = \"ND_tangent_vector3\"\n                    string inputs:space = \"world\"\n                    float3 outputs:out\n                }\n\n                def Shader \"node_003\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19012/NodeGraphs/node_002.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_004\"\n                {\n                    uniform token info:id = \"ND_rotate3d_vector3\"\n                    float inputs:amount = -90\n                    float3 inputs:axis.connect = </root/_materials/CA19012/NodeGraphs/node_001.outputs:out>\n                    float3 inputs:in.connect = </root/_materials/CA19012/NodeGraphs/node_003.outputs:out>\n                    float3 outputs:out\n                }\n\n                def Shader \"node_005\"\n                {\n                    uniform token info:id = \"ND_normalize_vector3\"\n                    float3 inputs:in.connect = </root/_materials/CA19012/NodeGraphs/node_004.outputs:out>\n                    float3 outputs:out\n                }\n            }\n        }\n    }\n}\n\n"
+      }
+    }
+  ]
+}

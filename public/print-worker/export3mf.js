@@ -150,8 +150,8 @@
       { name: "3D/3dmodel.model", chunks: textChunks(modelXml()) },
     ];
     entries.push({ name: "Metadata/materials.json", chunks: once(enc.encode(JSON.stringify({
-      version: 1, application: "Tripo Demo", colorSpace: "sRGB",
-      renderRule: "opacity = 1 - transparency; roughness = 0.5 + 0.5 * inputRoughness",
+      version: 2, application: "Tripo Demo", colorSpace: "sRGB",
+      renderRules: opt.materialData?.renderRules ?? ["studio-v1: roughnessFinal=0.5+0.5*(roughness*roughnessMap.g)"],
       slots: filaments.map((material, index) => ({ index, ...material })),
       materialData: opt.materialData ?? null,
     }, null, 2))) });
@@ -159,7 +159,7 @@
       const project = {
         name: "project_settings", from: "project", version: "02.07.01.62",
         filament_colour: filaments.map((f) => f.hex.toUpperCase()),
-        filament_type: filaments.map((f) => f.type || "PLA"),
+        filament_type: filaments.map((f) => f.type || "Unknown"),
         filament_vendor: filaments.map((f) => f.vendor || "Generic"),
       };
       entries.push({ name: "Metadata/project_settings.config", chunks: once(enc.encode(JSON.stringify(project, null, 4))) });

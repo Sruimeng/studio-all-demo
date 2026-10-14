@@ -114,6 +114,37 @@ test('segmentation is independent of the legacy lightness tolerance flag', async
   assert.deepEqual(Array.from(legacyFlag.label), Array.from(baseColor.label));
 });
 
+test('owned palette selects only the supplied SKU candidates and reports source color and Delta E', async () => {
+  const { request } = createRuntime();
+  assert.equal((await request('init', model())).type, 'init');
+  const cands = [{ id: 'red-sku', hex: '#FF0000' }, { id: 'blue-sku', hex: '#0000FF' }, { id: 'unused', hex: '#00FF00' }];
+  const result = await request('palette', { mode: 'owned', N: 2, protect: true, cands });
+  assert.equal(result.type, 'palette');
+  assert.deepEqual(Array.from(result.slots, slot => slot.filamentId).sort(), ['blue-sku', 'red-sku']);
+  assert.ok(result.slots.every(slot => /^#[0-9A-F]{6}$/.test(slot.sourceHex)));
+  assert.ok(result.slots.every(slot => slot.de < 0.3 && Math.abs(slot.w - 0.5) < 0.01));
+  const labeled = await request('label', { ...options, slotHex: result.slots.map(slot => slot.sourceHex) });
+  assert.deepEqual(Array.from(labeled.label, index => result.slots[index].filamentId), ['red-sku', 'blue-sku']);
+  const limited = await request('palette', { mode: 'owned', N: 1, cands });
+  assert.equal(limited.slots.length, 1);
+  assert.ok(limited.slots[0].de > 0);
+  const expanded = await request('palette', { mode: 'owned', N: 3, cands });
+  assert.equal(expanded.slots.length, 2);
+});
+
+test('SKU color distance uses standard lightness weight for neutral colors', async () => {
+  const { request, context } = createRuntime();
+  const input = model();
+  input.materials = [{ image: -1, factor: [0.5, 0.5, 0.5] }];
+  input.faceMat.fill(0);
+  await request('init', input);
+  const result = await request('palette', { mode: 'owned', N: 1, cands: [{ id: 'dark', hex: '#404040' }] });
+  const source = context.MC.oklabToLab(...result.slots[0].ok);
+  const candidate = context.MC.hexToLab('#404040');
+  const expected = context.MC.deltaE00(...source, ...candidate, 1);
+  assert.ok(Math.abs(result.slots[0].de - expected) < 0.01);
+});
+
 test('snapshot restores overrides and rejects a different mesh with the same face count', async () => {
   const { request } = await labeledRuntime();
   await request('paintHigh', { faces: new Uint32Array([0]), label: 1 });

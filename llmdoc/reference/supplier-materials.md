@@ -1,0 +1,53 @@
+---
+id: supplier-materials
+type: reference
+---
+# 供应商材质
+
+## 契约
+
+`@feature/materials/types`：
+
+- `SupplierProfile`：vendor、SKU、材料类型、表格 HEX / Pantone / D65 Lab、对应状态、问题列表、来源行号、USDA 路径、SHA256、原始参数与材质文本。
+- `MaterialOverrides`：本地 HEX、透明度、金属度、粗糙度、IOR、颜色解释方式。供应商原值不改写。
+- `MaterialRecord` v2：可选供应商档案与覆盖。旧本地记录兼容；稳定内部 ID 与展示 SKU 分开。
+- `SurfaceValues`：Viewer 只接收颜色、外观参数与渲染规则，不依赖 SKU 类型。
+- `RegionColorMatch`：basis=`catalog-hex-d65-deltae00`、稳定材质 ID、canonical HEX、生成时平均 ΔE00 与采样面积比例。旧区域快照可无此字段。
+
+## 首批数据
+
+`scripts/import-polymaker.py` 读取 Sheet1 与 ZIP，输出 `app/@feature/materials/data/polymaker-pla.json`。使用 Python 标准库，不改写源文件。只处理一个 OpenPBR 节点的常量输入；拒绝外部组合、资源与有效连接输入，忽略本批未启用的几何切线连接。
+
+26 行颜色数据 + 16 份 USDA → 28 条档案：14 对应、12 仅颜色、2 未对应。`CA19010.001.usda` / `CA19012.usda` 未对应表格，禁止应用；名后缀保留并提示确认。材质不读取 USDA 中的样例球体。
+
+源问题不修正：CA19006 Black 的 L=95.46；CA19027 Cold White 的 L=33.34；CA19024 Azure Blue 的中文名为绿色；CA19009 颜色 R=1.0947。自动匹配使用表格 HEX 推导的 sRGB/D65 Lab；测量 Lab 仍待复核。
+
+## 分色匹配
+
+新模型加载与“生成分色”使用 `palette` 的 `owned` 模式。26 个候选取自内置供应商档案，须通过六位 HEX 与可应用检查；本地副本、预览调整及未对应 SKU 不参与选色。Worker 接收稳定内部 ID 与 canonical HEX，用标准 CIEDE2000（kL=1）优化面积加权近似，返回模型代表色、采样面积比例和平均色差。Feature 解析 ID 并绑定含本地覆盖的材质快照。
+
+颜色数是使用 SKU 的上限，无分配面积的候选不生成槽位。ΔE00 是生成时量化采样色至色卡的面积加权平均，不是代表色单点色差或实物误差。标签使用模型代表色；手动更换或保存材质不重算标签，并清除旧匹配记录。已保存项目优先恢复快照中的绑定；重新分色会替换手动绑定。
+
+## 预览
+
+`supplier.ts` 将来源与覆盖转换成 `SurfaceValues`；本地 HEX 优先，其次显式颜色解释，默认表格 HEX。源颜色空间为 unknown；linear-srgb / srgb 均为试验假设。大于 1 的源颜色保留，转换为导出 HEX 时受 sRGB 范围限制。
+
+`openpbr-subset-v1` 映射 base color、metalness、specular roughness、IOR、geometry opacity；粗糙度直接使用。Studio 规则继续使用 `0.5 + 0.5 * roughness`。透明度是 alpha，不是 transmission。当前批次 base/specular weight=1、specular color=白、其余关键 lobe 权重为零；有效透射、清漆、SSS、fuzz、薄膜、各向异性等会阻止应用。Three.js 近似不代表完整 OpenPBR 着色器。
+
+`ModelViewport` 验证模式克隆源层级，共享几何与法线，替换整模材质；固定 Studio HDR、ACES、曝光 1、环境强度 1、旋转 0。默认关层纹。标准样件含平面、球面、薄壁；尺寸随打印高度缩放。左侧原模型不作为 Blender 真值。
+
+## 保存与导出
+
+IndexedDB 的 `materials` 保存本地材质，`supplier-overrides` 保存供应商调整。取消清草稿；恢复参数后仍需显式保存。
+
+项目 v2 保存 ViewerSettings、验证材质、区域快照；v1 缺省恢复为区域应用及 Studio 环境。ZIP 加入模型、本地库、供应商覆盖；恢复 v2 替换两类库。
+
+SKU 应用只改区域材质快照，不请求新标签。验证模式禁用 3MF 导出；区域应用导出真实 SKU / type / vendor / SHA256。未声明类型使用 Unknown。色槽采用有效预览色；原始色与本地覆盖在元数据中保留。3MF 附加元数据不赋予切片器 OpenPBR 支持，本批不导出材质贴图或工艺参数。
+
+## 入口与证据
+
+- `MaterialPanel` / `MaterialEditor` / `SupplierDetail`：选择、来源、参数、问题标记。
+- `useWorkspace`：验证与区域模式、绑定、保存、备份、导出。
+- `test/supplier-materials.spec.ts`：数据对应、颜色解释、粗糙度切换、覆盖恢复、不支持的 lobe。
+- `test/workspace.spec.ts`：不重算标签、独立存储、v1/v2、保存失败、真实耗材标识。
+- 实际浏览器与文件证据见 [验证记录](../guides/verification.md)。Blender、目标切片器、实物匹配仍待验证。

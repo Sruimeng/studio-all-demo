@@ -235,7 +235,6 @@ function getLevels(wL, protect) {
 // m: {mode:'free'|'owned'|'plans', N, protect, cands:[{id,hex}], locked:[id], plans:[{key,cands:[{id,hex,penalty}]}]}
 function palette(m, reqId) {
   const wL = COLOR_LIGHTNESS_WEIGHT;
-  const kL = COLOR_LIGHTNESS_WEIGHT;
   const levels = getLevels(wL, m.protect);
   const points = getBase(wL).base; // 细粒度点
   const K0 = points.length;
@@ -247,8 +246,9 @@ function palette(m, reqId) {
   } else {
     const run = (cands, n, locked) => {
       const cc = cands.map((c) => ({ id: c.id, hex: c.hex, lab: MC.hexToLab(c.hex), penalty: c.penalty || 0 }));
-      const r = MC.pam(points, cc, n, locked, kL);
-      return MC.slotsFromPam(points, cc, r, locked).map((s) => ({
+      const matchKL = 1;
+      const r = MC.pam(points, cc, n, locked, matchKL);
+      return MC.slotsFromPam(points, cc, r, locked, matchKL).map((s) => ({
         hex: s.cand.hex, ok: s.ok, w: s.w, de: s.de, filamentId: s.cand.id, sourceHex: MC.oklabToHex(s.ok[0], s.ok[1], s.ok[2]),
       }));
     };

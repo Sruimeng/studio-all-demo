@@ -1,4 +1,5 @@
-import { RENDER_RULE, type MaterialRecord } from './types';
+import { OPENPBR_RULE, RENDER_RULE, type MaterialRecord } from './types';
+import { materialHex } from './supplier';
 
 export const initialMaterials: MaterialRecord[] = [
   ['porcelain', 'PLA-001', 'Porcelain', '#EAE8E2', 0, 0, 0.35],
@@ -14,11 +15,24 @@ export const initialMaterials: MaterialRecord[] = [
 }));
 
 export function validateMaterial(material: MaterialRecord, catalog: MaterialRecord[]): string | null {
-  if (!material || typeof material.id !== 'string' || !material.id || typeof material.materialId !== 'string' || typeof material.name !== 'string' || material.colorSpace !== 'srgb' || material.renderRule !== RENDER_RULE) return 'Invalid material record / 材质数据无效';
+  if (!material || typeof material.id !== 'string' || !material.id || typeof material.materialId !== 'string' || typeof material.name !== 'string' || material.colorSpace !== 'srgb' || ![RENDER_RULE, OPENPBR_RULE].includes(material.renderRule)) return 'Invalid material record / 材质数据无效';
   if (!material.materialId.trim() || !material.name.trim()) return 'Name and material ID are required / 名称和材质 ID 必填';
   if (catalog.some(item => item.id !== material.id && item.materialId.toLowerCase() === material.materialId.trim().toLowerCase())) return 'Material ID already exists / 材质 ID 已存在';
   if (!/^#[\da-f]{6}$/i.test(material.hex)) return 'Use a six-digit HEX color / 请输入六位 HEX 颜色';
   if ([material.transparency, material.metalness, material.roughness].some(value => !Number.isFinite(value) || value < 0 || value > 1)) return 'Parameters must be between 0 and 1 / 参数范围为 0–1';
+  if (material.ior !== undefined && (!Number.isFinite(material.ior) || material.ior < 1 || material.ior > 3)) return 'IOR must be between 1 and 3 / 折射率范围为 1–3';
+  if (material.overrides) {
+    if (material.overrides.colorMode && !['catalog', 'linear-srgb', 'srgb'].includes(material.overrides.colorMode)) return 'Invalid color interpretation';
+    if (material.overrides.hex && !/^#[\da-f]{6}$/i.test(material.overrides.hex)) return 'Invalid override color';
+    if (['transparency', 'metalness', 'roughness'].some(key => { const value = material.overrides![key as 'roughness']; return value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1); })) return 'Invalid parameter override';
+    if (material.overrides.ior !== undefined && (!Number.isFinite(material.overrides.ior) || material.overrides.ior < 1 || material.overrides.ior > 3)) return 'Invalid IOR override';
+  }
+  if (material.supplier) {
+    const supplier = material.supplier;
+    if (!supplier || typeof supplier.sku !== 'string' || typeof supplier.vendor !== 'string' || !['paired', 'color-only', 'unmatched'].includes(supplier.status) || !Array.isArray(supplier.issues) || !supplier.issues.every(issue => typeof issue === 'string') || !supplier.source || typeof supplier.source.parameters !== 'object' || !supplier.source.parameters) return 'Invalid supplier profile';
+    const color = supplier.source.parameters.base_color;
+    if (supplier.source.file && (!Array.isArray(color) || color.length !== 3 || !color.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0))) return 'Invalid source base color';
+  }
   return null;
 }
 
@@ -30,7 +44,10 @@ export function materialsCSV(materials: MaterialRecord[]): string {
     if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`;
     return `"${text.replaceAll('"', '""')}"`;
   };
-  const rows: unknown[][] = [['material_id', 'name', 'hex', 'r', 'g', 'b', 'transparency', 'metalness', 'roughness', 'color_space', 'render_rule']];
-  for (const item of materials) rows.push([item.materialId, item.name, item.hex, ...rgb(item.hex), item.transparency, item.metalness, item.roughness, item.colorSpace, item.renderRule]);
+  const rows: unknown[][] = [['material_id', 'name', 'hex', 'r', 'g', 'b', 'transparency', 'metalness', 'roughness', 'color_space', 'render_rule', 'vendor', 'material_type', 'catalog_hex', 'pantone', 'd65_l', 'd65_a', 'd65_b', 'ior', 'color_interpretation', 'source_file', 'source_sha256', 'issues', 'status']];
+  for (const item of materials) {
+    const hex = item.supplier?.status === 'unmatched' ? '' : materialHex(item);
+    rows.push([item.materialId, item.name, hex, ...(hex ? rgb(hex) : ['', '', '']), item.transparency, item.metalness, item.roughness, item.colorSpace, item.renderRule, item.supplier?.vendor ?? '', item.supplier?.materialType ?? '', item.supplier?.catalogHex ?? '', item.supplier?.pantone ?? '', ...(item.supplier?.d65Lab ?? ['', '', '']), item.ior ?? '', item.overrides?.colorMode ?? 'catalog', item.supplier?.source.file ?? '', item.supplier?.source.sha256 ?? '', item.supplier?.issues.join('; ') ?? '', item.supplier?.status ?? 'local']);
+  }
   return '\uFEFF' + rows.map(row => row.map(escape).join(',')).join('\r\n');
 }

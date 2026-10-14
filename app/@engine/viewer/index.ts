@@ -1,2 +1,2 @@
 export { default as ModelViewport } from './ModelViewport.vue';
-export type { ViewerContent, PrintDisplay, ViewerSettings, ViewerHit, SurfaceValues } from './types';
+export type { ViewerContent, PrintDisplay, ViewerSettings, PreviewSettings, ViewerHit, SurfaceValues } from './types';
