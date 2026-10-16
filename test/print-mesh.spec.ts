@@ -21,3 +21,16 @@ it.each([0, 1])('keeps PBR endpoint %i finite and independent of opacity', endpo
   expect(material.opacity).toBe(1 - endpoint); expect(material.metalness).toBe(endpoint); expect(material.roughness).toBe(endpoint);
   expect(material.transparent).toBe(endpoint > 0); material.dispose();
 });
+
+it('retains authored UV and keeps overlapping mesh instances in separate selection domains', async () => {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(new Float32Array([0,0,0,1,0,0,0,1,0]), 3));
+  geometry.setAttribute('uv', new BufferAttribute(new Float32Array([0,0,1,0,0,1]), 2));
+  const root = new Group(); const material = new MeshStandardMaterial();
+  root.add(new Mesh(geometry, material), new Mesh(geometry, material));
+  const result = await toPrintMesh(root);
+  expect(Array.from(result.rawUvs!)).toEqual([0,0,1,0,0,1,0,0,1,0,0,1]);
+  expect(Array.from(result.uvValid!)).toEqual([1,1]);
+  expect(result.faceDomain![0]).not.toBe(result.faceDomain![1]);
+  expect(result.topologyVertices![0]).not.toBe(result.topologyVertices![3]);
+});

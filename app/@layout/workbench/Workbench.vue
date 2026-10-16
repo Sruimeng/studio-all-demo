@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
-import { Icon, Popover, PopoverClose, PopoverContent, PopoverTrigger, Tabs, TabsContent, TabsList, TabsTrigger, Tooltip, TooltipContent, TooltipTrigger } from '@tripo3d/design';
-import { useWorkspace, ValidationControls, RegionAssignments } from '~/@feature/workspace';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { Icon, Popover, PopoverClose, PopoverContent, PopoverTrigger, Tooltip, TooltipContent, TooltipTrigger } from '@tripo3d/design';
+import { useWorkspace } from '~/@feature/workspace';
 import { useLocale } from '~/@base/locale';
 import { ModelViewport } from '~/@engine/viewer';
-import { MaterialPanel } from '~/@feature/materials';
+import UvAtlas from '~/@feature/workspace/view/UvAtlas.vue';
+import PrintPreparation from '~/@feature/workspace/view/PrintPreparation.vue';
 import ModuleTooltip from '~/@base/ui/ModuleTooltip.vue';
+import type { MaterialRecord } from '~/@feature/materials';
 
 const studio = useWorkspace();
 const locale = useLocale();
@@ -15,7 +17,113 @@ const restore = useTemplateRef<HTMLInputElement>('restore');
 const viewport = useTemplateRef('viewport');
 const canvasArea = useTemplateRef<HTMLDivElement>('canvasArea');
 const compareDragging = ref(false);
-const rightTab = ref('assets');
+const settingsExpanded = ref(true);
+const refineExpanded = ref(false);
+const refineMode = ref<'brush' | 'color' | 'uv'>('brush');
+const filamentPopover = ref<'library' | 'replace' | null>(null);
+const filamentEntry = ref<'sku' | 'color'>('sku');
+const filamentQuery = ref('');
+const filamentColor = ref('#a6b441');
+const replaceMaterialId = ref<string | null>(null);
+const pendingRegenerate = ref(false);
+const inviteDialog = ref(false);
+
+const preferOwned = ref(true);
+const ownedIds = ref<string[]>([]);
+
+const ownedMaterials = computed(() => studio.allMaterials.filter(material => ownedIds.value.includes(material.id)));
+const searchedFilaments = computed(() => {
+  const query = filamentQuery.value.trim().toLowerCase();
+  return studio.allMaterials.filter(material => !query || material.materialId.toLowerCase().includes(query) || material.name.toLowerCase().includes(query)).slice(0, 8);
+});
+const planFilaments = computed(() => {
+  const map = new Map<string, { material: MaterialRecord; count: number; indices: number[] }>();
+  studio.regions.forEach((region, index) => {
+    const key = region.material.id;
+    const current = map.get(key) ?? { material: region.material, count: 0, indices: [] };
+    current.count += 1;
+    current.indices.push(index);
+    map.set(key, current);
+  });
+  return [...map.values()];
+});
+
+function isOwned(material: MaterialRecord) { return ownedIds.value.includes(material.id); }
+function addOwned(material: MaterialRecord) {
+  if (!ownedIds.value.includes(material.id)) ownedIds.value = [...ownedIds.value, material.id];
+  filamentQuery.value = '';
+}
+function removeOwned(material: MaterialRecord) { ownedIds.value = ownedIds.value.filter(id => id !== material.id); }
+function addClosestColor() {
+  const target = filamentColor.value.toLowerCase();
+  const hex = (value: string) => value.replace('#', '').match(/.{2}/g)?.map(part => Number.parseInt(part, 16)) ?? [0, 0, 0];
+  const wanted = hex(target);
+  const nearest = studio.allMaterials.reduce<{ material: MaterialRecord | null; distance: number }>((best, material) => {
+    const rgb = hex(material.hex); const distance = rgb.reduce((sum, value, index) => sum + (value - wanted[index]!) ** 2, 0);
+    return distance < best.distance ? { material, distance } : best;
+  }, { material: null, distance: Number.POSITIVE_INFINITY }).material;
+  if (nearest) addOwned(nearest);
+}
+function normalizeColorCount() {
+  const count = Number(studio.colorCount);
+  studio.colorCount = Number.isFinite(count) && count > 0 ? Math.min(12, Math.max(1, Math.round(count))) : 4;
+}
+function returnToPlan() {
+  studio.draft = null;
+  if (studio.settings.workflow === 'validation') studio.setWorkflow('assignment');
+}
+function generatePlan() {
+  normalizeColorCount();
+  returnToPlan();
+  void studio.segment({ ownedIds: ownedIds.value, preferOwned: preferOwned.value });
+}
+function requestGenerate() {
+  if (studio.undoCount > 0) pendingRegenerate.value = true;
+  else generatePlan();
+}
+function confirmGenerate() { pendingRegenerate.value = false; generatePlan(); }
+function selectPlan(index: number) { returnToPlan(); studio.selectedRegion = index; }
+function openReplacement(materialId: string) { returnToPlan(); replaceMaterialId.value = materialId; filamentPopover.value = 'replace'; }
+function replacePlanMaterial(material: MaterialRecord) {
+  if (replaceMaterialId.value) studio.replaceMaterial(replaceMaterialId.value, material);
+  replaceMaterialId.value = null; filamentPopover.value = null;
+}
+async function startRefine(mode: 'brush' | 'color' | 'uv') {
+  if (studio.busy || !studio.content) return;
+  returnToPlan();
+  await studio.prepareRefinement();
+  if (!studio.refinement) return;
+  refineMode.value = mode; refineExpanded.value = true; studio.clearSelection();
+  if (mode === 'uv' && !studio.refinement.islandCount) { studio.settings.tool = 'orbit'; return; }
+  studio.selectionScope = mode === 'color' ? 'color' : 'island';
+  if (studio.settings.mode === 'original') studio.settings.mode = 'print';
+  studio.settings.tool = mode === 'brush' ? 'brush' : 'select';
+}
+function finishRefine() { studio.settings.tool = 'orbit'; studio.clearSelection(); }
+function chooseRefineFilament(index: number) {
+  if (refineMode.value === 'brush') studio.selectedRegion = index;
+  else void studio.assignSelection(index);
+}
+function setSelectionScope(scope: 'island' | 'part') { studio.selectionScope = scope; studio.clearSelection(); }
+function toggleRefine() {
+  if (refineExpanded.value) { refineExpanded.value = false; finishRefine(); }
+  else void startRefine(refineMode.value);
+}
+function toggleLibrary() { filamentPopover.value = filamentPopover.value === 'library' ? null : 'library'; }
+function dismissInvite(addFilaments = false) {
+  inviteDialog.value = false;
+  if (addFilaments) filamentPopover.value = 'library';
+  try { window.sessionStorage.setItem('tripo-filament-invite-seen', '1'); } catch { /* storage can be unavailable */ }
+}
+
+// Old saved projects may still be in the removed standalone material preview.
+watch(() => studio.settings.workflow, workflow => { if (workflow === 'validation') returnToPlan(); }, { immediate: true });
+watch(() => studio.content?.id, () => { refineExpanded.value = false; });
+
+watch(ownedIds, value => {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem('tripo-owned-filaments', JSON.stringify(value)); } catch { /* ignore unavailable local storage */ }
+}, { deep: true });
 
 
 async function uploadFiles(event: Event) {
@@ -32,19 +140,9 @@ async function restoreFiles(event: Event) {
   if (file) await studio.restoreBackup(file);
 }
 
-function heightChanged(event: Event) {
-  const input = event.target as HTMLInputElement;
-  studio.setHeight(input.valueAsNumber);
-  input.value = String(studio.settings.height);
-}
-
-function check(id: string) {
-  studio.checked = studio.checked.includes(id) ? studio.checked.filter(value => value !== id) : [...studio.checked, id];
-}
-
 function shortcut(event: KeyboardEvent) {
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-  if ((event.ctrlKey || event.metaKey) && event.key === 'z') event.preventDefault();
+  if ((event.ctrlKey || event.metaKey) && event.key === 'z') { event.preventDefault(); if (!studio.busy && studio.undoCount) void studio.undo(); }
 }
 
 function leave(event: BeforeUnloadEvent) {
@@ -87,7 +185,13 @@ function modeDescription(mode: ViewMode) {
 
 onMounted(() => {
   locale.restore();
-  void studio.initialize();
+  try {
+    const saved = window.localStorage.getItem('tripo-owned-filaments');
+    if (saved) ownedIds.value = JSON.parse(saved) as string[];
+  } catch { /* ignore unavailable local storage */ }
+  void studio.initialize().then(() => {
+    if (studio.preparation.activeModule === 'multi-color' && !ownedIds.value.length && !window.sessionStorage.getItem('tripo-filament-invite-seen')) inviteDialog.value = true;
+  });
   window.addEventListener('keydown', shortcut);
   window.addEventListener('beforeunload', leave);
 });
@@ -114,11 +218,18 @@ onBeforeUnmount(() => {
         <span class="header-context">{{ studio.project?.name ?? t('Material Studio', '材质工作台') }}</span>
       </nav>
       <div class="studio-header-actions">
+        <ModuleTooltip :title="t('Import model', '导入模型')" :description="t('Upload a GLB or FBX model and its matching textures.', '上传 GLB 或 FBX 模型及配套贴图。')" side="bottom">
+          <button class="header-action header-import" type="button" :disabled="studio.busy" @click="upload?.click()"><Icon icon="i-tripo:upload" class="size-3.5" />{{ t('Import model', '导入模型') }}</button>
+        </ModuleTooltip>
+        <input ref="upload" class="hidden-input" type="file" multiple accept=".glb,.fbx,.png,.jpg,.jpeg,.webp,.tga,.bmp" @change="uploadFiles">
+        <ModuleTooltip :title="t('Open sample', '打开示例')" :description="t('Load the bundled model for a quick workflow preview.', '打开内置示例模型，快速体验流程。')" side="bottom">
+          <button class="header-action" type="button" :disabled="studio.busy" @click="studio.demo">{{ t('Sample', '示例') }}</button>
+        </ModuleTooltip>
+        <ModuleTooltip :title="t('Projects & backups', '项目与备份')" :description="t('Save, reopen or restore local projects.', '保存、打开或恢复本地项目。')" side="bottom">
+          <details class="header-menu"><summary>{{ t('Projects', '项目') }} <Icon icon="i-tripo:caret" class="size-3 rotate-180" /></summary><div class="header-menu-pop"><button type="button" :disabled="studio.busy || !studio.content" @click="studio.save">{{ t('Save project', '保存项目') }}</button><button v-for="item in studio.projects" :key="item.id" type="button" :disabled="studio.busy" @click="studio.openProject(item.id)">{{ item.name }}</button><button type="button" :disabled="studio.busy || !studio.content" @click="studio.backup">{{ t('Backup', '备份') }}</button><button type="button" :disabled="studio.busy" @click="restore?.click()">{{ t('Restore', '恢复') }}</button><button type="button" :disabled="studio.busy || !studio.content" @click="studio.selftest">{{ t('3MF self-test', '3MF 自检') }}</button><input ref="restore" class="hidden-input" type="file" accept=".zip" @change="restoreFiles"></div></details>
+        </ModuleTooltip>
         <ModuleTooltip :title="t('Language', '语言')" :description="t('Switch the workspace labels between English and Chinese.', '切换工作台的中英文显示。')" side="bottom">
           <button class="header-language" type="button" @click="locale.toggle">{{ locale.language === 'zh' ? '中 / EN' : 'EN / 中' }}</button>
-        </ModuleTooltip>
-        <ModuleTooltip :title="t('Save project', '保存项目')" :description="t('Save the model, region assignments and material references locally.', '保存模型、区域分配和材质引用到本地。')" side="bottom">
-          <button class="header-action" type="button" :disabled="studio.busy || !studio.content" @click="studio.save">{{ t('Save', '保存') }}</button>
         </ModuleTooltip>
         <ModuleTooltip :title="t('Export 3MF', '导出 3MF')" :description="t('Export the colored model with millimeter scale and material metadata.', '导出带颜色区域、毫米尺寸和材质参数的模型。')" side="bottom">
           <button class="header-export" type="button" :disabled="studio.busy || !studio.display || studio.settings.workflow === 'validation'" :title="studio.settings.workflow === 'validation' ? t('Assign region filaments before exporting', '请先在区域应用中分配耗材') : '3MF'" @click="studio.export3mf"><Icon icon="i-tripo:download" class="size-3.5" />{{ t('Export', '导出') }}</button>
@@ -129,105 +240,95 @@ onBeforeUnmount(() => {
     <div class="studio-body">
       <aside class="studio-left-shell">
         <nav class="studio-left-menu" aria-label="Studio tools">
-          <ModuleTooltip :title="t('Model', '模型')" :description="t('Import and inspect the source model before assigning print materials.', '导入并检查源模型，再分配打印材质。')">
-            <button class="studio-menu-item active" type="button"><Icon icon="i-tripo:generate" /><span>{{ t('Model', '模型') }}</span></button>
-          </ModuleTooltip>
-          <ModuleTooltip :title="t('Segment', '分色')" :description="t('Generate editable surface or UV regions for multicolor printing.', '生成可编辑的表面或 UV 分色区域，用于多色打印。')">
-            <button class="studio-menu-item" type="button"><Icon icon="i-tripo:segmentation" /><span>{{ t('Segment', '分色') }}</span></button>
-          </ModuleTooltip>
-          <ModuleTooltip :title="t('Texture', '贴图')" :description="t('Review source textures and PBR information carried by the model.', '查看模型携带的贴图和 PBR 信息。')">
-            <button class="studio-menu-item" type="button"><Icon icon="i-tripo:texture" /><span>{{ t('Texture', '贴图') }}</span></button>
-          </ModuleTooltip>
-          <ModuleTooltip :title="t('Retopo', '重拓扑')" :description="t('Inspect mesh density and topology before preparing the print.', '在准备打印前检查网格密度和拓扑。')">
-            <button class="studio-menu-item" type="button"><Icon icon="i-tripo:remesh" /><span>{{ t('Retopo', '重拓扑') }}</span></button>
-          </ModuleTooltip>
+          <button class="studio-menu-item" type="button" disabled :title="t('Image · Coming soon', 'Image · 暂未开放')">
+            <svg class="studio-module-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-8" /><circle cx="8" cy="9" r="1.5" fill="currentColor" stroke="none" /><path d="m4 18 5-5 4 4 3-3 5 5M18 2l1.3 3.7L23 7l-3.7 1.3L18 12l-1.3-3.7L13 7l3.7-1.3Z" /></svg>
+            <span>Image</span>
+          </button>
+          <button class="studio-menu-item" type="button" disabled :title="t('Model · Coming soon', 'Model · 暂未开放')"><Icon icon="i-tripo:generate" /><span>Model</span></button>
+          <button class="studio-menu-item studio-menu-segment" type="button" disabled :title="t('Segment · Coming soon', 'Segment · 暂未开放')"><Icon icon="i-tripo:segmentation" /><span>Segment</span><svg class="studio-module-caret" viewBox="0 0 10 6" fill="currentColor" aria-hidden="true"><path d="M0 0h10L5 6Z" /></svg></button>
+          <button class="studio-menu-item" type="button" disabled :title="t('Decorate · Coming soon', 'Decorate · 暂未开放')">
+            <svg class="studio-module-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.3 2.7a2.1 2.1 0 0 1 3 3L12 16l-4-4ZM6.8 13.8l3.4 3.4c-.2 3.2-2.8 4.7-7.4 4.2 1.6-1.5.4-4.6 4-7.6Z" /></svg>
+            <span>Decorate</span>
+          </button>
+          <button class="studio-menu-item studio-menu-print-start" :class="{ active: studio.preparation.activeModule === 'multi-color' }" type="button" :aria-current="studio.preparation.activeModule === 'multi-color' ? 'page' : undefined" aria-controls="multicolor-panel" :disabled="studio.busy || !studio.content" @click="studio.navigatePreparation('multi-color')">
+            <span class="studio-module-badge" aria-hidden="true">🔥</span>
+            <svg class="studio-module-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7Zm-10 9 10 5 10-5v3l-10 5-10-5Zm0 6 10 5 10-5v3l-10 5-10-5Z" transform="translate(1 0) scale(.92)" /></svg>
+            <span>Multi-color</span>
+          </button>
+          <button class="studio-menu-item" :class="{ active: studio.preparation.activeModule === 'print' }" type="button" :disabled="studio.busy || !studio.content" :aria-current="studio.preparation.activeModule === 'print' ? 'page' : undefined" aria-controls="print-preparation-panel" @click="studio.navigatePreparation('print')">
+            <span class="studio-module-badge" aria-hidden="true">🔥</span>
+            <svg class="studio-module-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18M6 3v16H3v3h18v-3h-3V3M9 4v4h6V4M12 8v3M6 19h12" /><path d="m12 12 3 1.5v3L12 18l-3-1.5v-3Zm0 3v3m-3-4.5 3 1.5 3-1.5" /></svg>
+            <span>Print</span>
+          </button>
           <span class="studio-menu-spacer" />
           <span class="studio-local-state"><i />LOCAL</span>
         </nav>
 
-        <section class="studio-left-panel">
+        <PrintPreparation v-if="studio.preparation.activeModule === 'print'" :owned-ids="ownedIds" />
+        <section v-else id="multicolor-panel" class="studio-left-panel">
           <div class="studio-panel-title">
             <Icon icon="i-tripo:segmentation" class="size-4" />
             <h1>{{ t('Multicolor print', '多色打印') }}</h1>
           </div>
-          <div class="studio-panel-scroll">
-            <ModuleTooltip :title="t('Import model', '导入模型')" :description="t('Upload a Tripo GLB or FBX. Select matching FBX textures at the same time.', '上传 Tripo 生成的 GLB 或 FBX；FBX 贴图请同时选择。')" side="right">
-              <button class="studio-upload" type="button" :disabled="studio.busy" @click="upload?.click()">
-                <Icon icon="i-tripo:upload" class="size-6" />
-                <strong>{{ t('Import model', '导入模型') }}</strong>
-                <small>GLB, FBX · {{ t('drag and drop', '拖拽上传') }}</small>
-              </button>
-            </ModuleTooltip>
-            <input ref="upload" class="hidden-input" type="file" multiple accept=".glb,.fbx,.png,.jpg,.jpeg,.webp,.tga,.bmp" @change="uploadFiles">
-            <p class="studio-help">{{ t('Select FBX textures together.', 'FBX 配套贴图请一起选择。') }}</p>
-
-            <ValidationControls :settings="studio.settings" :busy="studio.busy" @workflow="studio.setWorkflow" @sample="studio.validationSample" />
-
-            <section v-if="studio.settings.workflow !== 'validation'" class="studio-section">
-              <div class="studio-section-heading"><span>01</span><h2>{{ t('Color regions', '颜色区域') }}</h2></div>
-              <p class="studio-section-description">{{ t('Match model colors to Polymaker SKUs. Set the maximum filament count; assignments can be replaced manually.', '按模型颜色匹配 Polymaker SKU。设置最多使用的耗材数，结果可手动替换。') }}</p>
-              <div class="studio-segmented">
-                <ModuleTooltip :title="t('Surface regions', '表面分色')" :description="t('Assign colors by connected mesh faces. This works without UVs and keeps geometric boundaries.', '按连通网格面分配颜色。不依赖 UV，并保留几何边界。')" side="right">
-                  <button type="button" :class="{ active: studio.scheme === 'high' }" :disabled="studio.busy" @click="studio.changeScheme('high')">{{ t('Surface', '表面') }}</button>
-                </ModuleTooltip>
-                <ModuleTooltip :title="t('UV regions', 'UV 分色')" :description="t('Assign colors from the baseColor texture through UVs. Textured models are required.', '通过 UV 读取 baseColor 贴图并分配颜色。需要带贴图的模型。')" side="right">
-                  <button type="button" :class="{ active: studio.scheme === 'low' }" :disabled="studio.busy" @click="studio.changeScheme('low')">{{ t('UV', 'UV') }}</button>
-                </ModuleTooltip>
-              </div>
-              <ModuleTooltip :title="t('Color count', '颜色数')" :description="t('Use at most 1–12 supplier SKUs. Fewer may be selected when the model has fewer colors.', '最多使用 1–12 个供应商 SKU。模型颜色较少时，实际使用的数量可能更少。')" side="right">
-                <label class="studio-range"><span>{{ t('Colors', '颜色数') }}<b>{{ studio.colorCount }}</b></span><input v-model.number="studio.colorCount" type="range" min="1" max="12" :disabled="studio.busy"></label>
-              </ModuleTooltip>
-              <ModuleTooltip :title="t('Region detail', '区域细节')" :description="t('Controls small-region cleanup and edge preservation. Higher values keep finer patches but may create more small regions.', '控制小区域清理和边缘保留。数值越高越保留细节，也可能产生更多小区域。')" side="right">
-                <label class="studio-range"><span>{{ t('Detail', '细节') }}<b>{{ studio.precision }}/6</b></span><input v-model.number="studio.precision" type="range" min="1" max="6" :disabled="studio.busy"></label>
-              </ModuleTooltip>
-              <ModuleTooltip :title="t('Generate regions', '生成分色')" :description="t('Sample model colors and match them to supplier catalog HEX colors. Regeneration replaces current assignments. Preview lighting and local material edits do not affect matching.', '采样模型颜色，匹配供应商色卡 HEX。重新生成会替换当前绑定。预览光照与本地材质调整不影响匹配。')" side="right">
-                <button class="studio-primary" type="button" :disabled="studio.busy || !studio.content" @click="studio.segment"><Icon icon="i-tripo:magic" class="size-4" />{{ t('Generate regions', '生成分色') }}</button>
-              </ModuleTooltip>
-            </section>
-
-            <section class="studio-section">
-              <div class="studio-section-heading"><span>02</span><h2>{{ t('Print appearance', '打印外观') }}</h2></div>
-              <p class="studio-section-description">{{ t('Set the physical height and toggle the layer texture used in the preview.', '设置打印高度，并控制预览中的层纹效果。') }}</p>
-              <ModuleTooltip :title="t('Print height', '打印高度')" :description="t('Physical model height in millimeters. The preview and 3MF export use the same scale.', '模型打印高度，单位为毫米。预览和 3MF 导出使用同一比例。')" side="right">
-                <label class="studio-field-row"><span>{{ t('Print height', '打印高度') }}</span><span class="studio-number"><input :value="studio.settings.height" type="number" min="10" max="320" @change="heightChanged">mm</span></label>
-              </ModuleTooltip>
-              <ModuleTooltip :title="t('Layer texture', '层纹效果')" :description="t('Shows or hides the visual layer shader in the preview. It does not change region labels or print data.', '显示或隐藏预览中的层纹 shader。不改变区域标签或打印数据。')" side="right">
-                <label class="studio-field-row"><span>{{ t('Layer texture', '层纹效果') }}</span><input v-model="studio.settings.layers" class="studio-switch" type="checkbox" role="switch"></label>
-              </ModuleTooltip>
-            </section>
-
-            <details class="studio-projects">
-              <summary>
-                <ModuleTooltip :title="t('Projects & backups', '项目与备份')" :description="t('Projects stay in this browser. Backups include the model files, region labels and material assignments.', '项目保存在当前浏览器。备份包含模型文件、区域标签和材质分配。')" side="right">{{ t('Projects & backups', '项目与备份') }}</ModuleTooltip>
-                <Icon icon="i-tripo:caret" class="size-3 rotate-180" />
-              </summary>
-              <p class="studio-section-description">{{ t('Reopen a local project or restore a backup without uploading model data.', '重新打开本地项目，或恢复备份，不上传模型数据。') }}</p>
-              <ModuleTooltip :title="t('Open sample', '打开示例')" :description="t('Load the bundled Atelier model to try the workflow without selecting files.', '打开内置 Atelier 示例模型，无需选择文件即可体验流程。')" side="right">
-                <button type="button" :disabled="studio.busy" @click="studio.demo">{{ t('Open sample', '打开示例') }}</button>
-              </ModuleTooltip>
-              <ModuleTooltip v-for="item in studio.projects" :key="item.id" :title="t('Open saved project', '打开已保存项目')" :description="t('Restore this project from IndexedDB, including its model and region assignments.', '从 IndexedDB 恢复此项目，包括模型和区域分配。')" side="right">
-                <button type="button" :disabled="studio.busy" @click="studio.openProject(item.id)">{{ item.name }}</button>
-              </ModuleTooltip>
-              <div class="studio-button-row">
-                <ModuleTooltip :title="t('Backup project', '备份项目')" :description="t('Download a ZIP with the model files, materials and current region labels.', '下载包含模型文件、材质和当前区域标签的 ZIP。')" side="right">
-                  <button type="button" :disabled="studio.busy || !studio.content" @click="studio.backup">{{ t('Backup', '备份') }}</button>
-                </ModuleTooltip>
-                <ModuleTooltip :title="t('Restore backup', '恢复备份')" :description="t('Import a previously downloaded project ZIP and continue editing locally.', '导入之前下载的项目 ZIP，继续本地编辑。')" side="right">
-                  <button type="button" :disabled="studio.busy" @click="restore?.click()">{{ t('Restore', '恢复') }}</button>
-                </ModuleTooltip>
-              </div>
-              <ModuleTooltip :title="t('3MF self-test', '3MF 自检')" :description="t('Download a four-color validation file to check the color-slot encoding.', '下载四色验证文件，检查色槽编码是否正确。')" side="right">
-                <button type="button" :disabled="studio.busy || !studio.content" @click="studio.selftest">{{ t('3MF self-test', '3MF 自检') }}</button>
-              </ModuleTooltip>
-            </details>
-            <input ref="restore" class="hidden-input" type="file" accept=".zip" @change="restoreFiles">
+          <div v-if="studio.preparation.origin === 'print'" class="prep-editor-back-row">
+            <button class="prep-editor-back" type="button" :disabled="studio.busy" @click="studio.navigatePreparation('print')">← 返回打印准备</button>
           </div>
+          <div class="studio-panel-scroll">
+            <button class="filament-library-card" type="button" @click="toggleLibrary"><span><strong>{{ t('My filaments', '我的耗材') }}</strong><small>{{ ownedMaterials.length }} {{ t('saved', '种已保存') }}</small></span><span class="filament-swatches"><i v-for="material in ownedMaterials.slice(0, 7)" :key="material.id" :style="{ background: material.hex }" /><Icon icon="i-tripo:caret" class="size-3 rotate-90" /></span></button>
+            <section class="print-section">
+              <div class="print-section-heading"><h2>{{ t('Color separation', '分色') }}</h2><button type="button" @click="settingsExpanded = !settingsExpanded">{{ settingsExpanded ? t('Collapse', '收起') : t('Edit', '编辑') }} <Icon icon="i-tripo:caret" :class="settingsExpanded ? 'size-3 rotate-180' : 'size-3'" /></button></div>
+              <template v-if="settingsExpanded">
+                <label class="print-field"><span>{{ t('Filament count', '耗材数量') }}</span><input v-model.number="studio.colorCount" type="number" min="1" max="12" step="1" :disabled="studio.busy" @change="normalizeColorCount"></label>
+                <label class="studio-range separation-detail"><span>{{ t('Color detail', '分色细节') }}<b>{{ studio.precision }}</b></span><input v-model.number="studio.precision" type="range" min="1" max="6" step="1" :disabled="studio.busy"></label>
+                <p class="print-help">{{ t('Higher values retain finer color details. Applied when you regenerate.', '数值越高，保留越多颜色细节；重新分色后生效。') }}</p>
+                <label class="print-switch"><span>{{ t('Use mine first', '优先使用我的耗材') }}</span><input v-model="preferOwned" class="studio-switch" type="checkbox" :disabled="!ownedMaterials.length"></label>
+                <p class="print-help">{{ ownedMaterials.length ? t('Prefer close colors from your compatible materials.', '优先匹配兼容的现有耗材。') : t('Add your filaments to enable this option.', '添加耗材后可启用此选项。') }}</p>
+                <button class="print-primary" type="button" :disabled="studio.busy || !studio.content" @click="requestGenerate"><Icon icon="i-tripo:magic" class="size-4" />{{ studio.regions.length ? t('Regenerate plan', '重新分色') : t('Generate color plan', '生成分色方案') }} <span>⚡ 10</span></button>
+              </template>
+              <div v-else class="print-summary"><b>{{ studio.colorCount }}</b><span>•</span><span>{{ preferOwned ? t('Use mine first', '优先我的耗材') : t('Best color match', '最佳颜色匹配') }}</span></div>
+            </section>
+            <section v-if="studio.regions.length" class="print-section plan-section"><div class="print-section-heading"><h2>{{ t('Plan filaments', '方案耗材') }}</h2><span>{{ planFilaments.length }} used</span></div><div class="plan-summary"><span>{{ planFilaments.filter(item => isOwned(item.material)).length }} owned</span><span>{{ planFilaments.filter(item => !isOwned(item.material)).length }} not owned</span></div><details v-for="item in planFilaments" :key="item.material.id" class="plan-row"><summary @click="selectPlan(item.indices[0]!)"><i :style="{ background: item.material.hex }" /><b>{{ item.material.name }}</b><em>{{ isOwned(item.material) ? 'Owned' : 'Not owned' }}</em></summary><div class="plan-detail"><p>Material <strong>{{ item.material.supplier?.materialType ?? 'PLA' }}</strong></p><p>SKU <strong>{{ item.material.materialId }}</strong></p><button type="button" @click="openReplacement(item.material.id)">{{ t('Replace filament', '替换耗材') }}</button></div></details></section>
+            <section class="print-section refine-section">
+              <button class="refine-heading" type="button" :disabled="studio.busy || !studio.content" @click="toggleRefine"><span><Icon icon="i-tripo:magic" />{{ t('Refine colors', '精修分色') }}</span><Icon icon="i-tripo:caret" :class="refineExpanded ? 'size-3 rotate-180' : 'size-3'" /></button>
+              <p v-if="!refineExpanded" class="print-help">{{ t('Brush, color regions or real UV islands.', '支持画笔、连续色块和真实 UV 岛改色。') }}</p>
+              <template v-else>
+                <div class="refine-tabs"><button v-for="mode in (['brush', 'color', 'uv'] as const)" :key="mode" type="button" :disabled="studio.busy" :class="{ active: refineMode === mode }" @click="startRefine(mode)">{{ mode === 'brush' ? t('Brush', '画笔') : mode === 'color' ? t('Color region', '色块') : t('UV Edit', 'UV 岛') }}</button></div>
+                <template v-if="refineMode === 'uv'">
+                  <template v-if="studio.refinement?.islandCount">
+                    <label class="print-field">{{ t('Select by', '选择范围') }}<select :value="studio.selectionScope" :disabled="studio.busy" @change="setSelectionScope(($event.target as HTMLSelectElement).value as 'island' | 'part')"><option value="island">{{ t('UV island', 'UV 岛') }}</option><option value="part">{{ t('Connected part', '独立部件') }}</option></select></label>
+                    <UvAtlas :data="studio.refinement" :selection="studio.selection" :colors="studio.regions.map(region => region.material.hex)" :busy="studio.busy || studio.settings.tool !== 'select'" @select="studio.selectRefinement" />
+                    <p class="print-help">{{ t('Select in the UV map or on the model. Parts follow connected geometry, not semantic shapes.', '可在展开图或模型上选择。独立部件按几何连接识别，不自动识别树叶等语义。') }}</p>
+                  </template>
+                  <p v-else class="print-help">{{ t('This model has no valid UV islands. Use Brush or Color region.', '当前模型没有有效 UV 岛，请使用画笔或色块改色。') }}</p>
+                </template>
+                <p v-else class="print-help">{{ refineMode === 'color' ? t('Click a connected color region on the model, then choose a filament. Shift-click to multi-select.', '点击模型上的连续同色色块，再选耗材。Shift 点击可多选。') : t('Choose a filament, then paint on the model.', '选择耗材后，在模型上涂抹改色。') }}</p>
+                <div v-if="refineMode !== 'brush' && studio.selection.length" class="refine-selection-info"><span>{{ refineMode === 'uv' ? t(`${studio.selectionIslandCount} islands selected`, `已选 ${studio.selectionIslandCount} 个 UV 岛`) : t(`${studio.selection.length} faces selected`, `已选 ${studio.selection.length} 个面`) }}</span><button type="button" @click="studio.clearSelection">{{ t('Clear', '清空') }}</button><small>{{ studio.selectionMaterial?.name ?? t('Mixed filaments', '混合耗材') }}</small></div>
+                <p v-if="refineMode !== 'brush' && !studio.selection.length" class="print-help">{{ t('Select a region to enable filament assignment.', '先选择区域，再点击下方耗材整块改色。') }}</p>
+                <div class="refine-filaments"><button v-for="item in planFilaments" :key="item.material.id" type="button" :disabled="studio.busy || (refineMode !== 'brush' && (!studio.selection.length || studio.settings.tool !== 'select'))" :class="{ active: (refineMode === 'brush' ? studio.selected : studio.selectionMaterial)?.id === item.material.id }" @click="chooseRefineFilament(item.indices[0]!)"><i :style="{ background: item.material.hex }" /><span>{{ item.material.name }}</span></button></div>
+                <button v-if="studio.settings.tool === 'orbit'" class="print-secondary" type="button" :disabled="studio.busy" @click="startRefine(refineMode)">{{ t('Continue editing', '继续精修') }}</button>
+              </template>
+            </section>
+          </div>
+          <footer class="prep-editor-footer">
+            <template v-if="studio.preparation.origin === 'print'">
+              <p>{{ studio.prepSaving ? '正在保存…' : studio.prepSaveError ? '草稿保存失败，请重试' : studio.prepDirty ? '草稿待保存' : '草稿已保存 · 完成后确认分色' }}</p>
+              <button v-if="studio.prepSaveError" class="prep-editor-back" type="button" :disabled="studio.busy" @click="studio.savePreparation">重试保存</button>
+              <button class="print-primary" type="button" :disabled="studio.busy || !studio.content" @click="studio.completePrintColors">完成并返回打印准备</button>
+            </template>
+            <button v-else class="prep-editor-back prep-editor-forward" type="button" :disabled="studio.busy || !studio.content" @click="studio.navigatePreparation('print')">前往打印准备 →</button>
+          </footer>
+          <div v-if="filamentPopover" class="filament-popover">
+            <div class="popover-heading"><strong>{{ filamentPopover === 'library' ? t('My filaments', '我的耗材') : t('Replace filament', '替换耗材') }}</strong><button type="button" @click="filamentPopover = null">×</button></div>
+            <template v-if="filamentPopover === 'library'"><p class="print-help">{{ t('Save the filaments you already own.', '保存你已有的耗材。') }}</p><div v-if="ownedMaterials.length" class="stock-list"><div v-for="material in ownedMaterials" :key="material.id" class="stock-row"><i :style="{ background: material.hex }" /><span>{{ material.name }}<small>{{ material.materialId }}</small></span><button type="button" @click="removeOwned(material)">×</button></div></div><div class="refine-tabs"><button type="button" :class="{ active: filamentEntry === 'sku' }" @click="filamentEntry = 'sku'">By SKU</button><button type="button" :class="{ active: filamentEntry === 'color' }" @click="filamentEntry = 'color'">By color</button></div><template v-if="filamentEntry === 'sku'"><input v-model="filamentQuery" class="popover-input" placeholder="e.g. PLA-001"><button v-for="material in searchedFilaments" :key="material.id" type="button" class="search-choice" @click="addOwned(material)"><i :style="{ background: material.hex }" /><span>{{ material.name }}<small>{{ material.materialId }}</small></span><b>+</b></button></template><template v-else><input v-model="filamentColor" class="popover-input" type="color"><button class="print-secondary" type="button" @click="addClosestColor">+ Add filament</button></template><button class="popover-done" type="button" @click="filamentPopover = null">Done</button></template>
+            <template v-else><p class="print-help">{{ t('Replace this filament in all assigned regions.', '替换所有使用该耗材的分区。') }}</p><button v-for="item in studio.allMaterials.slice(0, 8)" :key="item.id" type="button" class="search-choice" @click="replacePlanMaterial(item)"><i :style="{ background: item.hex }" /><span>{{ item.name }}<small>{{ item.materialId }}</small></span></button></template>
+          </div>
+          <div v-if="pendingRegenerate" class="regenerate-dialog"><strong>{{ t('Replace your refinements?', '重新分色会替换精修结果？') }}</strong><p>{{ t('Generating a new color plan resets brush and UV edits.', '重新生成分色方案会重置画笔和 UV 精修。') }}</p><button type="button" class="print-primary" @click="confirmGenerate">{{ t('Regenerate plan', '重新分色') }}</button><button type="button" class="popover-done" @click="pendingRegenerate = false">{{ t('Keep editing', '继续编辑') }}</button></div>
         </section>
       </aside>
 
       <section class="studio-viewer-shell">
         <div ref="canvasArea" class="studio-viewer">
-          <ClientOnly><ModelViewport ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.settings" :validation-surface="studio.validationSurface" @error="studio.report" /></ClientOnly>
+          <ClientOnly><ModelViewport ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.settings" :validation-surface="studio.validationSurface" :selection="studio.selection" :busy="studio.busy" @select="studio.selectRefinement" @error="studio.report" @stroke="studio.stroke" @fill="studio.fill" /></ClientOnly>
           <div class="viewer-mode-bar">
             <span>{{ t('Workspace', '工作台') }} <i>/</i> {{ t('Material preview', '材质预览') }}</span>
             <div class="studio-segmented viewer-modes"><ModuleTooltip v-for="mode in (['original', 'print', 'compare'] as const)" :key="mode" :title="modeTitle(mode)" :description="modeDescription(mode)" side="bottom"><button type="button" :class="{ active: studio.settings.mode === mode }" @click="studio.settings.mode = mode">{{ mode === 'original' ? t('Original', '原模型') : mode === 'print' ? t('Material', '材质') : t('Compare', '对比') }}</button></ModuleTooltip></div>
@@ -259,17 +360,20 @@ onBeforeUnmount(() => {
           <div v-if="studio.failure" role="alert" class="workspace-error"><span>{{ studio.failure }}</span><button type="button" aria-label="Dismiss error" @click="studio.failure = ''"><Icon icon="i-tripo:close" /></button></div>
           <details v-if="studio.warnings.length" class="warnings"><summary>{{ studio.warnings.length }} {{ t('import notes', '条导入提示') }}</summary><p v-for="warning in studio.warnings" :key="warning">{{ warning }}</p></details>
 
-          <RegionAssignments v-if="studio.settings.workflow !== 'validation'" :regions="studio.regions" :selected="studio.selectedRegion" :busy="studio.busy" @select="studio.selectedRegion = $event" />
+          <div class="print-toolbar" :class="{ editing: studio.settings.tool !== 'orbit' }">
+            <template v-if="studio.settings.tool === 'orbit'"><span class="toolbar-pill"><Icon icon="i-tripo:columns-2" />{{ t('Compare', '对比') }}</span><span class="toolbar-divider" /><span class="toolbar-label"><Icon icon="i-tripo:circle-dot" />{{ t('Filament appearance', '耗材效果') }}</span><span class="toolbar-divider" /><button class="toolbar-icon" type="button" :title="t('Preview information', '预览信息')">i</button></template>
+            <template v-else-if="refineMode === 'brush'"><button class="toolbar-tool active" type="button" @click="studio.settings.tool = 'brush'"><Icon icon="i-tripo:paintbrush" />{{ t('Brush', '画笔') }}</button><button class="toolbar-chip" type="button" @click="refineExpanded = true">● {{ studio.selected?.name ?? t('Choose filament', '选择耗材') }}</button><label class="toolbar-size">{{ t('Size', '大小') }}<input v-model.number="studio.settings.radius" type="range" min="0.2" max="12" step="0.2"></label><button class="toolbar-icon" type="button" :disabled="studio.busy || !studio.undoCount" @click="studio.undo">↶</button><button class="toolbar-done" type="button" @click="finishRefine">{{ t('Done', '完成') }}</button></template>
+            <template v-else><span class="toolbar-label"><Icon icon="i-tripo:cursor" />{{ refineMode === 'color' ? t('Color region', '色块选择') : studio.selectionScope === 'part' ? t('Connected part', '独立部件') : t('UV island', 'UV 岛') }}</span><span class="toolbar-label">{{ t(`${studio.selection.length} faces`, `${studio.selection.length} 个面`) }}</span><button class="toolbar-icon" type="button" :disabled="studio.busy || !studio.undoCount" :title="t('Undo', '撤销')" @click="studio.undo">↶</button><button class="toolbar-chip" type="button" :disabled="!studio.selection.length" @click="studio.clearSelection">{{ t('Clear', '清空选择') }}</button><button class="toolbar-done" type="button" @click="finishRefine">{{ t('Done', '完成') }}</button></template>
+          </div>
         </div>
       </section>
 
-      <aside class="studio-right-shell">
-        <Tabs :model-value="rightTab" class="studio-right-tabs" @update:model-value="rightTab = String($event)">
-          <TabsList class="studio-right-tab-list"><ModuleTooltip :title="t('Assets', '资产')" :description="t('Manage material records, apply them to regions and export value tables.', '管理材质档案，将材质应用到区域，并导出数值表。')" side="top"><TabsTrigger value="assets"><Icon icon="i-tripo:assets" /><span>{{ t('Assets', '资产') }}</span></TabsTrigger></ModuleTooltip><ModuleTooltip :title="t('Properties', '属性')" :description="t('Inspect the selected region and its current material parameters.', '查看当前区域及其材质参数。')" side="top"><TabsTrigger value="properties"><Icon icon="i-tripo:properties" /><span>{{ t('Property', '属性') }}</span></TabsTrigger></ModuleTooltip></TabsList>
-          <TabsContent value="assets" class="studio-right-content"><MaterialPanel :materials="studio.allMaterials" :selected="studio.selected" :checked="studio.checked" :busy="studio.busy" :save-material="studio.saveMaterial" :delete-material="studio.deleteMaterial" :import-materials="studio.importMaterials" @apply="studio.apply" @preview="studio.draft = $event" @check="check" @export="studio.exportMaterials" /></TabsContent>
-          <TabsContent value="properties" class="studio-right-content"><div class="properties-panel"><div class="properties-heading"><Icon icon="i-tripo:properties" /><span>{{ t('Material properties', '材质属性') }}</span></div><p>{{ t('Select a region to inspect its current assignment.', '选择一个区域查看当前材质。') }}</p><dl v-if="studio.selected"><ModuleTooltip :title="t('Material ID', '材质 ID')" :description="t('Stable user-facing identifier for exports and material references.', '导出和材质引用使用的稳定用户标识。')" side="left"><div><dt>{{ t('Material ID', '材质 ID') }}</dt><dd>{{ studio.selected.materialId }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Display color', '展示颜色')" :description="t('Saved sRGB HEX value. It is the source color for the region preview.', '已保存的 sRGB HEX 值，是区域预览使用的源颜色。')" side="left"><div><dt>{{ t('Color', '颜色') }}</dt><dd>{{ studio.selected.hex }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Transparency', '透明度')" :description="t('Preview opacity is 1 minus transparency. This is a display parameter.', '预览不透明度等于 1 减透明度。这是显示参数。')" side="left"><div><dt>{{ t('Transparency', '透明度') }}</dt><dd>{{ studio.selected.transparency.toFixed(2) }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Metalness', '金属度')" :description="t('Preview metallic response from 0 non-metallic to 1 fully metallic.', '预览金属反射，0 为非金属，1 为完全金属。')" side="left"><div><dt>{{ t('Metalness', '金属度') }}</dt><dd>{{ studio.selected.metalness.toFixed(2) }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Roughness', '粗糙度')" :description="t('Roughness follows the assigned material rule. The OpenPBR subset uses it directly.', '输入粗糙度值。按当前材质的渲染规则使用。OpenPBR 子集直接使用粗糙度。')" side="left"><div><dt>{{ t('Roughness', '粗糙度') }}</dt><dd>{{ studio.selected.roughness.toFixed(2) }}</dd></div></ModuleTooltip></dl></div></TabsContent>
-        </Tabs>
-      </aside>
+      <aside class="studio-right-shell" aria-hidden="true"><div class="studio-history-placeholder" /></aside>
     </div>
+    <div v-if="inviteDialog" class="print-invite-veil"><section class="print-invite"><div class="invite-icon"><Icon icon="i-tripo:segmentation" /></div><h2>{{ t('Print with what you own', '使用已有耗材打印') }}</h2><p>{{ t('Add your existing filaments by SKU or color. We will use compatible, close matches first.', '按 SKU 或颜色录入现有耗材，分色时会优先使用兼容的相近颜色。') }}</p><button type="button" class="print-primary" @click="dismissInvite(true)">{{ t('Add my filaments', '录入我的耗材') }}</button><button type="button" class="popover-done" @click="dismissInvite()">{{ t('Skip for now', '暂时跳过') }}</button></section></div>
   </main>
 </template>
+
+<style scoped>
+.prep-editor-back-row{padding:0 20px 10px;flex:none}.prep-editor-footer{margin-top:auto;padding:12px 20px 16px;border-top:1px solid #ffffff14;flex:none}.prep-editor-back{display:block;border:0;background:none;color:#c5c6cb;font-size:11px;padding:5px 0 8px;cursor:pointer}.prep-editor-back:disabled{opacity:.45;cursor:not-allowed}.prep-editor-footer .print-primary{min-height:34px;font-size:11px}.prep-editor-footer p{font-size:10px;color:#94959c;line-height:1.5;margin:0 0 8px}.prep-editor-forward{width:100%;padding:8px 0;text-align:center}.prep-editor-back:focus-visible{outline:2px solid #ffd400;outline-offset:3px}
+</style>

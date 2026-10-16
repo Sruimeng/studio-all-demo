@@ -2,8 +2,8 @@
  * worker.js — 分色计算 Worker
  * 消息：init / palette / label / lowpoly / paintHigh / paintLow / export3mf / exportGLB / selftest
  * ============================================================ */
-/* global MC, MCMesh, MCDecimate, MCLow, MCExport */
-importScripts("./color.js", "./palette.js", "./mesh.js", "./decimate.js", "./lowpoly.js", "./export3mf.js");
+/* global MC, MCMesh, MCDecimate, MCLow, MCExport, MCRefine */
+importScripts("./color.js", "./palette.js", "./mesh.js", "./decimate.js", "./lowpoly.js", "./export3mf.js", "./refinement.js");
 
 const S = {}; // 全部状态
 
@@ -74,6 +74,7 @@ async function init(m, reqId) {
   }
   const nv = positions.length / 3, nf = indices.length / 3;
   Object.assign(S, { positions, indices, uvs, colors, faceMat, materials, nv, nf, warnings: [], geometryKey: geometryKey(positions, indices) });
+  S.refineInput = m;
   pr(0.02, "焊接顶点");
   let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   for (let i = 0; i < nv; i += 1) {
@@ -665,6 +666,7 @@ function fillHigh(m) {
   return new Uint32Array(faces);
 }
 function clearPaint() {
+  S.refinement = null;
   if (S.highPaint) S.highPaint.fill(-1);
   if (S.low) S.low.override.forEach((o) => o && o.fill(-1));
   S.undo = [];
@@ -744,7 +746,8 @@ function undo() {
   if (!op) return false;
   const operations = op.type === "batch" ? op.operations : [op];
   for (const op of operations) {
-  if (op.type === "high") for (let i = 0; i < op.faces.length; i += 1) S.highPaint[op.faces[i]] = op.prev[i];
+  if (op.type === "refinement") { for (let i = 0; i < op.faces.length; i++) S.refinement.labels[op.faces[i]] = op.prev[i]; }
+  else if (op.type === "high") for (let i = 0; i < op.faces.length; i += 1) S.highPaint[op.faces[i]] = op.prev[i];
   else { const o = S.low.override[op.img]; for (let i = 0; i < op.idx.length; i += 1) o[op.idx[i]] = op.prev[i]; }
   }
   return true;
@@ -762,7 +765,31 @@ async function export3mf(m, reqId) {
   const pr = progress(reqId);
   const { scheme, scale, filaments, name, withConfig, bed } = m;
   let blob;
-  if (scheme === "low") {
+  if (S.refinement) {
+    const r = S.refinement;
+    if (S.refinementScheme === 'low' && S.low?.sub) {
+      // Keep the watertight source mesh; change leaf states in the existing subdivision codes.
+      const sub = S.low.sub; let leaf = 0; const codes = [];
+      for (let f = 0; f < S.low.nlf; f++) {
+        const encoded = [];
+        for (let i = sub.off[f]; i < sub.off[f + 1]; i++) {
+          const value = sub.nib[i];
+          if (value & 3) encoded.push(value);
+          else {
+            if ((value >> 2) === 3) i++;
+            const state = r.labels[leaf++] + 1;
+            if (state < 3) encoded.push(state << 2); else encoded.push(12, state - 3);
+          }
+        }
+        codes.push(encoded.reverse().map(v => '0123456789ABCDEF'[v]).join(''));
+      }
+      if (leaf !== r.labels.length) throw new Error('Refinement topology does not match the export mesh.');
+      blob = await MCExport.build3mf({ name, pos: S.low.lpos, idx: S.low.lidx, nf: S.low.nlf, scale, filaments, withConfig, bed, materialData: m.materialData, faceCode: f => codes[f] }, pr);
+    } else {
+      blob = await MCExport.build3mf({ name, pos: S.wpos, idx: S.widx, nf: S.nf, scale, filaments, withConfig, bed, materialData: m.materialData,
+        faceSlot: f => r.labels[f], faceCode: f => MCLow.stateString(r.labels[f]) }, pr);
+    }
+  } else if (scheme === "low") {
     const low = S.low;
     const sub = low.sub;
     blob = await MCExport.build3mf({
@@ -881,11 +908,12 @@ function refreshHigh() {
 }
 
 function editAck(reqId, extra = {}) {
-  post("ack", { reqId, left: S.undo.length, label: S.label ? S.label.slice() : null, ...extra });
+  post("ack", { reqId, left: S.undo.length, label: S.label ? S.label.slice() : null, refinementLabels: S.refinement?.labels.slice(), ...extra });
 }
 
 function snapshot() {
   return {
+    refinement: S.refinement ? { scheme: S.refinementScheme, positions: Array.from(S.refinement.positions), labels: Array.from(S.refinement.labels), sourceFaces: Array.from(S.refinement.sourceFaces) } : undefined,
     version: 1, faceCount: S.nf, geometryKey: S.geometryKey,
     highPaint: Array.from(S.highPaint), labels: S.label ? Array.from(S.label) : null,
     autoLabels: S.autoLabel ? Array.from(S.autoLabel) : null,
@@ -909,6 +937,15 @@ function restore(m, reqId) {
     const map = S.mapTex[i], ov = snap.lowOverrides[i];
     if (ov !== null && (!map || !validLabels(ov, -1, map.w * map.h))) throw new Error("UV override dimensions do not match.");
   }
+  let refinement = null;
+  if (snap.refinement) {
+    const r = snap.refinement;
+    if (!['high', 'low', undefined].includes(r.scheme) || !Array.isArray(r.labels) || !r.labels.length || !Array.isArray(r.positions) || r.positions.length !== r.labels.length * 9 || r.positions.some(v => !Number.isFinite(v)) || !validLabels(r.labels, 0, r.labels.length)
+      || !Array.isArray(r.sourceFaces) || r.sourceFaces.length !== r.labels.length || r.sourceFaces.some(f => !Number.isInteger(f) || f < 0 || f >= S.nf)) throw new Error('Invalid refinement snapshot.');
+    refinement = MCRefine.create(S.refineInput, Float32Array.from(r.positions), Uint8Array.from(r.labels), Uint32Array.from(r.sourceFaces));
+  }
+  S.refinement = refinement;
+  S.refinementScheme = snap.refinement?.scheme ?? (snap.lowOptions && snap.refinement?.labels.length !== S.nf ? 'low' : 'high');
   S.highPaint = Int8Array.from(snap.highPaint);
   S.label = snap.labels ? Uint8Array.from(snap.labels) : null;
   S.autoLabel = snap.autoLabels ? Uint8Array.from(snap.autoLabels) : null;
@@ -926,7 +963,36 @@ function restore(m, reqId) {
     try { lowpoly(snap.lowOptions, reqId); } finally { captured = null; }
     result = responses.find(r => r.type === "lowpoly") || null;
   }
-  post("restore", { reqId, label: S.label ? S.label.slice() : null, low: result });
+  post("restore", { reqId, label: S.label ? S.label.slice() : null, low: result, refinement: refinement ? refinementResult() : undefined });
+}
+
+function refinementResult() {
+  const { adjacency, bvh, ...result } = S.refinement;
+  return result;
+}
+function prepareRefinement(scheme) {
+  if (S.refinement) return;
+  S.refinementScheme = scheme;
+  if (scheme === 'low' && S.low?.sub) {
+    const sub = S.low.sub;
+    if (S.low.target !== 0) throw new Error('Refinement needs the original mesh.');
+    S.refinement = MCRefine.create(S.refineInput, sub.leaves.slice(), sub.leafLab.slice(), sub.leafFace.slice());
+  } else {
+    if (!S.label) throw new Error('Generate colors before refining.');
+    const positions = new Float32Array(S.nf * 9);
+    for (let c = 0; c < S.indices.length; c++) positions.set(S.positions.subarray(S.indices[c] * 3, S.indices[c] * 3 + 3), c * 3);
+    S.refinement = MCRefine.create(S.refineInput, positions, S.label.slice(), Uint32Array.from({ length: S.nf }, (_, f) => f));
+  }
+}
+function paintRefinement(faces, label) {
+  requireLabel(label);
+  const r = S.refinement;
+  if (!r || !faces || Array.from(faces).some(f => !Number.isInteger(f) || f < 0 || f >= r.labels.length)) throw new Error('Invalid refinement selection.');
+  const changed = Uint32Array.from(new Set(Array.from(faces).filter(f => r.labels[f] !== label)));
+  if (!changed.length) return;
+  const prev = Uint8Array.from(changed, f => r.labels[f]);
+  for (const f of changed) r.labels[f] = label;
+  pushUndo({ type: 'refinement', faces: changed, prev });
 }
 
 async function dispatch(m) {
@@ -940,6 +1006,22 @@ async function dispatch(m) {
     if (m.type !== "init" && m.type !== "selftest" && !S.positions) throw new Error("Load a model first.");
     switch (m.type) {
       case "init": await init(m, reqId); break;
+      case "prepareRefinement": prepareRefinement(m.scheme); post('refinement', { reqId, ...refinementResult() }); break;
+      case "selectRefinement":
+        if (!S.refinement || !Array.isArray(m.materialGroups) || m.materialGroups.length !== S.nSlots) throw new Error('Prepare refinement first.');
+        post('selection', { reqId, faces: MCRefine.select(S.refinement, m.face, m.scope, m.materialGroups) }); break;
+      case "paintRefinement": paintRefinement(m.faces, m.label); editAck(reqId); break;
+      case "brushRefinement": {
+        const r = S.refinement; if (!r) throw new Error('Prepare refinement first.');
+        const idx = Uint32Array.from({ length: r.positions.length / 3 }, (_, i) => i);
+        r.bvh ??= MCMesh.buildBVH(r.positions, idx, r.labels.length);
+        const faces = new Set();
+        for (const hit of m.hits) {
+          if (!Number.isInteger(hit.face) || hit.face < 0 || hit.face >= r.labels.length || !Number.isFinite(hit.radius) || hit.radius <= 0 || hit.point.length !== 3 || hit.point.some(v => !Number.isFinite(v))) throw new Error('Invalid brush hit.');
+          faces.add(hit.face); MCMesh.sphereQuery(r.bvh, r.positions, idx, ...hit.point, hit.radius, f => faces.add(f));
+        }
+        paintRefinement(Uint32Array.from(faces), m.label); editAck(reqId); break;
+      }
       case "palette":
         if (!Number.isInteger(m.N) || m.N < 1 || m.N > 12) throw new Error("Choose 1–12 colors.");
         if (m.mode !== "free" && (!m.cands?.length || m.cands.some(c => !/^#[a-f0-9]{6}$/i.test(c.hex)))) throw new Error("Choose valid materials.");
@@ -974,14 +1056,23 @@ async function dispatch(m) {
         if (!S.low || !S.mapTex[m.img] || !Number.isFinite(m.u) || !Number.isFinite(m.v)) throw new Error("Invalid UV selection.");
         editAck(reqId, { count: fillLow(m) }); break;
       case "reset": case "clearPaint": clearPaint(); refreshHigh(); editAck(reqId); break;
-      case "undo": { const ok = undo(); refreshHigh(); editAck(reqId, { ok }); break; }
+      case "undo": {
+        const legacy = S.refinement && S.undo.length && S.undo[S.undo.length - 1].type !== 'refinement';
+        const ok = undo(); refreshHigh();
+        if (legacy) {
+          const scheme = S.refinementScheme; S.refinement = null;
+          if (scheme === 'low' && S.lastLow) { captured = []; try { lowpoly(S.lastLow, reqId); } finally { captured = null; } }
+          prepareRefinement(scheme);
+        }
+        editAck(reqId, { ok, refinement: legacy ? refinementResult() : undefined }); break;
+      }
       case "snapshot": post("snapshot", { reqId, snapshot: snapshot() }); break;
       case "restore": restore(m, reqId); break;
       case "export3mf":
         if (!Number.isFinite(m.scale) || m.scale <= 0 || !m.filaments?.length || m.filaments.length > 12 || m.filaments.some(f => !/^#[a-f0-9]{6}$/i.test(f.hex))) throw new Error("Invalid export scale or material slots.");
         if (m.scheme === "low" ? !S.low?.sub : !S.label) throw new Error("Create color labels before exporting.");
         if (m.filaments.length < S.nSlots) throw new Error("Export is missing material slots.");
-        if (m.scheme === "low" && S.lastLow) {
+        if (!m.preservePartition && !S.refinement && m.scheme === "low" && S.lastLow) {
           captured = [];
           try { lowpoly({ ...S.lastLow, scale: m.scale }, reqId); } finally { captured = null; }
         }

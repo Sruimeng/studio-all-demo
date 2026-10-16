@@ -9,6 +9,10 @@ export interface PrintMeshInput {
   materials: Array<{ image: number; factor: [number, number, number]; vertexColors?: boolean }>;
   images: Array<Blob | null>;
   partOfVertex?: Uint16Array;
+  rawUvs?: Float32Array | null;
+  uvValid?: Uint8Array;
+  topologyVertices?: Uint32Array;
+  faceDomain?: Uint32Array;
 }
 
 export interface PrintBounds {
@@ -100,6 +104,24 @@ export interface LowDab {
   seed?: [number, number, number]; tol?: number;
 }
 
+export type SelectionScope = 'color' | 'island' | 'part';
+export interface RefinementSnapshot {
+  scheme?: 'high' | 'low';
+  positions: number[];
+  labels: number[];
+  sourceFaces: number[];
+}
+export interface RefinementResult {
+  positions: Float32Array;
+  labels: Uint8Array;
+  sourceFaces: Uint32Array;
+  uvs: Float32Array;
+  faceIsland: Int32Array;
+  facePart: Uint32Array;
+  faceAtlas: Int32Array;
+  islandCount: number;
+  partCount: number;
+}
 export interface PrintSnapshot {
   version: 1;
   faceCount: number;
@@ -112,6 +134,7 @@ export interface PrintSnapshot {
   labelOptions: LabelOptions | null;
   lowOptions: LowOptions | null;
   lowOverrides: Array<number[] | null>;
+  refinement?: RefinementSnapshot;
 }
 
 export interface EditResult {
@@ -120,9 +143,13 @@ export interface EditResult {
   label: Uint8Array | null;
   faces?: Uint32Array;
   count?: number;
+  refinementLabels?: Uint8Array;
+  refinement?: RefinementResult;
 }
 
 export interface ExportOptions {
+  /** Export the confirmed subdivision without recomputing it at a new scale. */
+  preservePartition?: boolean;
   scheme: 'high' | 'low';
   scale: number;
   name: string;
@@ -133,12 +160,16 @@ export interface ExportOptions {
 }
 
 export interface ExportResult { blob: Blob; size: number; code?: string }
-export interface RestoreResult { label: Uint8Array | null; low: LowResult | null }
+export interface RestoreResult { label: Uint8Array | null; low: LowResult | null; refinement?: RefinementResult }
 export interface RequestIdentity { projectId: string; requestId: number; editRevision: number }
 export interface PrintProgress extends RequestIdentity { p: number; text: string }
 
 export interface PrintCommands {
   init: [PrintMeshInput, InitResult];
+  prepareRefinement: [{ scheme: 'high' | 'low' }, RefinementResult];
+  selectRefinement: [{ face: number; scope: SelectionScope; materialGroups: number[] }, { faces: Uint32Array }];
+  paintRefinement: [{ faces: Uint32Array; label: number }, EditResult];
+  brushRefinement: [{ hits: Array<{ face: number; point: [number, number, number]; radius: number }>; label: number }, EditResult];
   palette: [PaletteOptions, PaletteResult];
   label: [LabelOptions, LabelResult];
   lowpoly: [LowOptions, LowResult];

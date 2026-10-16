@@ -281,3 +281,107 @@ test('texture sampling multiplies authored vertex color in linear space', async 
   const init = await request('init', input); assert.ok(init.warnings.some(w => w.includes('vertex-color')));
   const result = await request('label', options); assert.deepEqual(Array.from(result.label), [0, 0]);
 });
+
+function uvModel() {
+  // One connected square split at a UV seam, plus a detached triangle sharing UVs.
+  return {
+    positions: new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,0,0, 1,1,0, 0,1,0, 3,0,0, 4,0,0, 4,1,0]),
+    indices: new Uint32Array([0,1,2,3,4,5,6,7,8]),
+    topologyVertices: new Uint32Array([0,1,2,0,2,3,4,5,6]),
+    faceDomain: new Uint32Array([0,0,0]), faceMat: new Uint32Array([0,0,0]),
+    uvs: new Float32Array([0,0, 1,0, 1,1, 2,0, 3,1, 2,1, 0,0, 1,0, 1,1]),
+    uvValid: new Uint8Array([1,1,1]), colors: null,
+    materials: [{ image: -1, factor: [1,0,0] }], images: [],
+  };
+}
+test('real UV seams, connected parts and color components remain distinct without a texture', async () => {
+  const { request } = createRuntime(); await request('init', uvModel()); await request('label', options);
+  const r = await request('prepareRefinement', { scheme: 'high' });
+  assert.equal(r.type, 'refinement'); assert.equal(r.islandCount, 3); assert.equal(r.partCount, 2);
+  assert.deepEqual(Array.from(r.uvs), Array.from(uvModel().uvs));
+  const pick = (face, scope) => request('selectRefinement', { face, scope, materialGroups: [0,1] });
+  assert.deepEqual(Array.from((await pick(0, 'island')).faces), [0]);
+  assert.deepEqual(Array.from((await pick(0, 'part')).faces), [0,1]);
+  assert.deepEqual(Array.from((await pick(0, 'color')).faces), [0,1]);
+  assert.deepEqual(Array.from((await request('prepareRefinement', { scheme: 'high' })).labels), [0,0,0]);
+  await request('paintRefinement', { faces: new Uint32Array([0]), label: 1 });
+  assert.deepEqual(Array.from((await request('prepareRefinement', { scheme: 'high' })).labels), [1,0,0]);
+  assert.deepEqual(Array.from((await pick(1, 'color')).faces), [1]);
+});
+test('multi-island paint and brush share undo, snapshot and exported material labels', async () => {
+  const { request } = createRuntime(); await request('init', uvModel()); await request('label', options);
+  await request('prepareRefinement', { scheme: 'high' });
+  const painted = await request('paintRefinement', { faces: new Uint32Array([0,2]), label: 1 });
+  assert.equal(painted.left, 1); assert.deepEqual(Array.from(painted.refinementLabels), [1,0,1]);
+  const brushed = await request('brushRefinement', { hits: [{ face: 1, point: [0.1,0.9,0], radius: 0.01 }], label: 1 });
+  assert.deepEqual(Array.from(brushed.refinementLabels), [1,1,1]);
+  assert.deepEqual(Array.from((await request('undo')).refinementLabels), [1,0,1]);
+  const { snapshot } = await request('snapshot');
+  await request('reset');
+  const restored = await request('restore', { snapshot });
+  assert.equal(restored.type, 'restore'); assert.deepEqual(Array.from(restored.refinement.labels), [1,0,1]);
+  const exported = await request('export3mf', { scheme: 'high', name: 'uv-edited', scale: 80, filaments: [{ hex: '#FF0000' }, { hex: '#0000FF' }] });
+  assert.equal(exported.type, 'export');
+  const xml = (await unzip(exported.blob)).get('3D/3dmodel.model');
+  assert.equal((xml.match(/p1="1" paint_color="8"/g) ?? []).length, 2);
+  assert.equal((xml.match(/p1="0" paint_color="4"/g) ?? []).length, 1);
+});
+test('UV islands join only shared geometric edges with matching UV endpoints', async () => {
+  const input = uvModel(); input.uvs.set([0,0,1,1,0,1], 6);
+  const { request } = createRuntime(); await request('init', input); await request('label', options);
+  const r = await request('prepareRefinement', { scheme: 'high' });
+  assert.equal(r.islandCount, 2);
+  assert.deepEqual(Array.from((await request('selectRefinement', { face: 0, scope: 'island', materialGroups: [0,1] })).faces), [0,1]);
+});
+test('adaptive T junctions remain connected for color-region selection', async () => {
+  const { context } = createRuntime(); const input = model();
+  // Source face 0 stays whole; face 1 is divided into two along the shared diagonal.
+  const positions = new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,0,0, .5,.5,0, 0,1,0, .5,.5,0, 1,1,0, 0,1,0]);
+  const r = context.MCRefine.create(input, positions, new Uint8Array([0,0,0]), new Uint32Array([0,1,1]));
+  assert.deepEqual(Array.from(context.MCRefine.select(r, 0, 'color', [0,1])).sort(), [0,1,2]);
+});
+
+test('legacy brush undo remains visible after entering shared refinement', async () => {
+  const { request } = await labeledRuntime();
+  await request('paintHigh', { faces: new Uint32Array([0]), label: 1 });
+  await request('prepareRefinement', { scheme: 'high' });
+  const result = await request('undo');
+  assert.deepEqual(Array.from(result.refinement.labels), [0,1]);
+});
+test('refinement on adaptive UV leaves exports source triangles with edited leaf codes', async () => {
+  const pixels = new Uint8ClampedArray(8 * 8 * 4);
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; pixels[i + (x < 4 ? 0 : 2)] = 255; pixels[i + 3] = 255; }
+  const { request } = createRuntime(pixels); const input = model();
+  input.uvs = new Float32Array([0,0,1,0,1,1,0,1]); input.images = [new Blob(['test'])];
+  input.materials = [{ image: 0, factor: [1,1,1] }]; input.faceMat = new Uint16Array(2);
+  await request('init', input); await request('label', options);
+  const low = await request('lowpoly', { ...options, target: 0 });
+  assert.ok(low.leafLab.length > 2);
+  const r = await request('prepareRefinement', { scheme: 'low' });
+  assert.equal(r.islandCount, 1); assert.deepEqual(Array.from(r.labels), Array.from(low.leafLab));
+  await request('paintRefinement', { faces: Uint32Array.from({ length: r.labels.length }, (_, i) => i), label: 1 });
+  const { snapshot } = await request('snapshot'); await request('reset');
+  const restored = await request('restore', { snapshot }); assert.ok(restored.refinement.labels.every(l => l === 1));
+  const exported = await request('export3mf', { scheme: 'low', name: 'adaptive', scale: 80, filaments: [{ hex: '#FF0000' }, { hex: '#0000FF' }] });
+  assert.equal(exported.type, 'export');
+  const xml = (await unzip(exported.blob)).get('3D/3dmodel.model');
+  assert.equal((xml.match(/<triangle /g) ?? []).length, 2);
+  for (const [, code] of xml.matchAll(/paint_color="([0-9A-F]+)"/g)) assert.ok(!code.includes('4') && code.includes('8'));
+});
+
+test('prepared low-color export preserves confirmed partition when dimensions change', async () => {
+  const pixels = new Uint8ClampedArray(8 * 8 * 4);
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const i = (y * 8 + x) * 4; pixels[i + (x < 4 ? 0 : 2)] = 255; pixels[i + 3] = 255; }
+  const { request } = createRuntime(pixels); const input = model();
+  input.uvs = new Float32Array([0,0,1,0,1,1,0,1]); input.images = [new Blob(['test'])];
+  input.materials = [{ image: 0, factor: [1,1,1] }]; input.faceMat = new Uint16Array(2);
+  await request('init', input); await request('label', options); await request('lowpoly', { ...options, target: 0 });
+  const before = (await request('snapshot')).snapshot;
+  const payload = { scheme: 'low', name: 'prepared', scale: 80, filaments: [{ hex: '#FF0000' }, { hex: '#0000FF' }], preservePartition: true };
+  const original = await request('export3mf', payload);
+  const scaled = await request('export3mf', { ...payload, scale: 160 });
+  assert.equal(scaled.type, 'export');
+  const codes = async result => [...(await unzip(result.blob)).get('3D/3dmodel.model').matchAll(/paint_color="([0-9A-F]+)"/g)].map(match => match[1]);
+  assert.deepEqual(await codes(original), await codes(scaled));
+  assert.equal(JSON.stringify((await request('snapshot')).snapshot), JSON.stringify(before));
+});
