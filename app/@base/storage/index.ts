@@ -17,13 +17,18 @@ export async function readRecord<T>(key: string): Promise<T | undefined> {
   });
 }
 export async function writeRecord(key: string, value: unknown): Promise<void> {
+  return writeRecords([[key, value]]);
+}
+/** Commit project data and its index together, including the confirmation state. */
+export async function writeRecords(entries: Array<[string, unknown]>): Promise<void> {
   const db = await open();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('records', 'readwrite');
-    transaction.objectStore('records').put(value, key);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error ?? new Error('Storage transaction aborted'));
+    try { for (const [key, value] of entries) transaction.objectStore('records').put(value, key); }
+    catch (error) { transaction.abort(); reject(error); }
   });
 }
 export function downloadFile(blob: Blob, name: string): void {

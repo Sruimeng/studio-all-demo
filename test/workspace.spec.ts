@@ -1,11 +1,12 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { disposePinia, getActivePinia } from 'pinia';
 import { createPinia, setActivePinia } from 'pinia';
 import { initialMaterials } from './fixtures/materials';
 import { Group } from 'three';
 import { unzipSync, strFromU8, zipSync, strToU8 } from 'fflate';
 
 const mocks = vi.hoisted(() => ({ records: new Map<string, unknown>(), write: vi.fn(), download: vi.fn(), load: vi.fn(), request: vi.fn(), clients: [] as Array<{ disposed: boolean }> }));
-vi.mock('~/@base/storage', () => ({ readRecord: async (key: string) => mocks.records.get(key), writeRecord: mocks.write, downloadFile: mocks.download }));
+vi.mock('~/@base/storage', () => ({ readRecord: async (key: string) => mocks.records.get(key), writeRecord: mocks.write, writeRecords: async (entries: Array<[string, unknown]>) => { const before = new Map(mocks.records); try { for (const [key, value] of entries) await mocks.write(key, value); } catch (error) { mocks.records.clear(); for (const [key, value] of before) mocks.records.set(key, value); throw error; } }, downloadFile: mocks.download }));
 vi.mock('~/@base/locale', () => ({ useLocale: () => ({ t: (en: string) => en }) }));
 vi.mock('~/@feature/materials', async () => ({ ...await import('../app/@feature/materials/catalog'), ...await import('../app/@feature/materials/types'), ...await import('../app/@feature/materials/supplier'), ...await import('../app/@feature/materials/usda') }));
 vi.mock('~/@engine/import', () => ({ loadLocalModel: mocks.load }));
@@ -20,14 +21,14 @@ vi.mock('~/@engine/multicolor', () => ({ MulticolorClient: class {
     mocks.request(type, payload);
     structuredClone(payload);
     if (this.disposed) throw new Error('disposed');
-    if (type === 'init') return { bbox: { minY: 0, maxY: 1 }, warnings: [], nf: 1 };
+    if (type === 'init') return { bbox: { minX: 0, maxX: 2, minY: 0, maxY: 1, minZ: 0, maxZ: 3 }, warnings: [], nf: 1, wpos: new Float32Array([0,0,0,2,1,0,0,0,3]), widx: new Uint32Array([0,1,2]) };
     if (type === 'palette') {
       const candidates = (payload as { cands?: Array<{ id: string; hex: string }> }).cands ?? [];
       return { slots: candidates.slice(0, 2).map((candidate, index) => ({ hex: candidate.hex, sourceHex: index ? '#0000FF' : '#FF0000', filamentId: candidate.id, w: 0.5, de: index + 0.25 })) };
     }
     if (type === 'label' || type === 'restore') return { label: new Uint8Array([0]) };
     if (type === 'export3mf') return { blob: new Blob(['3mf']) };
-    if (type === 'snapshot') return { snapshot: { version: 1, labels: [0], slotCount: 2 } };
+    if (type === 'snapshot') return { snapshot: { version: 1, geometryKey: 'test-geometry', faceCount: 1, labels: [0], slotCount: 2 } };
   }
 } }));
 const { useWorkspace } = await import('../app/@feature/workspace/use-workspace');
@@ -43,6 +44,7 @@ beforeEach(() => {
   mocks.write.mockReset().mockImplementation(async (key: string, value: unknown) => { mocks.records.set(key, structuredClone(value)); });
   mocks.load.mockReset().mockImplementation(async () => ({ root: new Group(), warnings: [] }));
 });
+afterEach(() => { const pinia = getActivePinia(); if (pinia) disposePinia(pinia); });
 const files = () => [new File(['model'], 'test.glb')];
 const supplier = async (sku = 'CA19017') => {
   const { supplierMaterials, cloneMaterial } = await import('../app/@feature/materials/supplier');
@@ -162,6 +164,36 @@ it('validation and region assignment change appearance without requesting new la
   await store.export3mf(); expect(store.failure).toContain('Switch to region');
   store.setWorkflow('assignment'); store.apply(await supplier());
   expect(store.regions[0]!.material.materialId).toBe('CA19017'); expect(store.display!.labels).toBe(labels);
+});
+
+it('leaving material preview restores the color plan, lighting and view without changing assignments', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  const assignments = JSON.stringify(store.regions);
+  const model = store.content; const labels = store.display!.labels;
+  store.settings.mode = 'compare'; store.settings.layers = true;
+  store.settings.preview = { preset: 'studio-v1', exposure: 1.2, environmentIntensity: 0.7, environmentRotation: 90 };
+  const preview = { ...store.settings.preview };
+  mocks.request.mockClear();
+  store.setWorkflow('validation'); store.apply(await supplier());
+  expect(store.settings.mode).toBe('print'); expect(store.settings.preview!.preset).toBe('validation-v1');
+  store.setWorkflow('validation');
+  store.draft = await supplier('CA19001');
+  store.setWorkflow('assignment');
+  expect(store.settings.mode).toBe('compare'); expect(store.settings.layers).toBe(true);
+  expect(store.settings.preview).toEqual(preview); expect(store.draft).toBeNull();
+  expect(JSON.stringify(store.regions)).toBe(assignments);
+  expect(store.content).toBe(model); expect(store.display!.labels).toBe(labels);
+  expect(mocks.request).not.toHaveBeenCalled();
+});
+
+it('importing a new model exits material preview and clears the previous preview view state', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.settings.mode = 'original'; store.setWorkflow('validation');
+  await store.loadFiles(files());
+  expect(store.settings.workflow).toBe('assignment');
+  expect(store.settings.preview!.preset).toBe('studio-v1');
+  store.setWorkflow('validation'); store.setWorkflow('assignment');
+  expect(store.settings.mode).toBe('compare');
 });
 
 it('supplier overrides use separate storage and survive project save and reopen', async () => {
@@ -294,4 +326,115 @@ it('restores old backups without repopulating the local library with samples', a
   await store.restoreBackup(new File([blob], 'legacy.tripo.zip'));
   expect(store.failure).toBe(''); expect(store.materials).toEqual([]);
   expect(mocks.records.get('materials')).toEqual([]); expect(store.selected!.id).toBe('porcelain');
+});
+
+
+it('Print opens size first; explicit multi selection alone enters the existing editor and stays a draft', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  await store.navigatePreparation('print');
+  expect(store.preparation.expanded).toBe('size'); expect(store.printColorState).toBe('not-started');
+  await store.changePrintMode('multi');
+  expect(store.preparation.activeModule).toBe('multi-color'); expect(store.preparation.origin).toBe('print');
+  expect(store.printColorState).toBe('progress');
+  await store.navigatePreparation('print');
+  expect(store.printColorState).toBe('progress'); expect(store.preparation.expanded).toBe('check');
+  await store.savePreparation();
+  const id = store.project!.id;
+  setActivePinia(createPinia()); const restored = workspaceWithMaterials(); await restored.openProject(id);
+  expect(restored.preparation.activeModule).toBe('print'); expect(restored.preparation.mode).toBe('multi');
+  expect(restored.printColorState).toBe('progress'); expect(restored.preparation.origin).toBeNull();
+});
+it('confirmed colors survive no-op editing, independent navigation and scaling; actual assignment changes need review', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print');
+  await store.changePrintMode('multi'); await store.completePrintColors();
+  expect(store.failure).toBe(''); expect(store.printColorState).toBe('ready'); expect(store.preparation.activeModule).toBe('print');
+  expect(store.currentColorResult.used).toHaveLength(1); // The second generated slot is unused.
+  await store.navigatePreparation('multi-color', true); await store.navigatePreparation('print');
+  expect(store.printColorState).toBe('ready');
+  await store.changePrintMode('single'); await store.changePrintMode('multi');
+  expect(store.preparation.activeModule).toBe('print'); expect(store.printColorState).toBe('ready');
+  store.setPrintDimension('width', 200);
+  expect(store.settings.height).toBe(100); expect(store.printDimensions.depth).toBe(300); expect(store.printColorState).toBe('ready');
+  await store.navigatePreparation('multi-color'); expect(store.preparation.origin).toBeNull();
+  await store.completePrintColors(); expect(store.preparation.activeModule).toBe('multi-color');
+  store.apply(store.materials[0]!); expect(store.printColorState).toBe('review');
+  await store.navigatePreparation('print'); expect(store.printColorState).toBe('review');
+  await store.navigatePreparation('multi-color', true); await store.completePrintColors(); expect(store.printColorState).toBe('ready');
+});
+it('dimension changes invalidate size and checks, while repeated confirmation preserves the check', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print');
+  await store.acknowledgePrintCheck(); await store.confirmPrintSize(); expect(store.printCheckReady).toBe(true); expect(store.printSizeReady).toBe(true);
+  const key = store.preparation.checkedKey; await store.confirmPrintSize(); expect(store.preparation.checkedKey).toBe(key);
+  store.setPrintDimension('depth', 300); expect(store.settings.height).toBe(100); expect(store.printSizeReady).toBe(false); expect(store.printCheckReady).toBe(false);
+  store.setPrintDimension('height', 500); expect(store.settings.height).toBe(100); expect(store.failure).toContain('10–320');
+});
+it('failed saves cannot confirm colors or enable export, and retry preserves the draft', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi');
+  mocks.write.mockRejectedValueOnce(new Error('disk full'));
+  await store.completePrintColors();
+  expect(store.preparation.activeModule).toBe('multi-color'); expect(store.printColorState).toBe('progress'); expect(store.prepSaveError).toBe('disk full');
+  expect(store.printTodo).toContain('保存失败');
+  const persisted = mocks.records.get(`project:${store.project!.id}`) as { preparation: { confirmedColor: unknown } };
+  expect(persisted.preparation.confirmedColor).toBeNull();
+  await store.completePrintColors(); expect(store.printColorState).toBe('ready'); expect(store.prepSaveError).toBe('');
+});
+it('unassigned faces block confirmation and model changes invalidate color mapping', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi');
+  const previous = store.display!;
+  store.display = { ...previous, labels: new Uint8Array([255]) }; await store.completePrintColors();
+  expect(store.failure).toContain('未分配有效耗材'); expect(store.preparation.activeModule).toBe('multi-color');
+  store.display = previous; await store.completePrintColors(); expect(store.printColorState).toBe('ready');
+  store.modelInfo = { ...store.modelInfo!, wpos: new Float32Array([0,0,0,4,1,0,0,0,3]) };
+  expect(store.printColorState).toBe('review');
+});
+it('projects restore their own progress and refresh restores print-origin editing without redirect loops', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi');
+  await store.changePrintSlicer('OrcaSlicer'); store.setPrintDimension('height', 120); await store.confirmPrintSize();
+  const first = store.project!.id; await store.loadFiles(files()); expect(store.project!.id).not.toBe(first);
+  expect(store.preparation.sizeConfirmedHeight).toBeNull(); expect(store.preparation.confirmedColor).toBeNull(); expect(store.preparation.mode).toBe('single');
+  await store.openProject(first); expect(store.settings.height).toBe(120); expect(store.printSizeReady).toBe(true);
+  expect(store.preparation.slicer).toBe('OrcaSlicer'); expect(store.preparation.activeModule).toBe('multi-color'); expect(store.preparation.origin).toBe('print');
+  await store.completePrintColors(); await store.savePreparation();
+  setActivePinia(createPinia()); const restored = workspaceWithMaterials(); await restored.initialize();
+  expect(restored.preparation.activeModule).toBe('print'); expect(restored.printColorState).toBe('ready'); expect(restored.printSizeReady).toBe(true);
+});
+it('exports latest confirmed scale and materials, gates unverified slicers, and preserves multi data for single STL', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi');
+  store.apply(store.materials[0]!); await store.completePrintColors(); store.setPrintDimension('height', 160);
+  await store.acknowledgePrintCheck(); await store.confirmPrintSize();
+  expect(store.printTodo).toBe('');
+  await store.downloadPreparedModel();
+  expect(mocks.request.mock.calls.findLast(([type]) => type === 'export3mf')![1]).toMatchObject({ scale: 160, filaments: [{ id: store.regions[0]!.material.materialId }, { id: store.regions[1]!.material.materialId }] });
+  expect(mocks.download.mock.calls.at(-1)![1]).toBe('test.3mf'); expect(store.prepNotice).toContain('尚未向切片器导入');
+  await store.changePrintSlicer('Creality Print'); expect(store.printTodo).toContain('尚未验证'); expect(store.printColorState).toBe('ready');
+  const calls = mocks.download.mock.calls.length; await store.downloadPreparedModel(); expect(mocks.download).toHaveBeenCalledTimes(calls);
+  await store.changePrintMode('single'); expect(store.printTodo).toBe(''); const confirmation = { ...store.preparation.confirmedColor! };
+  await store.downloadPreparedModel(); expect(mocks.download.mock.calls.at(-1)![1]).toBe('test.stl');
+  expect(store.preparation.confirmedColor).toEqual(confirmation); expect(store.printColorState).toBe('ready');
+});
+it('automatically persists real color edits once Print Preparation is engaged', async () => {
+  vi.useFakeTimers();
+  try {
+    const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi'); await store.completePrintColors();
+    await store.navigatePreparation('multi-color', true); store.apply(store.materials[0]!);
+    expect(store.prepDirty).toBe(true); await vi.advanceTimersByTimeAsync(300);
+    expect(store.prepDirty).toBe(false);
+    const data = mocks.records.get(`project:${store.project!.id}`) as { regions: typeof store.regions };
+    expect(data.regions[0]!.material.id).toBe(store.materials[0]!.id); expect(store.printColorState).toBe('review');
+  } finally { vi.useRealTimers(); }
+});
+
+it('reading accordion summaries does not start a model save or processing overlay', async () => {
+  vi.useFakeTimers();
+  try {
+    const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print');
+    mocks.write.mockClear(); store.preparation.expanded = 'check'; await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.write).not.toHaveBeenCalled(); expect(store.prepDirty).toBe(false); expect(store.busy).toBe(false);
+  } finally { vi.useRealTimers(); }
+});
+it('returning to Print leaves local material validation and retains the confirmed color plan', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi');
+  store.setWorkflow('validation'); await store.completePrintColors();
+  expect(store.printColorState).toBe('ready'); expect(store.settings.workflow).toBe('assignment');
+  expect(store.saved).toBe(true);
 });

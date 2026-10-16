@@ -1,3 +1,4 @@
+import type { PreparationState } from '../print-preparation';
 import type { MaterialRecord } from '../../materials';
 import type { PrintSnapshot } from '../../../@engine/multicolor';
 import type { ViewerSettings } from '../../../@engine/viewer';
@@ -22,4 +23,5 @@ export interface PrintProject {
   snapshot: PrintSnapshot | null;
   viewerSettings?: ViewerSettings;
   validationMaterial?: MaterialRecord | null;
+  preparation?: PreparationState;
 }
