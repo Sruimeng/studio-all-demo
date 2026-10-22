@@ -329,12 +329,14 @@ it('restores old backups without repopulating the local library with samples', a
 });
 
 
-it('Print opens size first; explicit multi selection alone enters the existing editor and stays a draft', async () => {
+it('Print keeps size outside the checklist; explicit multi selection alone enters the existing editor and stays a draft', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files());
   await store.navigatePreparation('print');
-  expect(store.preparation.expanded).toBe('size'); expect(store.printColorState).toBe('not-started');
+  expect(store.preparation.expanded).toBe('check'); expect(store.printColorState).toBe('not-started');
+  expect(store.printTasks).toEqual(['check']); expect(store.printSizeReady).toBe(false);
   await store.changePrintMode('multi');
   expect(store.preparation.activeModule).toBe('multi-color'); expect(store.preparation.origin).toBe('print');
+  expect(store.printTasks).toEqual(['check', 'color']);
   expect(store.printColorState).toBe('progress');
   await store.navigatePreparation('print');
   expect(store.printColorState).toBe('progress'); expect(store.preparation.expanded).toBe('check');
@@ -363,10 +365,39 @@ it('confirmed colors survive no-op editing, independent navigation and scaling; 
 });
 it('dimension changes invalidate size and checks, while repeated confirmation preserves the check', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print');
-  await store.acknowledgePrintCheck(); await store.confirmPrintSize(); expect(store.printCheckReady).toBe(true); expect(store.printSizeReady).toBe(true);
+  await store.confirmPrintSize(); await store.acknowledgePrintCheck(); expect(store.printCheckReady).toBe(true); expect(store.printSizeReady).toBe(true);
   const key = store.preparation.checkedKey; await store.confirmPrintSize(); expect(store.preparation.checkedKey).toBe(key);
+  store.setPrintDimension('depth', store.printDimensions.depth);
+  expect(store.printSizeReady).toBe(true); expect(store.printCheckReady).toBe(true);
   store.setPrintDimension('depth', 300); expect(store.settings.height).toBe(100); expect(store.printSizeReady).toBe(false); expect(store.printCheckReady).toBe(false);
+  expect(store.preparation.expanded).toBe('check'); expect(store.preparation.checkedKey).toBeNull();
+  await store.confirmPrintSize(); expect(store.printSizeReady).toBe(true); expect(store.printCheckReady).toBe(false);
+  expect(store.printTodo).toContain('复核可打印性');
+  await store.acknowledgePrintCheck(); expect(store.printCheckReady).toBe(true); expect(store.printTodo).toBe('');
   store.setPrintDimension('height', 500); expect(store.settings.height).toBe(100); expect(store.failure).toContain('10–320');
+});
+it('checking and exporting require size confirmation first, including after resizing back to the original size', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print');
+  await store.acknowledgePrintCheck(); expect(store.failure).toContain('请先确认');
+  expect(store.preparation.checkedKey).toBeNull(); expect(store.printCheckReady).toBe(false);
+  await store.downloadPreparedModel(); expect(mocks.download).not.toHaveBeenCalled();
+  await store.confirmPrintSize(); await store.acknowledgePrintCheck(); expect(store.printTodo).toBe('');
+  store.setPrintDimension('height', 40); store.setPrintDimension('height', 80);
+  expect(store.printSizeReady).toBe(false); expect(store.printCheckReady).toBe(false);
+  await store.confirmPrintSize(); await store.downloadPreparedModel();
+  expect(mocks.download).not.toHaveBeenCalled(); expect(store.failure).toContain('复核可打印性');
+  await store.acknowledgePrintCheck(); await store.downloadPreparedModel();
+  expect(mocks.download.mock.calls.at(-1)![1]).toBe('test.stl');
+});
+it('reopening a resized project retains the new size and requires a fresh check review', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print');
+  await store.confirmPrintSize(); await store.acknowledgePrintCheck();
+  store.setPrintDimension('width', 200); await store.confirmPrintSize();
+  const id = store.project!.id;
+  setActivePinia(createPinia()); const restored = workspaceWithMaterials(); await restored.openProject(id);
+  expect(restored.settings.height).toBe(100); expect(restored.printSizeReady).toBe(true);
+  expect(restored.printCheckReady).toBe(false); expect(restored.preparation.expanded).toBe('check');
+  expect(restored.printTodo).toContain('复核可打印性');
 });
 it('failed saves cannot confirm colors or enable export, and retry preserves the draft', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi');
@@ -401,7 +432,7 @@ it('projects restore their own progress and refresh restores print-origin editin
 it('exports latest confirmed scale and materials, gates unverified slicers, and preserves multi data for single STL', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.navigatePreparation('print'); await store.changePrintMode('multi');
   store.apply(store.materials[0]!); await store.completePrintColors(); store.setPrintDimension('height', 160);
-  await store.acknowledgePrintCheck(); await store.confirmPrintSize();
+  await store.confirmPrintSize(); await store.acknowledgePrintCheck();
   expect(store.printTodo).toBe('');
   await store.downloadPreparedModel();
   expect(mocks.request.mock.calls.findLast(([type]) => type === 'export3mf')![1]).toMatchObject({ scale: 160, filaments: [{ id: store.regions[0]!.material.materialId }, { id: store.regions[1]!.material.materialId }] });

@@ -4,12 +4,22 @@ import { Icon, Popover, PopoverClose, PopoverContent, PopoverTrigger, Tooltip, T
 import { useWorkspace } from '~/@feature/workspace';
 import { useLocale } from '~/@base/locale';
 import { ModelViewport } from '~/@engine/viewer';
+import { useSegmentation } from '~/@feature/segmentation/use-segmentation';
+import SegmentPanel from '~/@feature/segmentation/view/SegmentPanel.vue';
+import SegmentViewport from '~/@feature/segmentation/view/SegmentViewport.vue';
 import UvAtlas from '~/@feature/workspace/view/UvAtlas.vue';
 import PrintPreparation from '~/@feature/workspace/view/PrintPreparation.vue';
 import ModuleTooltip from '~/@base/ui/ModuleTooltip.vue';
 import type { MaterialRecord } from '~/@feature/materials';
 
 const studio = useWorkspace();
+const segmentation = useSegmentation(studio);
+const inSegment = computed(() => studio.preparation.activeModule === 'segment');
+async function navigateModule(target: 'segment' | 'print' | 'multi-color') {
+  if (segmentation.busy || segmentation.editing) return;
+  if (inSegment.value && segmentation.confirmed && target !== 'segment') await segmentation.forward(target);
+  else await studio.navigatePreparation(target);
+}
 const locale = useLocale();
 const { t } = locale;
 const upload = useTemplateRef<HTMLInputElement>('upload');
@@ -142,7 +152,7 @@ async function restoreFiles(event: Event) {
 
 function shortcut(event: KeyboardEvent) {
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-  if ((event.ctrlKey || event.metaKey) && event.key === 'z') { event.preventDefault(); if (!studio.busy && studio.undoCount) void studio.undo(); }
+  if ((event.ctrlKey || event.metaKey) && event.key === 'z') { event.preventDefault(); if (inSegment.value) { if (event.shiftKey) segmentation.redo(); else segmentation.undo(); } else if (!studio.busy && studio.undoCount) void studio.undo(); }
 }
 
 function leave(event: BeforeUnloadEvent) {
@@ -219,20 +229,20 @@ onBeforeUnmount(() => {
       </nav>
       <div class="studio-header-actions">
         <ModuleTooltip :title="t('Import model', '导入模型')" :description="t('Upload a GLB or FBX model and its matching textures.', '上传 GLB 或 FBX 模型及配套贴图。')" side="bottom">
-          <button class="header-action header-import" type="button" :disabled="studio.busy" @click="upload?.click()"><Icon icon="i-tripo:upload" class="size-3.5" />{{ t('Import model', '导入模型') }}</button>
+          <button class="header-action header-import" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="upload?.click()"><Icon icon="i-tripo:upload" class="size-3.5" />{{ t('Import model', '导入模型') }}</button>
         </ModuleTooltip>
         <input ref="upload" class="hidden-input" type="file" multiple accept=".glb,.fbx,.png,.jpg,.jpeg,.webp,.tga,.bmp" @change="uploadFiles">
         <ModuleTooltip :title="t('Open sample', '打开示例')" :description="t('Load the bundled model for a quick workflow preview.', '打开内置示例模型，快速体验流程。')" side="bottom">
-          <button class="header-action" type="button" :disabled="studio.busy" @click="studio.demo">{{ t('Sample', '示例') }}</button>
+          <button class="header-action" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="studio.demo()">{{ t('Sample', '示例') }}</button>
         </ModuleTooltip>
         <ModuleTooltip :title="t('Projects & backups', '项目与备份')" :description="t('Save, reopen or restore local projects.', '保存、打开或恢复本地项目。')" side="bottom">
-          <details class="header-menu"><summary>{{ t('Projects', '项目') }} <Icon icon="i-tripo:caret" class="size-3 rotate-180" /></summary><div class="header-menu-pop"><button type="button" :disabled="studio.busy || !studio.content" @click="studio.save">{{ t('Save project', '保存项目') }}</button><button v-for="item in studio.projects" :key="item.id" type="button" :disabled="studio.busy" @click="studio.openProject(item.id)">{{ item.name }}</button><button type="button" :disabled="studio.busy || !studio.content" @click="studio.backup">{{ t('Backup', '备份') }}</button><button type="button" :disabled="studio.busy" @click="restore?.click()">{{ t('Restore', '恢复') }}</button><button type="button" :disabled="studio.busy || !studio.content" @click="studio.selftest">{{ t('3MF self-test', '3MF 自检') }}</button><input ref="restore" class="hidden-input" type="file" accept=".zip" @change="restoreFiles"></div></details>
+          <details class="header-menu"><summary>{{ t('Projects', '项目') }} <Icon icon="i-tripo:caret" class="size-3 rotate-180" /></summary><div class="header-menu-pop"><button type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="studio.save">{{ t('Save project', '保存项目') }}</button><button v-for="item in studio.projects" :key="item.id" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="studio.openProject(item.id)">{{ item.name }}</button><button type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="studio.backup">{{ t('Backup', '备份') }}</button><button type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="restore?.click()">{{ t('Restore', '恢复') }}</button><button type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="studio.selftest">{{ t('3MF self-test', '3MF 自检') }}</button><input ref="restore" class="hidden-input" type="file" accept=".zip" @change="restoreFiles"></div></details>
         </ModuleTooltip>
         <ModuleTooltip :title="t('Language', '语言')" :description="t('Switch the workspace labels between English and Chinese.', '切换工作台的中英文显示。')" side="bottom">
           <button class="header-language" type="button" @click="locale.toggle">{{ locale.language === 'zh' ? '中 / EN' : 'EN / 中' }}</button>
         </ModuleTooltip>
         <ModuleTooltip :title="t('Export 3MF', '导出 3MF')" :description="t('Export the colored model with millimeter scale and material metadata.', '导出带颜色区域、毫米尺寸和材质参数的模型。')" side="bottom">
-          <button class="header-export" type="button" :disabled="studio.busy || !studio.display || studio.settings.workflow === 'validation'" :title="studio.settings.workflow === 'validation' ? t('Assign region filaments before exporting', '请先在区域应用中分配耗材') : '3MF'" @click="studio.export3mf"><Icon icon="i-tripo:download" class="size-3.5" />{{ t('Export', '导出') }}</button>
+          <button class="header-export" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || (inSegment ? !segmentation.confirmed || !!studio.prepSaveError : !studio.display || studio.settings.workflow === 'validation')" :title="inSegment ? (segmentation.confirmed ? '导出已确认的拆分结果' : '请先确认拆分结果') : studio.settings.workflow === 'validation' ? t('Assign region filaments before exporting', '请先在区域应用中分配耗材') : '3MF'" @click="inSegment ? segmentation.exportResult() : studio.export3mf()"><Icon icon="i-tripo:download" class="size-3.5" />{{ inSegment ? '导出部件 GLB' : t('Export', '导出') }}</button>
         </ModuleTooltip>
       </div>
     </header>
@@ -245,17 +255,17 @@ onBeforeUnmount(() => {
             <span>Image</span>
           </button>
           <button class="studio-menu-item" type="button" disabled :title="t('Model · Coming soon', 'Model · 暂未开放')"><Icon icon="i-tripo:generate" /><span>Model</span></button>
-          <button class="studio-menu-item studio-menu-segment" type="button" disabled :title="t('Segment · Coming soon', 'Segment · 暂未开放')"><Icon icon="i-tripo:segmentation" /><span>Segment</span><svg class="studio-module-caret" viewBox="0 0 10 6" fill="currentColor" aria-hidden="true"><path d="M0 0h10L5 6Z" /></svg></button>
+          <button class="studio-menu-item studio-menu-segment" :class="{ active: inSegment }" type="button" :disabled="studio.busy || segmentation.busy || !studio.content" :aria-current="inSegment ? 'page' : undefined" aria-controls="segment-panel" title="模型拆分" @click="navigateModule('segment')"><Icon icon="i-tripo:segmentation" /><span>Segment</span><svg class="studio-module-caret" viewBox="0 0 10 6" fill="currentColor" aria-hidden="true"><path d="M0 0h10L5 6Z" /></svg></button>
           <button class="studio-menu-item" type="button" disabled :title="t('Decorate · Coming soon', 'Decorate · 暂未开放')">
             <svg class="studio-module-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.3 2.7a2.1 2.1 0 0 1 3 3L12 16l-4-4ZM6.8 13.8l3.4 3.4c-.2 3.2-2.8 4.7-7.4 4.2 1.6-1.5.4-4.6 4-7.6Z" /></svg>
             <span>Decorate</span>
           </button>
-          <button class="studio-menu-item studio-menu-print-start" :class="{ active: studio.preparation.activeModule === 'multi-color' }" type="button" :aria-current="studio.preparation.activeModule === 'multi-color' ? 'page' : undefined" aria-controls="multicolor-panel" :disabled="studio.busy || !studio.content" @click="studio.navigatePreparation('multi-color')">
+          <button class="studio-menu-item studio-menu-print-start" :class="{ active: studio.preparation.activeModule === 'multi-color' }" type="button" :aria-current="studio.preparation.activeModule === 'multi-color' ? 'page' : undefined" aria-controls="multicolor-panel" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="navigateModule('multi-color')">
             <span class="studio-module-badge" aria-hidden="true">🔥</span>
             <svg class="studio-module-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7Zm-10 9 10 5 10-5v3l-10 5-10-5Zm0 6 10 5 10-5v3l-10 5-10-5Z" transform="translate(1 0) scale(.92)" /></svg>
             <span>Multi-color</span>
           </button>
-          <button class="studio-menu-item" :class="{ active: studio.preparation.activeModule === 'print' }" type="button" :disabled="studio.busy || !studio.content" :aria-current="studio.preparation.activeModule === 'print' ? 'page' : undefined" aria-controls="print-preparation-panel" @click="studio.navigatePreparation('print')">
+          <button class="studio-menu-item" :class="{ active: studio.preparation.activeModule === 'print' }" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" :aria-current="studio.preparation.activeModule === 'print' ? 'page' : undefined" aria-controls="print-preparation-panel" @click="navigateModule('print')">
             <span class="studio-module-badge" aria-hidden="true">🔥</span>
             <svg class="studio-module-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18M6 3v16H3v3h18v-3h-3V3M9 4v4h6V4M12 8v3M6 19h12" /><path d="m12 12 3 1.5v3L12 18l-3-1.5v-3Zm0 3v3m-3-4.5 3 1.5 3-1.5" /></svg>
             <span>Print</span>
@@ -264,38 +274,39 @@ onBeforeUnmount(() => {
           <span class="studio-local-state"><i />LOCAL</span>
         </nav>
 
-        <PrintPreparation v-if="studio.preparation.activeModule === 'print'" :owned-ids="ownedIds" />
+        <SegmentPanel v-if="inSegment" :seg="segmentation" />
+        <PrintPreparation v-else-if="studio.preparation.activeModule === 'print'" :owned-ids="ownedIds" />
         <section v-else id="multicolor-panel" class="studio-left-panel">
           <div class="studio-panel-title">
             <Icon icon="i-tripo:segmentation" class="size-4" />
             <h1>{{ t('Multicolor print', '多色打印') }}</h1>
           </div>
           <div v-if="studio.preparation.origin === 'print'" class="prep-editor-back-row">
-            <button class="prep-editor-back" type="button" :disabled="studio.busy" @click="studio.navigatePreparation('print')">← 返回打印准备</button>
+            <button class="prep-editor-back" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="navigateModule('print')">← 返回打印准备</button>
           </div>
           <div class="studio-panel-scroll">
             <button class="filament-library-card" type="button" @click="toggleLibrary"><span><strong>{{ t('My filaments', '我的耗材') }}</strong><small>{{ ownedMaterials.length }} {{ t('saved', '种已保存') }}</small></span><span class="filament-swatches"><i v-for="material in ownedMaterials.slice(0, 7)" :key="material.id" :style="{ background: material.hex }" /><Icon icon="i-tripo:caret" class="size-3 rotate-90" /></span></button>
             <section class="print-section">
               <div class="print-section-heading"><h2>{{ t('Color separation', '分色') }}</h2><button type="button" @click="settingsExpanded = !settingsExpanded">{{ settingsExpanded ? t('Collapse', '收起') : t('Edit', '编辑') }} <Icon icon="i-tripo:caret" :class="settingsExpanded ? 'size-3 rotate-180' : 'size-3'" /></button></div>
               <template v-if="settingsExpanded">
-                <label class="print-field"><span>{{ t('Filament count', '耗材数量') }}</span><input v-model.number="studio.colorCount" type="number" min="1" max="12" step="1" :disabled="studio.busy" @change="normalizeColorCount"></label>
-                <label class="studio-range separation-detail"><span>{{ t('Color detail', '分色细节') }}<b>{{ studio.precision }}</b></span><input v-model.number="studio.precision" type="range" min="1" max="6" step="1" :disabled="studio.busy"></label>
+                <label class="print-field"><span>{{ t('Filament count', '耗材数量') }}</span><input v-model.number="studio.colorCount" type="number" min="1" max="12" step="1" :disabled="studio.busy || segmentation.busy || segmentation.editing" @change="normalizeColorCount"></label>
+                <label class="studio-range separation-detail"><span>{{ t('Color detail', '分色细节') }}<b>{{ studio.precision }}</b></span><input v-model.number="studio.precision" type="range" min="1" max="6" step="1" :disabled="studio.busy || segmentation.busy || segmentation.editing"></label>
                 <p class="print-help">{{ t('Higher values retain finer color details. Applied when you regenerate.', '数值越高，保留越多颜色细节；重新分色后生效。') }}</p>
                 <label class="print-switch"><span>{{ t('Use mine first', '优先使用我的耗材') }}</span><input v-model="preferOwned" class="studio-switch" type="checkbox" :disabled="!ownedMaterials.length"></label>
                 <p class="print-help">{{ ownedMaterials.length ? t('Prefer close colors from your compatible materials.', '优先匹配兼容的现有耗材。') : t('Add your filaments to enable this option.', '添加耗材后可启用此选项。') }}</p>
-                <button class="print-primary" type="button" :disabled="studio.busy || !studio.content" @click="requestGenerate"><Icon icon="i-tripo:magic" class="size-4" />{{ studio.regions.length ? t('Regenerate plan', '重新分色') : t('Generate color plan', '生成分色方案') }} <span>⚡ 10</span></button>
+                <button class="print-primary" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="requestGenerate"><Icon icon="i-tripo:magic" class="size-4" />{{ studio.regions.length ? t('Regenerate plan', '重新分色') : t('Generate color plan', '生成分色方案') }} <span>⚡ 10</span></button>
               </template>
               <div v-else class="print-summary"><b>{{ studio.colorCount }}</b><span>•</span><span>{{ preferOwned ? t('Use mine first', '优先我的耗材') : t('Best color match', '最佳颜色匹配') }}</span></div>
             </section>
             <section v-if="studio.regions.length" class="print-section plan-section"><div class="print-section-heading"><h2>{{ t('Plan filaments', '方案耗材') }}</h2><span>{{ planFilaments.length }} used</span></div><div class="plan-summary"><span>{{ planFilaments.filter(item => isOwned(item.material)).length }} owned</span><span>{{ planFilaments.filter(item => !isOwned(item.material)).length }} not owned</span></div><details v-for="item in planFilaments" :key="item.material.id" class="plan-row"><summary @click="selectPlan(item.indices[0]!)"><i :style="{ background: item.material.hex }" /><b>{{ item.material.name }}</b><em>{{ isOwned(item.material) ? 'Owned' : 'Not owned' }}</em></summary><div class="plan-detail"><p>Material <strong>{{ item.material.supplier?.materialType ?? 'PLA' }}</strong></p><p>SKU <strong>{{ item.material.materialId }}</strong></p><button type="button" @click="openReplacement(item.material.id)">{{ t('Replace filament', '替换耗材') }}</button></div></details></section>
             <section class="print-section refine-section">
-              <button class="refine-heading" type="button" :disabled="studio.busy || !studio.content" @click="toggleRefine"><span><Icon icon="i-tripo:magic" />{{ t('Refine colors', '精修分色') }}</span><Icon icon="i-tripo:caret" :class="refineExpanded ? 'size-3 rotate-180' : 'size-3'" /></button>
+              <button class="refine-heading" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="toggleRefine"><span><Icon icon="i-tripo:magic" />{{ t('Refine colors', '精修分色') }}</span><Icon icon="i-tripo:caret" :class="refineExpanded ? 'size-3 rotate-180' : 'size-3'" /></button>
               <p v-if="!refineExpanded" class="print-help">{{ t('Brush, color regions or real UV islands.', '支持画笔、连续色块和真实 UV 岛改色。') }}</p>
               <template v-else>
-                <div class="refine-tabs"><button v-for="mode in (['brush', 'color', 'uv'] as const)" :key="mode" type="button" :disabled="studio.busy" :class="{ active: refineMode === mode }" @click="startRefine(mode)">{{ mode === 'brush' ? t('Brush', '画笔') : mode === 'color' ? t('Color region', '色块') : t('UV Edit', 'UV 岛') }}</button></div>
+                <div class="refine-tabs"><button v-for="mode in (['brush', 'color', 'uv'] as const)" :key="mode" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" :class="{ active: refineMode === mode }" @click="startRefine(mode)">{{ mode === 'brush' ? t('Brush', '画笔') : mode === 'color' ? t('Color region', '色块') : t('UV Edit', 'UV 岛') }}</button></div>
                 <template v-if="refineMode === 'uv'">
                   <template v-if="studio.refinement?.islandCount">
-                    <label class="print-field">{{ t('Select by', '选择范围') }}<select :value="studio.selectionScope" :disabled="studio.busy" @change="setSelectionScope(($event.target as HTMLSelectElement).value as 'island' | 'part')"><option value="island">{{ t('UV island', 'UV 岛') }}</option><option value="part">{{ t('Connected part', '独立部件') }}</option></select></label>
+                    <label class="print-field">{{ t('Select by', '选择范围') }}<select :value="studio.selectionScope" :disabled="studio.busy || segmentation.busy || segmentation.editing" @change="setSelectionScope(($event.target as HTMLSelectElement).value as 'island' | 'part')"><option value="island">{{ t('UV island', 'UV 岛') }}</option><option value="part">{{ t('Connected part', '独立部件') }}</option></select></label>
                     <UvAtlas :data="studio.refinement" :selection="studio.selection" :colors="studio.regions.map(region => region.material.hex)" :busy="studio.busy || studio.settings.tool !== 'select'" @select="studio.selectRefinement" />
                     <p class="print-help">{{ t('Select in the UV map or on the model. Parts follow connected geometry, not semantic shapes.', '可在展开图或模型上选择。独立部件按几何连接识别，不自动识别树叶等语义。') }}</p>
                   </template>
@@ -305,17 +316,17 @@ onBeforeUnmount(() => {
                 <div v-if="refineMode !== 'brush' && studio.selection.length" class="refine-selection-info"><span>{{ refineMode === 'uv' ? t(`${studio.selectionIslandCount} islands selected`, `已选 ${studio.selectionIslandCount} 个 UV 岛`) : t(`${studio.selection.length} faces selected`, `已选 ${studio.selection.length} 个面`) }}</span><button type="button" @click="studio.clearSelection">{{ t('Clear', '清空') }}</button><small>{{ studio.selectionMaterial?.name ?? t('Mixed filaments', '混合耗材') }}</small></div>
                 <p v-if="refineMode !== 'brush' && !studio.selection.length" class="print-help">{{ t('Select a region to enable filament assignment.', '先选择区域，再点击下方耗材整块改色。') }}</p>
                 <div class="refine-filaments"><button v-for="item in planFilaments" :key="item.material.id" type="button" :disabled="studio.busy || (refineMode !== 'brush' && (!studio.selection.length || studio.settings.tool !== 'select'))" :class="{ active: (refineMode === 'brush' ? studio.selected : studio.selectionMaterial)?.id === item.material.id }" @click="chooseRefineFilament(item.indices[0]!)"><i :style="{ background: item.material.hex }" /><span>{{ item.material.name }}</span></button></div>
-                <button v-if="studio.settings.tool === 'orbit'" class="print-secondary" type="button" :disabled="studio.busy" @click="startRefine(refineMode)">{{ t('Continue editing', '继续精修') }}</button>
+                <button v-if="studio.settings.tool === 'orbit'" class="print-secondary" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="startRefine(refineMode)">{{ t('Continue editing', '继续精修') }}</button>
               </template>
             </section>
           </div>
           <footer class="prep-editor-footer">
             <template v-if="studio.preparation.origin === 'print'">
               <p>{{ studio.prepSaving ? '正在保存…' : studio.prepSaveError ? '草稿保存失败，请重试' : studio.prepDirty ? '草稿待保存' : '草稿已保存 · 完成后确认分色' }}</p>
-              <button v-if="studio.prepSaveError" class="prep-editor-back" type="button" :disabled="studio.busy" @click="studio.savePreparation">重试保存</button>
-              <button class="print-primary" type="button" :disabled="studio.busy || !studio.content" @click="studio.completePrintColors">完成并返回打印准备</button>
+              <button v-if="studio.prepSaveError" class="prep-editor-back" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="studio.savePreparation">重试保存</button>
+              <button class="print-primary" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="studio.completePrintColors">完成并返回打印准备</button>
             </template>
-            <button v-else class="prep-editor-back prep-editor-forward" type="button" :disabled="studio.busy || !studio.content" @click="studio.navigatePreparation('print')">前往打印准备 →</button>
+            <button v-else class="prep-editor-back prep-editor-forward" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="navigateModule('print')">前往打印准备 →</button>
           </footer>
           <div v-if="filamentPopover" class="filament-popover">
             <div class="popover-heading"><strong>{{ filamentPopover === 'library' ? t('My filaments', '我的耗材') : t('Replace filament', '替换耗材') }}</strong><button type="button" @click="filamentPopover = null">×</button></div>
@@ -328,7 +339,9 @@ onBeforeUnmount(() => {
 
       <section class="studio-viewer-shell">
         <div ref="canvasArea" class="studio-viewer">
-          <ClientOnly><ModelViewport ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.settings" :validation-surface="studio.validationSurface" :selection="studio.selection" :busy="studio.busy" @select="studio.selectRefinement" @error="studio.report" @stroke="studio.stroke" @fill="studio.fill" /></ClientOnly>
+          <ClientOnly><ModelViewport v-show="!inSegment" ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.settings" :validation-surface="studio.validationSurface" :selection="studio.selection" :busy="studio.busy" @select="studio.selectRefinement" @error="studio.report" @stroke="studio.stroke" @fill="studio.fill" /></ClientOnly>
+          <ClientOnly><SegmentViewport v-if="inSegment && studio.content" :key="studio.content.id" :content="studio.content" :seg="segmentation" /></ClientOnly>
+          <template v-if="!inSegment">
           <div class="viewer-mode-bar">
             <span>{{ t('Workspace', '工作台') }} <i>/</i> {{ t('Material preview', '材质预览') }}</span>
             <div class="studio-segmented viewer-modes"><ModuleTooltip v-for="mode in (['original', 'print', 'compare'] as const)" :key="mode" :title="modeTitle(mode)" :description="modeDescription(mode)" side="bottom"><button type="button" :class="{ active: studio.settings.mode === mode }" @click="studio.settings.mode = mode">{{ mode === 'original' ? t('Original', '原模型') : mode === 'print' ? t('Material', '材质') : t('Compare', '对比') }}</button></ModuleTooltip></div>
@@ -365,6 +378,7 @@ onBeforeUnmount(() => {
             <template v-else-if="refineMode === 'brush'"><button class="toolbar-tool active" type="button" @click="studio.settings.tool = 'brush'"><Icon icon="i-tripo:paintbrush" />{{ t('Brush', '画笔') }}</button><button class="toolbar-chip" type="button" @click="refineExpanded = true">● {{ studio.selected?.name ?? t('Choose filament', '选择耗材') }}</button><label class="toolbar-size">{{ t('Size', '大小') }}<input v-model.number="studio.settings.radius" type="range" min="0.2" max="12" step="0.2"></label><button class="toolbar-icon" type="button" :disabled="studio.busy || !studio.undoCount" @click="studio.undo">↶</button><button class="toolbar-done" type="button" @click="finishRefine">{{ t('Done', '完成') }}</button></template>
             <template v-else><span class="toolbar-label"><Icon icon="i-tripo:cursor" />{{ refineMode === 'color' ? t('Color region', '色块选择') : studio.selectionScope === 'part' ? t('Connected part', '独立部件') : t('UV island', 'UV 岛') }}</span><span class="toolbar-label">{{ t(`${studio.selection.length} faces`, `${studio.selection.length} 个面`) }}</span><button class="toolbar-icon" type="button" :disabled="studio.busy || !studio.undoCount" :title="t('Undo', '撤销')" @click="studio.undo">↶</button><button class="toolbar-chip" type="button" :disabled="!studio.selection.length" @click="studio.clearSelection">{{ t('Clear', '清空选择') }}</button><button class="toolbar-done" type="button" @click="finishRefine">{{ t('Done', '完成') }}</button></template>
           </div>
+          </template>
         </div>
       </section>
 
