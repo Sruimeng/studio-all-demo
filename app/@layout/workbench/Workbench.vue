@@ -4,7 +4,7 @@ import { Icon, Popover, PopoverClose, PopoverContent, PopoverTrigger, Tabs, Tabs
 import { useWorkspace, ValidationControls, RegionAssignments } from '~/@feature/workspace';
 import { useLocale } from '~/@base/locale';
 import { ModelViewport } from '~/@engine/viewer';
-import { MaterialPanel } from '~/@feature/materials';
+import { FilamentValidation, MaterialPanel } from '~/@feature/materials';
 import ModuleTooltip from '~/@base/ui/ModuleTooltip.vue';
 
 const studio = useWorkspace();
@@ -15,8 +15,19 @@ const restore = useTemplateRef<HTMLInputElement>('restore');
 const viewport = useTemplateRef('viewport');
 const canvasArea = useTemplateRef<HTMLDivElement>('canvasArea');
 const compareDragging = ref(false);
+const showMaterialLibrary = ref(false);
 const rightTab = ref('assets');
 
+function selectWorkflow(workflow: 'assignment' | 'validation') {
+  studio.setWorkflow(workflow);
+  rightTab.value = 'assets';
+  showMaterialLibrary.value = false;
+}
+
+async function openValidationSample() {
+  await studio.validationSample();
+  if (!studio.failure) selectWorkflow('validation');
+}
 
 async function uploadFiles(event: Event) {
   const input = event.target as HTMLInputElement;
@@ -74,10 +85,12 @@ function stopCompareDrag() {
 type ViewMode = 'original' | 'print' | 'compare';
 
 function modeTitle(mode: ViewMode) {
+  if (studio.settings.workflow === 'validation' && studio.validationReference && mode !== 'compare') return mode === 'original' ? t('Material A', '材质 A') : t('Material B', '材质 B');
   return mode === 'original' ? t('Original model', '原模型') : mode === 'print' ? t('Material preview', '材质预览') : t('Compare views', '对比视图');
 }
 
 function modeDescription(mode: ViewMode) {
+  if (studio.settings.workflow === 'validation' && studio.validationReference) return t('Compare the pinned material A and current material B using the same geometry, camera and lighting.', '使用相同几何、相机与灯光，比较固定的材质 A 和当前材质 B。');
   return mode === 'original'
     ? t('Show the imported model with its source materials.', '显示保留原始材质的导入模型。')
     : mode === 'print'
@@ -161,11 +174,11 @@ onBeforeUnmount(() => {
             <input ref="upload" class="hidden-input" type="file" multiple accept=".glb,.fbx,.png,.jpg,.jpeg,.webp,.tga,.bmp" @change="uploadFiles">
             <p class="studio-help">{{ t('Select FBX textures together.', 'FBX 配套贴图请一起选择。') }}</p>
 
-            <ValidationControls :settings="studio.settings" :busy="studio.busy" @workflow="studio.setWorkflow" @sample="studio.validationSample" />
+            <ValidationControls :settings="studio.settings" :busy="studio.busy" @workflow="selectWorkflow" @sample="openValidationSample" />
 
             <section v-if="studio.settings.workflow !== 'validation'" class="studio-section">
               <div class="studio-section-heading"><span>01</span><h2>{{ t('Color regions', '颜色区域') }}</h2></div>
-              <p class="studio-section-description">{{ t('Match model colors to Polymaker SKUs. Set the maximum filament count; assignments can be replaced manually.', '按模型颜色匹配 Polymaker SKU。设置最多使用的耗材数，结果可手动替换。') }}</p>
+              <p class="studio-section-description">{{ t('Match model colors to supplier color catalogs. Set the maximum filament count; assignments can be replaced manually.', '按模型颜色匹配供应商色卡。设置最多使用的耗材数，结果可手动替换。') }}</p>
               <div class="studio-segmented">
                 <ModuleTooltip :title="t('Surface regions', '表面分色')" :description="t('Assign colors by connected mesh faces. This works without UVs and keeps geometric boundaries.', '按连通网格面分配颜色。不依赖 UV，并保留几何边界。')" side="right">
                   <button type="button" :class="{ active: studio.scheme === 'high' }" :disabled="studio.busy" @click="studio.changeScheme('high')">{{ t('Surface', '表面') }}</button>
@@ -174,7 +187,7 @@ onBeforeUnmount(() => {
                   <button type="button" :class="{ active: studio.scheme === 'low' }" :disabled="studio.busy" @click="studio.changeScheme('low')">{{ t('UV', 'UV') }}</button>
                 </ModuleTooltip>
               </div>
-              <ModuleTooltip :title="t('Color count', '颜色数')" :description="t('Use at most 1–12 supplier SKUs. Fewer may be selected when the model has fewer colors.', '最多使用 1–12 个供应商 SKU。模型颜色较少时，实际使用的数量可能更少。')" side="right">
+              <ModuleTooltip :title="t('Color count', '颜色数')" :description="t('Use at most 1–12 supplier colors. Fewer may be selected when the model has fewer colors.', '最多使用 1–12 个供应商颜色。模型颜色较少时，实际使用的数量可能更少。')" side="right">
                 <label class="studio-range"><span>{{ t('Colors', '颜色数') }}<b>{{ studio.colorCount }}</b></span><input v-model.number="studio.colorCount" type="range" min="1" max="12" :disabled="studio.busy"></label>
               </ModuleTooltip>
               <ModuleTooltip :title="t('Region detail', '区域细节')" :description="t('Controls small-region cleanup and edge preservation. Higher values keep finer patches but may create more small regions.', '控制小区域清理和边缘保留。数值越高越保留细节，也可能产生更多小区域。')" side="right">
@@ -227,14 +240,14 @@ onBeforeUnmount(() => {
 
       <section class="studio-viewer-shell">
         <div ref="canvasArea" class="studio-viewer">
-          <ClientOnly><ModelViewport ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.settings" :validation-surface="studio.validationSurface" @error="studio.report" /></ClientOnly>
+          <ClientOnly><ModelViewport ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.settings" :validation-surface="studio.validationSurface" :reference-surface="studio.referenceSurface" @error="studio.report" /></ClientOnly>
           <div class="viewer-mode-bar">
             <span>{{ t('Workspace', '工作台') }} <i>/</i> {{ t('Material preview', '材质预览') }}</span>
-            <div class="studio-segmented viewer-modes"><ModuleTooltip v-for="mode in (['original', 'print', 'compare'] as const)" :key="mode" :title="modeTitle(mode)" :description="modeDescription(mode)" side="bottom"><button type="button" :class="{ active: studio.settings.mode === mode }" @click="studio.settings.mode = mode">{{ mode === 'original' ? t('Original', '原模型') : mode === 'print' ? t('Material', '材质') : t('Compare', '对比') }}</button></ModuleTooltip></div>
+            <div class="studio-segmented viewer-modes"><ModuleTooltip v-for="mode in (['original', 'print', 'compare'] as const)" :key="mode" :title="modeTitle(mode)" :description="modeDescription(mode)" side="bottom"><button type="button" :class="{ active: studio.settings.mode === mode }" @click="studio.settings.mode = mode">{{ studio.settings.workflow === 'validation' && studio.validationReference && mode !== 'compare' ? (mode === 'original' ? 'A' : 'B') : mode === 'original' ? t('Original', '原模型') : mode === 'print' ? t('Material', '材质') : t('Compare', '对比') }}</button></ModuleTooltip></div>
           </div>
           <div class="model-caption"><span>{{ studio.settings.workflow === 'validation' ? 'MATERIAL VALIDATION' : studio.scheme === 'high' ? 'SURFACE COLOR' : 'UV COLOR' }}</span><strong>{{ studio.project?.name }}</strong><small v-if="studio.modelInfo">{{ studio.modelInfo.nf.toLocaleString() }} {{ t('triangles', '三角面') }} · {{ studio.settings.height }} mm</small></div>
 
-          <ModuleTooltip v-if="studio.settings.mode === 'compare'" :title="t('Compare divider', '对比分割线')" :description="t('Drag left or right to compare the source model and material preview. The split is kept between 20% and 80%.', '向左或向右拖动，比较原模型与材质预览。分割位置限制在 20% 到 80%。')" side="bottom"><div class="compare-divider" :style="{ left: `${studio.settings.compareSplit * 100}%` }" role="slider" aria-label="Compare split" :aria-valuenow="Math.round(studio.settings.compareSplit * 100)" aria-valuemin="20" aria-valuemax="80" tabindex="0" @pointerdown="startCompareDrag" @pointermove="updateCompareSplit" @pointerup="stopCompareDrag" @pointercancel="stopCompareDrag"><span>{{ t('Original', '原模型') }}</span><i /><span>{{ t('Material', '材质') }}</span></div></ModuleTooltip>
+          <ModuleTooltip v-if="studio.settings.mode === 'compare'" :title="t('Compare divider', '对比分割线')" :description="t('Drag to compare the two views. A pinned material replaces the source view in validation mode.', '拖动比较两侧视图。验证模式固定材质 A 后，左侧显示该材质。')" side="bottom"><div class="compare-divider" :style="{ left: `${studio.settings.compareSplit * 100}%` }" role="slider" aria-label="Compare split" :aria-valuenow="Math.round(studio.settings.compareSplit * 100)" aria-valuemin="20" aria-valuemax="80" tabindex="0" @pointerdown="startCompareDrag" @pointermove="updateCompareSplit" @pointerup="stopCompareDrag" @pointercancel="stopCompareDrag"><span>{{ studio.settings.workflow === 'validation' && studio.validationReference ? 'A' : t('Original', '原模型') }}</span><i /><span>{{ studio.settings.workflow === 'validation' && studio.validationReference ? 'B' : t('Material', '材质') }}</span></div></ModuleTooltip>
 
           <div class="viewer-gizmo">
             <Popover>
@@ -266,7 +279,7 @@ onBeforeUnmount(() => {
       <aside class="studio-right-shell">
         <Tabs :model-value="rightTab" class="studio-right-tabs" @update:model-value="rightTab = String($event)">
           <TabsList class="studio-right-tab-list"><ModuleTooltip :title="t('Assets', '资产')" :description="t('Manage material records, apply them to regions and export value tables.', '管理材质档案，将材质应用到区域，并导出数值表。')" side="top"><TabsTrigger value="assets"><Icon icon="i-tripo:assets" /><span>{{ t('Assets', '资产') }}</span></TabsTrigger></ModuleTooltip><ModuleTooltip :title="t('Properties', '属性')" :description="t('Inspect the selected region and its current material parameters.', '查看当前区域及其材质参数。')" side="top"><TabsTrigger value="properties"><Icon icon="i-tripo:properties" /><span>{{ t('Property', '属性') }}</span></TabsTrigger></ModuleTooltip></TabsList>
-          <TabsContent value="assets" class="studio-right-content"><MaterialPanel :materials="studio.allMaterials" :selected="studio.selected" :checked="studio.checked" :busy="studio.busy" :save-material="studio.saveMaterial" :delete-material="studio.deleteMaterial" :import-materials="studio.importMaterials" @apply="studio.apply" @preview="studio.draft = $event" @check="check" @export="studio.exportMaterials" /></TabsContent>
+          <TabsContent value="assets" class="studio-right-content"><button v-if="studio.settings.workflow === 'validation'" class="text-button library-toggle" @click="showMaterialLibrary = !showMaterialLibrary">{{ showMaterialLibrary ? t('← Filament lab', '← 材质验证') : t('Full library · import / export ↗', '完整材质库 · 导入 / 导出 ↗') }}</button><FilamentValidation v-if="studio.settings.workflow === 'validation' && !showMaterialLibrary" :materials="studio.allMaterials" :selected="studio.selected" :reference="studio.validationReference" :busy="studio.busy" :save-material="studio.saveMaterial" @apply="studio.apply" @preview="studio.draft = $event" @compare="studio.compareMaterial" /><MaterialPanel v-else :materials="studio.allMaterials" :selected="studio.selected" :checked="studio.checked" :busy="studio.busy" :save-material="studio.saveMaterial" :delete-material="studio.deleteMaterial" :import-materials="studio.importMaterials" @apply="studio.apply" @preview="studio.draft = $event" @check="check" @export="studio.exportMaterials" /></TabsContent>
           <TabsContent value="properties" class="studio-right-content"><div class="properties-panel"><div class="properties-heading"><Icon icon="i-tripo:properties" /><span>{{ t('Material properties', '材质属性') }}</span></div><p>{{ t('Select a region to inspect its current assignment.', '选择一个区域查看当前材质。') }}</p><dl v-if="studio.selected"><ModuleTooltip :title="t('Material ID', '材质 ID')" :description="t('Stable user-facing identifier for exports and material references.', '导出和材质引用使用的稳定用户标识。')" side="left"><div><dt>{{ t('Material ID', '材质 ID') }}</dt><dd>{{ studio.selected.materialId }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Display color', '展示颜色')" :description="t('Saved sRGB HEX value. It is the source color for the region preview.', '已保存的 sRGB HEX 值，是区域预览使用的源颜色。')" side="left"><div><dt>{{ t('Color', '颜色') }}</dt><dd>{{ studio.selected.hex }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Transparency', '透明度')" :description="t('Preview opacity is 1 minus transparency. This is a display parameter.', '预览不透明度等于 1 减透明度。这是显示参数。')" side="left"><div><dt>{{ t('Transparency', '透明度') }}</dt><dd>{{ studio.selected.transparency.toFixed(2) }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Metalness', '金属度')" :description="t('Preview metallic response from 0 non-metallic to 1 fully metallic.', '预览金属反射，0 为非金属，1 为完全金属。')" side="left"><div><dt>{{ t('Metalness', '金属度') }}</dt><dd>{{ studio.selected.metalness.toFixed(2) }}</dd></div></ModuleTooltip><ModuleTooltip :title="t('Roughness', '粗糙度')" :description="t('Roughness follows the assigned material rule. The OpenPBR subset uses it directly.', '输入粗糙度值。按当前材质的渲染规则使用。OpenPBR 子集直接使用粗糙度。')" side="left"><div><dt>{{ t('Roughness', '粗糙度') }}</dt><dd>{{ studio.selected.roughness.toFixed(2) }}</dd></div></ModuleTooltip></dl></div></TabsContent>
         </Tabs>
       </aside>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { effectScope, markRaw, onMounted, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vue';
-import { ACESFilmicToneMapping, Box3, BufferAttribute, BufferGeometry, DirectionalLight, EquirectangularReflectionMapping, GridHelper, Group, HemisphereLight, Mesh, PerspectiveCamera, Raycaster, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type Material } from 'three';
+import { ACESFilmicToneMapping, Box3, BufferAttribute, BufferGeometry, DirectionalLight, EquirectangularReflectionMapping, GridHelper, Group, HemisphereLight, Mesh, MeshBasicMaterial, PlaneGeometry, PerspectiveCamera, Raycaster, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type Material } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -12,7 +12,7 @@ import { createViewerRuntime } from './runtime';
 import { applySurface, cloneStudioMaterial, createPrintMaterial } from './material';
 import type { ViewerContent, ViewerSettings, PrintDisplay, SurfaceValues, ViewerHit } from './types';
 
-const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings; validationSurface?: SurfaceValues | null }>();
+const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings; validationSurface?: SurfaceValues | null; referenceSurface?: SurfaceValues | null }>();
 const emit = defineEmits<{ ready: []; error: [message: string]; stroke: [hits: ViewerHit[]]; fill: [hit: ViewerHit] }>();
 const host = useTemplateRef<HTMLDivElement>('host');
 const error = shallowRef('');
@@ -43,6 +43,16 @@ onMounted(() => {
     lights[1]!.position.set(50, 100, 80); scene.add(...lights);
     const grid = new GridHelper(220, 22, 0x43464b, 0x2a2d31); grid.position.y = -0.15; scene.add(grid);
     grid.visible = props.settings.grid;
+    const opticalBackdrop = new Group();
+    const backdropGeometry = new PlaneGeometry(1, 1);
+    const backdropMaterials = [new MeshBasicMaterial({ color: '#BCBDBE' }), new MeshBasicMaterial({ color: '#51565A' })];
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 8; x++) {
+      const tile = new Mesh(backdropGeometry, backdropMaterials[(x + y) % 2]);
+      tile.position.set((x - 3.5) / 8, (y - 2.5) / 8, 0); tile.scale.setScalar(1 / 8);
+      opticalBackdrop.add(tile);
+    }
+    opticalBackdrop.visible = false; scene.add(opticalBackdrop);
+    const backdropDirection = new Vector3();
     const callbacks: Array<{ handler: RenderFunction; order: number }> = [];
     const platform = useModelPlatform({ cameraEnabled: () => props.settings.tool === 'orbit', controls: shallowRef(controls), renderer,
       scene: () => mount, onRender: (handler, order) => { callbacks.push({ handler, order }); callbacks.sort((a, b) => a.order - b.order); } });
@@ -52,6 +62,8 @@ onMounted(() => {
     let printMesh: Mesh | null = null;
     let validationRoot: ViewerContent['root'] | null = null;
     let validationMaterial: ReturnType<typeof createPrintMaterial> | null = null;
+    let referenceMaterial: ReturnType<typeof createPrintMaterial> | null = null;
+    let validationMeshes: Mesh[] = [];
     let sourceKey: string | null = null;
     let currentPrint: PrintDisplay | null = null;
     let closed = false;
@@ -84,6 +96,7 @@ onMounted(() => {
       printMaterials.forEach(entry => entry.material.dispose()); printMaterials = []; currentPrint = null;
       validationRoot?.removeFromParent(); validationRoot = null;
       validationMaterial?.material.dispose(); validationMaterial = null;
+      referenceMaterial?.material.dispose(); referenceMaterial = null; validationMeshes = [];
     }
     function updatePrint() {
       if (!activeRoot || !props.display) { clearPrint(); return; }
@@ -92,11 +105,16 @@ onMounted(() => {
           // Share source geometry so calibration retains its authored normals.
           validationRoot = markRaw(activeRoot.clone(true));
           validationMaterial = createPrintMaterial(props.validationSurface);
-          validationRoot.traverse(object => { if (object instanceof Mesh) object.material = validationMaterial!.material; });
+          validationRoot.traverse(object => { if (object instanceof Mesh) { object.material = validationMaterial!.material; validationMeshes.push(object); } });
           mount.add(validationRoot);
         }
         applySurface(validationMaterial!.material, props.validationSurface);
         validationMaterial!.uniforms.printLayers.value = props.settings.layers ? 1 : 0;
+        if (props.referenceSurface) {
+          referenceMaterial ??= createPrintMaterial(props.referenceSurface);
+          applySurface(referenceMaterial.material, props.referenceSurface);
+          referenceMaterial.uniforms.printLayers.value = props.settings.layers ? 1 : 0;
+        } else { referenceMaterial?.material.dispose(); referenceMaterial = null; }
         return;
       }
       renderSurface = props.surfaces;
@@ -152,7 +170,7 @@ onMounted(() => {
       if (result.kind === ModelResultKind.Failed) { error.value = result.failure.error.message; emit('error', error.value); }
       else if (result.kind === ModelResultKind.Applied) { updatePrint(); emit('ready'); }
     }, { immediate: true });
-    watch(() => [props.display, props.surfaces, props.settings.layers, props.settings.workflow, props.validationSurface] as const, updatePrint, { deep: false });
+    watch(() => [props.display, props.surfaces, props.settings.layers, props.settings.workflow, props.validationSurface, props.referenceSurface] as const, updatePrint, { deep: false });
     watch(() => props.settings.height, () => { updateHeight(); fit(); });
     watch(() => props.settings.mode, fit);
     watch(() => props.settings.tool, tool => { controls.enabled = tool === 'orbit'; renderer.domElement.style.cursor = tool === 'orbit' ? 'grab' : 'crosshair'; });
@@ -207,9 +225,18 @@ onMounted(() => {
       if (!height) return;
       const draw = (left: number, w: number, print: boolean) => {
         const validation = props.settings.workflow === 'validation' && !!validationRoot;
-        if (activeRoot) activeRoot.visible = !print || !(validation ? validationRoot : printMesh);
+        const reference = validation && !print && !!referenceMaterial;
+        opticalBackdrop.visible = validation && ((props.validationSurface?.optics?.transmission ?? 0) > 0 || (props.referenceSurface?.optics?.transmission ?? 0) > 0);
+        if (opticalBackdrop.visible) {
+          const extent = sourceBounds.getSize(backdropDirection).length() * mount.scale.x;
+          opticalBackdrop.scale.setScalar(extent * 1.8);
+          opticalBackdrop.position.copy(controls.target).addScaledVector(camera.getWorldDirection(backdropDirection), extent * 0.65);
+          opticalBackdrop.quaternion.copy(camera.quaternion);
+        }
+        if (activeRoot) activeRoot.visible = !reference && (!print || !(validation ? validationRoot : printMesh));
         if (printMesh) printMesh.visible = print && !validation;
-        if (validationRoot) validationRoot.visible = print && validation;
+        if (validationRoot) validationRoot.visible = (print || reference) && validation;
+        if (validation && validationMaterial) validationMeshes.forEach(mesh => { mesh.material = reference ? referenceMaterial!.material : validationMaterial!.material; });
         camera.aspect = w / height; camera.updateProjectionMatrix(); renderer.setViewport(left, 0, w, height); renderer.setScissor(left, 0, w, height);
         renderer.render(scene, camera);
       };
@@ -224,14 +251,14 @@ onMounted(() => {
         orientationGizmo.update(); orientationGizmo.render();
       });
     }
-    inspect = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, triangles: renderer.info.render.triangles, workflow: props.settings.workflow, exposure: renderer.toneMappingExposure, environmentIntensity: scene.environmentIntensity, validationRoughness: validationMaterial?.material.roughness, studioRoughness: validationMaterial?.uniforms.studioRoughness.value, frameMS: frameTimes.length ? frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length : 0 });
+    inspect = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, triangles: renderer.info.render.triangles, workflow: props.settings.workflow, exposure: renderer.toneMappingExposure, environmentIntensity: scene.environmentIntensity, validationRoughness: validationMaterial?.material.roughness, transmission: validationMaterial?.material.transmission, sheen: validationMaterial?.material.sheen, clearcoat: validationMaterial?.material.clearcoat, referenceRoughness: referenceMaterial?.material.roughness, opticalBackdrop: opticalBackdrop.visible, studioRoughness: validationMaterial?.uniforms.studioRoughness.value, frameMS: frameTimes.length ? frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length : 0 });
     fit(); render();
     new HDRLoader().load('/studio.hdr', texture => { if (closed) { texture.dispose(); return; } texture.mapping = EquirectangularReflectionMapping; scene.environment = texture; updateLighting(); }, undefined, () => {});
     teardown = () => {
       closed = true; cancelAnimationFrame(frame); resize.disconnect(); controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointercancel', up);
       void controller.close().finally(() => {
-        clearPrint(); platform.dispose(); engine.dispose(); scene.environment?.dispose(); grid.geometry.dispose();
+        clearPrint(); backdropGeometry.dispose(); backdropMaterials.forEach(material => material.dispose()); platform.dispose(); engine.dispose(); scene.environment?.dispose(); grid.geometry.dispose();
         (Array.isArray(grid.material) ? grid.material : [grid.material]).forEach(material => material.dispose()); composer.dispose(); orientationGizmo.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); localScope.stop();
       });
     };

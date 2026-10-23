@@ -1,11 +1,49 @@
 import { describe, expect, it } from 'vitest';
 import { MeshStandardMaterial, LinearSRGBColorSpace, SRGBColorSpace, Color } from 'three';
-import { supplierMaterials, supplierCatalog, cloneMaterial, materialSurface, materialProblem, restoreSupplier, withOverrides } from '../app/@feature/materials/supplier';
+import { supplierMaterials, supplierCatalog, supplierCatalogs, cloneMaterial, materialSurface, materialProblem, restoreSupplier, withOverrides } from '../app/@feature/materials/supplier';
 import { validateMaterial, materialsCSV } from '../app/@feature/materials/catalog';
 import { createPrintMaterial, applySurface, patchStudioMaterial } from '../app/@engine/viewer/material';
 
 const source = (sku: string) => cloneMaterial(supplierMaterials.find(material => material.materialId === sku)!);
 describe('supplier material adaptation', () => {
+  it('adds all SUNLU PLA families with independent catalog IDs and no invented supplier SKU', () => {
+    const records = supplierCatalogs.find(catalog => catalog.vendor === 'SUNLU')!.records;
+    expect(records).toHaveLength(33);
+    expect(records.map(record => record.source.row)).toEqual(Array.from({ length: 33 }, (_, index) => index + 2));
+    expect(records.filter(record => record.colorFamily === '常规色系')).toHaveLength(20);
+    expect(records.filter(record => record.colorFamily?.startsWith('华彩系列'))).toHaveLength(5);
+    expect(records.filter(record => record.colorFamily?.startsWith('粉彩系列'))).toHaveLength(8);
+    expect(supplierMaterials).toHaveLength(61);
+    expect(new Set(supplierMaterials.map(material => material.id)).size).toBe(61);
+    expect(new Set(supplierMaterials.map(material => material.materialId)).size).toBe(61);
+    for (const record of records) {
+      expect(record.sku).toBe('');
+      expect(record.catalogId).toMatch(/^PLA-[A-Z-]+$/);
+      expect(record.catalogHex).toMatch(/^#[0-9A-F]{6}$/);
+      expect(record.materialType).toBe('PLA');
+      expect(record.status).toBe('color-only');
+      expect(record.source.parameters).toEqual({});
+      expect(record.issues).toContain('sku-not-provided');
+      const material = source(`SUNLU-${record.catalogId}`);
+      expect(materialProblem(material)).toBeNull();
+      expect(materialSurface(material).hex).toBe(record.catalogHex);
+      expect(materialSurface(material).baseColor).toBeUndefined();
+    }
+  });
+  it('uses the written SUNLU HEX and preserves differing swatches and original formatting', () => {
+    const white = source('SUNLU-PLA-WHITE');
+    expect(white.hex).toBe('#FFFFFF');
+    expect(white.supplier!.source).toMatchObject({ spreadsheet: 'SUNLU-PLA产品颜色资料.xlsx', sheet: 'Sheet1', row: 2, rawHex: '#FFFFFF', swatchHex: '#EFF0F1' });
+    expect(white.supplier!.issues).toContain('hex-swatch-mismatch');
+    const magenta = source('SUNLU-PLA-MAGENTA');
+    expect(magenta.hex).toBe('#D9027D');
+    expect(magenta.supplier!.source.rawHex).toBe('d9027d');
+    expect(magenta.supplier!.pantone).toBe('PANTONE Process Magenta C');
+    expect(magenta.supplier!.issues).not.toContain('hex-swatch-mismatch');
+    expect(supplierMaterials.filter(material => material.supplier!.vendor === 'SUNLU' && material.supplier!.issues.includes('hex-swatch-mismatch'))).toHaveLength(9);
+    expect(materialsCSV([magenta])).toContain('"SUNLU-PLA-MAGENTA","品红 · Magenta","#D9027D"');
+    expect(restoreSupplier(withOverrides({ ...magenta, hex: '#123456' })).hex).toBe('#D9027D');
+  });
   it('retains all sheet rows and unmatched USDA records without enabling unconfirmed SKUs', () => {
     expect(supplierCatalog.records).toHaveLength(28);
     expect(supplierCatalog.records.filter(record => record.source.row !== null)).toHaveLength(26);

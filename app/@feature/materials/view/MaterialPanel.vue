@@ -17,12 +17,14 @@ const { t } = locale;
 const { language } = storeToRefs(locale);
 const search = shallowRef('');
 const tab = shallowRef<'supplier' | 'local'>('supplier');
+const vendor = shallowRef('');
 const editing = shallowRef<MaterialRecord | null>(null);
 const deleting = shallowRef<MaterialRecord | null>(null);
 async function remove() {
   if (deleting.value && await props.deleteMaterial(deleting.value.id)) deleting.value = null;
 }
-const visible = computed(() => props.materials.filter(item => (tab.value === 'supplier' ? isSupplier(item) : !isSupplier(item)) && `${item.name} ${item.materialId} ${item.supplier?.vendor ?? ''} ${item.supplier?.product ?? ''} ${item.supplier?.materialType ?? ''}`.toLowerCase().includes(search.value.toLowerCase())));
+const vendors = computed(() => [...new Set(props.materials.filter(isSupplier).map(item => item.supplier!.vendor))].map(name => ({ name, count: props.materials.filter(item => isSupplier(item) && item.supplier!.vendor === name).length })));
+const visible = computed(() => props.materials.filter(item => (tab.value === 'supplier' ? isSupplier(item) && (!vendor.value || item.supplier!.vendor === vendor.value) : !isSupplier(item)) && `${item.name} ${item.materialId} ${item.supplier?.vendor ?? ''} ${item.supplier?.product ?? ''} ${item.supplier?.colorFamily ?? ''} ${item.supplier?.materialType ?? ''} ${item.appearance?.vendor ?? ''} ${item.appearance?.baseMaterial ?? ''} ${item.appearance?.colorCode ?? ''} ${item.appearance?.sku ?? ''}`.toLowerCase().includes(search.value.toLowerCase())));
 const counts = computed(() => ({ supplier: props.materials.filter(isSupplier).length, local: props.materials.filter(item => !isSupplier(item)).length }));
 function edit(material?: MaterialRecord) {
   editing.value = material ? cloneMaterial(material) : { id: crypto.randomUUID(), materialId: `MAT-${String(props.materials.length + 1).padStart(3, '0')}`, name: '', hex: '#BCA8FF', transparency: 0, metalness: 0, roughness: 0.35, colorSpace: 'srgb', renderRule: RENDER_RULE };
@@ -37,7 +39,8 @@ watch(() => props.selected?.id, close);
     <template v-else>
       <MaterialImport :busy="busy" :import-materials="importMaterials" @imported="tab = 'local'; search = ''" />
       <label class="search-field"><span>⌕</span><input v-model="search" :placeholder="t('Search SKU, color or material', '搜索 SKU、颜色或材料')" aria-label="Search materials"></label>
-      <div class="library-tabs"><button :class="{ active: tab === 'supplier' }" @click="tab = 'supplier'">Polymaker {{ counts.supplier }}</button><button :class="{ active: tab === 'local' }" @click="tab = 'local'">{{ t('Local', '本地') }} {{ counts.local }}</button></div>
+      <div class="library-tabs"><button :class="{ active: tab === 'supplier' }" @click="tab = 'supplier'">{{ t('Suppliers', '供应商') }} {{ counts.supplier }}</button><button :class="{ active: tab === 'local' }" @click="tab = 'local'">{{ t('Local', '本地') }} {{ counts.local }}</button></div>
+      <label v-if="tab === 'supplier'" class="vendor-filter">{{ t('Manufacturer', '厂商') }}<select v-model="vendor" :aria-label="t('Filter manufacturer', '筛选厂商')"><option value="">{{ t('All manufacturers', '全部厂商') }}</option><option v-for="entry in vendors" :key="entry.name" :value="entry.name">{{ entry.name }} · {{ entry.count }}</option></select></label>
       <div v-if="deleting" class="delete-confirm" role="group" :aria-label="t('Confirm deletion', '确认删除')">
         <p>{{ t(`Delete ${deleting.materialId} from the library? Applied materials will be retained.`, `从材质库删除 ${deleting.materialId}？已应用的材质保持不变。`) }}</p>
         <div class="button-row"><button :disabled="busy" @click="deleting = null">{{ t('Cancel', '取消') }}</button><button class="delete-material" :disabled="busy" @click="remove">{{ t('Confirm delete', '确认删除') }}</button></div>
@@ -47,7 +50,7 @@ watch(() => props.selected?.id, close);
         <article v-for="item in visible" :key="item.id" class="material-card" :class="{ selected: selected?.id === item.id }">
           <input class="material-check" type="checkbox" :checked="checked.includes(item.id)" :aria-label="`Select ${item.name} for export`" @change="emit('check', item.id)">
           <ModuleTooltip :title="t('Color swatch', '颜色色卡')" :description="t('Catalog sRGB color only. Evaluate surface appearance in the central 3D view.', '仅展示色卡颜色。表面材质效果请在中央 3D 视图评估。')" side="left"><button class="material-swatch" :style="{ background: item.supplier?.status === 'unmatched' ? 'repeating-linear-gradient(45deg,#444 0 4px,#777 4px 8px)' : materialHex(item) }" :disabled="busy || !!materialProblem(item)" :aria-label="`Apply ${item.materialId}`" @click="emit('apply', item)" /></ModuleTooltip>
-          <button class="material-description" :disabled="busy || !!materialProblem(item)" @click="emit('apply', item)"><strong>{{ item.name }}</strong><span>{{ item.materialId }} · {{ item.supplier ? item.supplier.materialType || t('Unconfirmed', '待确认') : t('Local', '本地') }}</span><small v-if="item.supplier" class="material-status">{{ ['paired', 'imported'].includes(item.supplier.status) ? 'OpenPBR' : item.supplier.status === 'color-only' ? t('Color only', '仅颜色') : t('SKU unconfirmed', 'SKU 待确认') }} · {{ t('Pending verification', '待验证') }}</small></button>
+          <button class="material-description" :disabled="busy || !!materialProblem(item)" @click="emit('apply', item)"><strong>{{ item.name }}</strong><span>{{ item.supplier?.vendor ? item.supplier.vendor + ' · ' : '' }}{{ item.supplier?.catalogId ?? item.materialId }} · {{ item.supplier ? item.supplier.materialType || t('Unconfirmed', '待确认') : t('Local', '本地') }}</span><small v-if="item.supplier" class="material-status">{{ ['paired', 'imported'].includes(item.supplier.status) ? 'OpenPBR' : item.supplier.status === 'color-only' ? t('Color only', '仅颜色') : t('SKU unconfirmed', 'SKU 待确认') }} · {{ t('Pending verification', '待验证') }}</small></button>
           <ModuleTooltip :title="t('Inspect / adjust', '查看 / 调整')" :description="item.supplier?.issues.map(issue => supplierIssue(issue, language === 'en')).join('；') || t('Edit this local material.', '编辑此本地材质。')" side="left"><button class="edit-material" :aria-label="`Edit ${item.materialId}`" :disabled="busy" @click="edit(item)">↗</button></ModuleTooltip>
           <button v-if="!isSupplier(item)" class="delete-material" :aria-label="t(`Delete ${item.materialId}`, `删除 ${item.materialId}`)" :title="t('Delete from local library', '从本地库删除')" :disabled="busy" @click="deleting = item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg></button>
         </article>
@@ -59,7 +62,9 @@ watch(() => props.selected?.id, close);
   </aside>
 </template>
 <style scoped>
-.panel-heading, .search-field, .library-tabs, .selection-detail, .library-footer { flex-shrink: 0; }
+.panel-heading, .search-field, .library-tabs, .vendor-filter, .selection-detail, .library-footer { flex-shrink: 0; }
+.vendor-filter { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 10px; color: #999; }
+.vendor-filter select { min-width: 0; flex: 1; padding: 6px; border: 1px solid #444; border-radius: 5px; background: #252525; color: #eee; font: inherit; }
 .material-list { flex: 1; min-height: 120px; overflow-y: auto; scrollbar-width: thin; }
 .selection-detail summary { cursor: pointer; font-size: 9px; }
 .material-swatch { width: 26px; height: 26px; border: 1px solid #666; border-radius: 5px; }

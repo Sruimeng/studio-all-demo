@@ -7,7 +7,7 @@ import { unzipSync, strFromU8, zipSync, strToU8 } from 'fflate';
 const mocks = vi.hoisted(() => ({ records: new Map<string, unknown>(), write: vi.fn(), download: vi.fn(), load: vi.fn(), request: vi.fn(), clients: [] as Array<{ disposed: boolean }> }));
 vi.mock('~/@base/storage', () => ({ readRecord: async (key: string) => mocks.records.get(key), writeRecord: mocks.write, downloadFile: mocks.download }));
 vi.mock('~/@base/locale', () => ({ useLocale: () => ({ t: (en: string) => en }) }));
-vi.mock('~/@feature/materials', async () => ({ ...await import('../app/@feature/materials/catalog'), ...await import('../app/@feature/materials/types'), ...await import('../app/@feature/materials/supplier'), ...await import('../app/@feature/materials/usda') }));
+vi.mock('~/@feature/materials', async () => ({ ...await import('../app/@feature/materials/catalog'), ...await import('../app/@feature/materials/types'), ...await import('../app/@feature/materials/supplier'), ...await import('../app/@feature/materials/usda'), ...await import('../app/@feature/materials/filaments') }));
 vi.mock('~/@engine/import', () => ({ loadLocalModel: mocks.load }));
 vi.mock('~/@engine/model', () => ({ collectModelResources: () => ({}), disposeModelResources: vi.fn() }));
 vi.mock('~/@engine/print-mesh', () => ({ toPrintMesh: async () => ({ positions: new Float32Array(9) }), uvHit: vi.fn() }));
@@ -61,10 +61,13 @@ it('loads and regenerates regions with supplier SKU matches and keeps source col
   const palette = mocks.request.mock.calls.find(([type]) => type === 'palette');
   expect(palette?.[1]).toMatchObject({ mode: 'owned', N: 4, protect: true });
   const candidates = (palette?.[1] as { cands: Array<{ id: string; hex: string }> }).cands;
-  expect(candidates).toHaveLength(26);
+  expect(candidates).toHaveLength(59);
+  expect(candidates.filter(candidate => candidate.id.startsWith('polymaker:'))).toHaveLength(26);
+  expect(candidates.filter(candidate => candidate.id.startsWith('sunlu:'))).toHaveLength(33);
+  expect(candidates.find(candidate => candidate.id === 'sunlu:PLA-MAGENTA')).toEqual({ id: 'sunlu:PLA-MAGENTA', hex: '#D9027D' });
   expect(candidates.map(candidate => candidate.id)).not.toContain('polymaker:CA19010');
   expect(candidates.map(candidate => candidate.id)).not.toContain('polymaker:CA19012');
-  expect(new Set(candidates.map(candidate => candidate.id)).size).toBe(26);
+  expect(new Set(candidates.map(candidate => candidate.id)).size).toBe(59);
   expect(store.regions.map(region => region.material.materialId)).toEqual(['CA19001', 'CA19002']);
   expect(store.regions.map(region => region.sourceHex)).toEqual(['#FF0000', '#0000FF']);
   expect(store.regions[0]!.match).toEqual({ basis: 'catalog-hex-d65-deltae00', materialId: candidates[0]!.id, hex: candidates[0]!.hex, meanDeltaE: 0.25, areaShare: 0.5 });
@@ -83,7 +86,7 @@ it('canonical candidates ignore local colors, supplier copies and preview overri
   expect(await store.saveMaterial(material)).toBe(true);
   mocks.request.mockClear(); await store.segment();
   const candidates = mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands;
-  expect(candidates).toHaveLength(26);
+  expect(candidates).toHaveLength(59);
   expect(candidates.find((candidate: { id: string }) => candidate.id === material.id).hex).toBe(hex);
   expect(store.regions[0]!.material.hex).toBe('#123456');
   expect(store.regions[0]!.match!.hex).toBe(hex);
@@ -177,6 +180,27 @@ it('supplier overrides use separate storage and survive project save and reopen'
   expect(store.validationSurface!.roughness).toBe(0.12); expect(store.saved).toBe(true);
 });
 
+it('retains supplier appearance bindings, render rules and optics through library reload and ZIP restore', async () => {
+  const { bindAppearance } = await import('../app/@feature/materials/binding');
+  const { filamentPreview } = await import('../app/@feature/materials/filaments');
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.setWorkflow('validation');
+  const source = { ...filamentPreview('CAILAB', 'PLA', undefined, 'translucent', '#112233'), id: 'own-appearance', materialId: 'OWN-APPEARANCE', name: 'Our glass', appearance: undefined };
+  expect(await store.saveMaterial(source)).toBe(true);
+  const bound = bindAppearance(await supplier('CA19001'), source);
+  expect(await store.saveMaterial(bound)).toBe(true);
+  const stored = () => store.allMaterials.find(item => item.id === bound.id)!;
+  expect(stored().appearanceBinding).toEqual(bound.appearanceBinding);
+  expect(stored().renderRule).toBe(source.renderRule); expect(stored().optics!.transmission).toBe(0.85);
+  await store.save(); await store.backup(); const blob = mocks.download.mock.calls.at(-1)![0] as Blob;
+  store.materials = []; await store.restoreBackup(new File([blob], 'binding.zip'));
+  expect(store.failure).toBe(''); expect(stored().appearanceBinding).toEqual(bound.appearanceBinding);
+  store.apply(stored()); expect(store.validationSurface!.hex).toBe(bound.hex); expect(store.validationSurface!.optics!.transmission).toBe(0.85);
+  expect(await store.deleteMaterial(source.id)).toBe(true);
+  expect(store.validationMaterial!.appearanceBinding!.name).toBe('Our glass'); expect(store.validationSurface!.optics!.transmission).toBe(0.85);
+  await store.initialize();
+  expect(stored().appearanceBinding).toEqual(bound.appearanceBinding); expect(stored().optics!.transmission).toBe(0.85);
+});
+
 it('legacy projects reopen under Studio rules and invalid new settings leave the active project intact', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); await store.save();
   const id = store.project!.id;
@@ -207,6 +231,30 @@ it('exports actual supplier material type, brand and revision and blocks unmatch
   expect(store.selected!.materialId).toBe('CA19017');
 });
 
+it('applies, saves and exports SUNLU colors while keeping their catalog identity and missing SKU', async () => {
+  const store = useWorkspace(); await store.loadFiles(files());
+  const material = await supplier('SUNLU-PLA-MAGENTA');
+  const labels = store.display!.labels; mocks.request.mockClear();
+  store.apply(material);
+  expect(store.selected!.id).toBe('sunlu:PLA-MAGENTA');
+  expect(store.display!.labels).toBe(labels); expect(mocks.request).not.toHaveBeenCalled();
+  material.roughness = 0.2;
+  expect(await store.saveMaterial(material)).toBe(true);
+  await store.save(); await store.openProject(store.project!.id);
+  expect(store.selected!.roughness).toBe(0.2);
+  expect(store.selected!.supplier).toMatchObject({ vendor: 'SUNLU', sku: '', catalogId: 'PLA-MAGENTA', catalogHex: '#D9027D', source: { row: 13, rawHex: 'd9027d' } });
+  await store.export3mf();
+  const payload = mocks.request.mock.calls.find(([type]) => type === 'export3mf')![1];
+  expect(payload.filaments[0]).toMatchObject({ id: 'SUNLU-PLA-MAGENTA', hex: '#D9027D', type: 'PLA', vendor: 'SUNLU' });
+  expect(payload.materialData.project.regions[0].material.supplier.sku).toBe('');
+  await store.backup(); const blob = mocks.download.mock.calls.at(-1)![0] as Blob;
+  await store.restoreBackup(new File([blob], 'sunlu.tripo.zip'));
+  expect(store.failure).toBe('');
+  expect(store.selected!.id).toBe('sunlu:PLA-MAGENTA');
+  expect(store.selected!.supplier!.source.rawHex).toBe('d9027d');
+  expect(store.allMaterials.find(item => item.id === material.id)!.roughness).toBe(0.2);
+});
+
 const materialFile = async () => new File([`#usda 1.0\n${(await supplier()).supplier!.source.materialUSDA}`], 'sample.usda');
 it('imports a mixed batch locally, avoids duplicate IDs and leaves assignments and candidates intact', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); const labels = store.display!.labels;
@@ -219,7 +267,7 @@ it('imports a mixed batch locally, avoids duplicate IDs and leaves assignments a
   expect(JSON.stringify(store.regions)).toBe(regions); expect(store.display!.labels).toBe(labels);
   expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.records.has('supplier-overrides')).toBe(false);
   await store.segment();
-  expect(mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands).toHaveLength(26);
+  expect(mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands).toHaveLength(59);
 });
 it('keeps the library and assignments intact if importing cannot be persisted', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); const before = JSON.stringify(store.materials);
@@ -270,7 +318,7 @@ it('a failed deletion preserves the local library, selection and validation appe
 
 it('starts with an empty local library and keeps supplier SKU matching available', async () => {
   const store = useWorkspace();
-  expect(store.materials).toEqual([]); expect(store.allMaterials).toHaveLength(28);
+  expect(store.materials).toEqual([]); expect(store.allMaterials).toHaveLength(61);
   await store.loadFiles(files()); await store.save(); await store.initialize();
   expect(store.failure).toBe(''); expect(store.materials).toEqual([]);
   expect(store.regions.every(region => region.material.supplier?.vendor === 'Polymaker')).toBe(true);
@@ -294,4 +342,29 @@ it('restores old backups without repopulating the local library with samples', a
   await store.restoreBackup(new File([blob], 'legacy.tripo.zip'));
   expect(store.failure).toBe(''); expect(store.materials).toEqual([]);
   expect(mocks.records.get('materials')).toEqual([]); expect(store.selected!.id).toBe('porcelain');
+});
+
+it('roundtrips custom series colors, optical overrides and pinned A/B snapshots through projects, ZIP and 3MF metadata', async () => {
+  const { filamentPreview, createFilamentColor } = await import('../app/@feature/materials/filaments');
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.setWorkflow('validation');
+  const color = createFilamentColor(filamentPreview('CAILAB', 'PLA', 'cailab-matte', 'matte', '#CF809F'), { name: 'Custom rose', hex: '#CF809F', colorCode: 'MY01', sku: '', source: 'User chart' }, 'custom-color');
+  expect(await store.saveMaterial(color)).toBe(true);
+  store.compareMaterial(color); color.roughness = 0.01;
+  expect(store.validationReference!.roughness).toBe(0.85);
+  const glass = filamentPreview('Polymaker', 'PLA', 'polymaker-translucent', 'translucent', '#CF809F'); store.apply(glass);
+  await store.save(); const id = store.project!.id;
+  store.compareMaterial(null); store.apply(await supplier()); await store.openProject(id);
+  expect(store.validationMaterial!.optics!.transmission).toBe(0.85);
+  expect(store.validationReference!.appearance!.seriesId).toBe('cailab-matte');
+  expect(store.settings.mode).toBe('compare');
+  await store.backup(); const blob = mocks.download.mock.calls.at(-1)![0] as Blob;
+  store.materials = []; store.compareMaterial(null);
+  await store.restoreBackup(new File([blob], 'filaments.zip'));
+  expect(store.failure).toBe(''); expect(store.materials.find(item => item.id === 'custom-color')!.appearance!.colorCode).toBe('MY01');
+  expect(store.referenceSurface!.roughness).toBe(0.85);
+  store.setWorkflow('assignment'); store.apply(store.materials.find(item => item.id === 'custom-color')!);
+  await store.export3mf();
+  const payload = mocks.request.mock.calls.findLast(([type]) => type === 'export3mf')![1];
+  expect(payload.filaments[0]).toMatchObject({ vendor: 'CAILAB', type: 'PLA', id: 'LOCAL-custom-color' });
+  expect(payload.materialData.project.regions[0].material.appearance).toMatchObject({ seriesId: 'cailab-matte', colorCode: 'MY01', origin: 'user' });
 });

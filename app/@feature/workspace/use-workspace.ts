@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { readRecord, writeRecord, downloadFile } from '~/@base/storage';
 import { useLocale } from '~/@base/locale';
-import { importUSDAMaterials, type MaterialImportResult, withoutLegacySamples, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
+import { filamentIdentity, importUSDAMaterials, type MaterialImportResult, withoutLegacySamples, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
 import { collectModelResources, disposeModelResources } from '~/@engine/model';
 import { loadLocalModel } from '~/@engine/import';
 import { toPrintMesh, uvHit } from '~/@engine/print-mesh';
@@ -23,9 +23,11 @@ export const useWorkspace = defineStore('workspace', () => {
   const supplierEdits = ref<MaterialRecord[]>([]);
   const allMaterials = computed(() => [...materials.value, ...supplierMaterials.map(material => {
     const edit = supplierEdits.value.find(item => item.id === material.id);
-    return edit ? { ...cloneMaterial(material), ...edit.overrides, overrides: edit.overrides, referenceImage: edit.referenceImage } : material;
+    return edit ? { ...cloneMaterial(material), ...edit.overrides, overrides: edit.overrides, renderRule: edit.renderRule, optics: edit.optics, appearance: edit.appearance ?? material.appearance, appearanceBinding: edit.appearanceBinding, referenceImage: edit.referenceImage } : material;
   })]);
   const validationMaterial = ref<MaterialRecord | null>(cloneMaterial(supplierMaterials.find(material => material.materialId === 'CA19017')!));
+  const validationReference = ref<MaterialRecord | null>(null);
+  const referenceSurface = computed(() => validationReference.value ? materialSurface(validationReference.value) : null);
   const checked = ref<string[]>([]); const selectedRegion = ref(0); const draft = ref<MaterialRecord | null>(null);
   const content = shallowRef<ViewerContent | null>(null); const display = shallowRef<PrintDisplay | null>(null);
   const regions = ref<RegionAssignment[]>([]); const project = shallowRef<PrintProject | null>(null);
@@ -56,7 +58,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const validationSurface = computed(() => selected.value ? materialSurface(draft.value ?? selected.value) : null);
   const scale = computed(() => settings.value.height / ((modelInfo.value?.bbox.maxY ?? 1) - (modelInfo.value?.bbox.minY ?? 0) || 1));
   const labelOptions = () => ({ slotHex: regions.value.map(region => region.sourceHex), slotCount: regions.value.length, regionMap: regions.value.map((_, i) => i), precision: precision.value, scale: scale.value });
-  const materialData = (items = allMaterials.value) => ({ version: 2, colorSpace: 'srgb', renderRules: [...new Set(items.map(item => item.renderRule))], materials: items, viewerSettings: settings.value, validationMaterial: validationMaterial.value, project: project.value ? { id: project.value.id, name: project.value.name, heightMM: settings.value.height, regions: regions.value } : null });
+  const materialData = (items = allMaterials.value) => ({ version: 2, colorSpace: 'srgb', renderRules: [...new Set(items.map(item => item.renderRule))], materials: items, viewerSettings: settings.value, validationMaterial: validationMaterial.value, validationReference: validationReference.value, project: project.value ? { id: project.value.id, name: project.value.name, heightMM: settings.value.height, regions: regions.value } : null });
   watch(settings, () => { saved.value = false; }, { deep: true, flush: 'sync' });
   function report(error: unknown) { failure.value = error instanceof Error ? error.message : String(error); }
   async function operation(action: () => Promise<void>) {
@@ -126,6 +128,7 @@ export const useWorkspace = defineStore('workspace', () => {
           settings.value = restore.viewerSettings ? JSON.parse(JSON.stringify(restore.viewerSettings)) : { ...settings.value, workflow: 'assignment', preview: { preset: 'studio-v1', exposure: 1, environmentIntensity: 1, environmentRotation: 0 } };
           settings.value.height = restore.height;
           validationMaterial.value = restore.validationMaterial ? cloneMaterial(restore.validationMaterial) : validationMaterial.value;
+          validationReference.value = restore.validationReference ? cloneMaterial(restore.validationReference) : null;
         }
         revision = 0; undoCount.value = 0;
         durations.value.segment = performance.now() - startedSegment;
@@ -176,6 +179,11 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   const undo = () => operation(async () => { if (client) { advance(); await editResult(await client.request('undo', {})); } });
   const reset = () => operation(async () => { if (client) { advance(); await editResult(await client.request('reset', {})); } });
+  function compareMaterial(material: MaterialRecord | null) {
+    validationReference.value = material ? cloneMaterial(material) : null;
+    if (material) settings.value.mode = 'compare';
+    saved.value = false;
+  }
   function apply(material: MaterialRecord) {
     if (busy.value) return;
     const problem = materialProblem(material); if (problem) { report(new Error(problem)); return; }
@@ -256,7 +264,7 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   async function snapshot(): Promise<PrintProject> {
     if (!project.value || !client) throw new Error(t('Import a model first', '请先导入模型'));
-    return { ...project.value, version: 2, updatedAt: new Date().toISOString(), regions: JSON.parse(JSON.stringify(regions.value)), height: settings.value.height, colorCount: colorCount.value, precision: precision.value, scheme: scheme.value, snapshot: (await client.request('snapshot', {})).snapshot, viewerSettings: JSON.parse(JSON.stringify(settings.value)), validationMaterial: validationMaterial.value ? cloneMaterial(validationMaterial.value) : null };
+    return { ...project.value, version: 2, updatedAt: new Date().toISOString(), regions: JSON.parse(JSON.stringify(regions.value)), height: settings.value.height, colorCount: colorCount.value, precision: precision.value, scheme: scheme.value, snapshot: (await client.request('snapshot', {})).snapshot, viewerSettings: JSON.parse(JSON.stringify(settings.value)), validationMaterial: validationMaterial.value ? cloneMaterial(validationMaterial.value) : null, validationReference: validationReference.value ? cloneMaterial(validationReference.value) : null };
   }
   const save = () => operation(async () => {
     const data = await snapshot(); await writeRecord(`project:${data.id}`, data);
@@ -270,6 +278,7 @@ export const useWorkspace = defineStore('workspace', () => {
       if (data.viewerSettings) validateSettings(data.viewerSettings);
       data.regions.forEach(validateRegion);
       if (data.validationMaterial) { const error = validateMaterial(data.validationMaterial, []); if (error) throw new Error(error); }
+      if (data.validationReference) { const error = validateMaterial(data.validationReference, []); if (error) throw new Error(error); }
       await loadFiles(data.files.map(file => { const value = new File([file.data], file.name, { type: file.type }); Object.defineProperty(value, 'webkitRelativePath', { value: file.path }); return value; }), data);
       if (!failure.value) await writeRecord('active-project', id);
     } catch (error) { report(error); }
@@ -289,6 +298,7 @@ export const useWorkspace = defineStore('workspace', () => {
       if (![1, 2].includes(data.version) || !Array.isArray(data.files) || !Array.isArray(data.regions) || data.regions.length > 12 || !Number.isFinite(data.height) || data.height < 10 || data.height > 320) throw new Error('Unsupported or invalid project');
       if (data.viewerSettings) validateSettings(data.viewerSettings);
       if (data.validationMaterial) { const error = validateMaterial(data.validationMaterial, []); if (error) throw new Error(error); }
+      if (data.validationReference) { const error = validateMaterial(data.validationReference, []); if (error) throw new Error(error); }
       data.regions.forEach(validateRegion);
       const files = data.files.map((item: { name: string; path: string; type: string; entry: string }) => { if (typeof item.name !== 'string' || typeof item.path !== 'string' || !entries[item.entry]) throw new Error('Missing project asset'); const value = new File([entries[item.entry]! as Uint8Array<ArrayBuffer>], item.name, { type: item.type }); Object.defineProperty(value, 'webkitRelativePath', { value: item.path }); return value; });
       const restored: PrintProject = { ...data, files: files.map((file: File) => ({ name: file.name, path: file.webkitRelativePath, type: file.type, data: file })) };
@@ -305,7 +315,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const export3mf = () => operation(async () => {
     if (!client) return;
     if (settings.value.workflow === 'validation') throw new Error(t('Switch to region assignment before exporting 3MF.', '请切换到区域应用，确认每个区域的耗材后再导出 3MF。'));
-    const result = await client.request('export3mf', { scheme: scheme.value, name: project.value?.name ?? 'Tripo', scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), type: region.material.supplier?.materialType || 'Unknown', vendor: region.material.supplier?.vendor || 'Generic', materialVersion: region.material.supplier?.source.sha256 ?? null })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true });
+    const result = await client.request('export3mf', { scheme: scheme.value, name: project.value?.name ?? 'Tripo', scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), ...filamentIdentity(region.material), materialVersion: region.material.supplier?.source.sha256 ?? null })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true });
     downloadFile(result.blob, `${project.value?.name ?? 'Tripo'}.3mf`); status.value = t('3MF exported', '3MF 已导出');
   });
   const selftest = () => operation(async () => { if (client) { const result = await client.request('selftest', { withConfig: true }); downloadFile(result.blob, 'four-color-selftest.3mf'); } });
@@ -327,7 +337,7 @@ export const useWorkspace = defineStore('workspace', () => {
     else await demo();
   }
   onScopeDispose(() => { generation++; client?.dispose(); });
-  return { materials, allMaterials, validationMaterial, validationSurface, checked, content, display, regions, selectedRegion, selected, surfaces, draft, project, projects, busy, status, failure, progress, warnings, colorCount, precision, scheme, settings, undoCount, saved, modelInfo, durations,
+  return { materials, allMaterials, validationMaterial, validationReference, referenceSurface, compareMaterial, validationSurface, checked, content, display, regions, selectedRegion, selected, surfaces, draft, project, projects, busy, status, failure, progress, warnings, colorCount, precision, scheme, settings, undoCount, saved, modelInfo, durations,
     loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, saveMaterial, deleteMaterial, importMaterials, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
 });
 

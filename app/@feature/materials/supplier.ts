@@ -1,26 +1,33 @@
 import { Color, LinearSRGBColorSpace, SRGBColorSpace } from 'three';
 import type { SurfaceValues } from '~/@engine/viewer';
 import data from './data/polymaker-pla.json';
+import sunlu from './data/sunlu-pla.json';
+import { catalogAppearance } from './filaments';
 import { OPENPBR_RULE, RENDER_RULE, type MaterialRecord, type SupplierCatalog, type SupplierProfile } from './types';
 
 export const supplierCatalog = data as SupplierCatalog;
+export const supplierCatalogs: SupplierCatalog[] = [supplierCatalog, sunlu as SupplierCatalog];
 export const cloneMaterial = (material: MaterialRecord): MaterialRecord => JSON.parse(JSON.stringify(material));
 const numeric = (profile: SupplierProfile, key: string, fallback: number) => {
   const value = profile.source.parameters[key];
   return typeof value === 'number' ? value : fallback;
 };
 export function supplierMaterial(profile: SupplierProfile): MaterialRecord {
+  const key = profile.sku || profile.catalogId;
+  if (!key) throw new Error('Supplier SKU or catalog ID is required');
+  const materialId = profile.sku || `${profile.vendor.toUpperCase()}-${key}`;
   return {
-    version: 2, id: `${profile.vendor.toLowerCase()}:${profile.sku}`, materialId: profile.sku,
+    version: 2, id: `${profile.vendor.toLowerCase()}:${key}`, materialId,
     name: [profile.colorNameCN || profile.colorNameEN || profile.sku, profile.colorNameEN].filter(Boolean).join(' · '),
     hex: profile.catalogHex ?? (profile.origin === 'local-usda' && Array.isArray(profile.source.parameters.base_color) ? `#${new Color().setRGB(...profile.source.parameters.base_color as [number, number, number], LinearSRGBColorSpace).getHexString().toUpperCase()}` : '#808080'), transparency: 1 - numeric(profile, 'geometry_opacity', 1),
     metalness: numeric(profile, 'base_metalness', 0), roughness: numeric(profile, 'specular_roughness', 0.35),
     ior: numeric(profile, 'specular_ior', 1.5), colorSpace: 'srgb',
     renderRule: profile.source.file ? OPENPBR_RULE : RENDER_RULE,
     supplier: profile, overrides: {},
+    appearance: catalogAppearance(profile),
   };
 }
-export const supplierMaterials = supplierCatalog.records.map(supplierMaterial);
+export const supplierMaterials = supplierCatalogs.flatMap(catalog => catalog.records.map(supplierMaterial));
 
 export function restoreSupplier(material: MaterialRecord): MaterialRecord {
   if (!material.supplier) return cloneMaterial(material);
@@ -38,10 +45,10 @@ export function withOverrides(material: MaterialRecord): MaterialRecord {
 }
 export function materialSurface(material: MaterialRecord): SurfaceValues {
   const value = { ...material, ...material.overrides };
-  const surface: SurfaceValues = { hex: value.hex, transparency: value.transparency, metalness: value.metalness, roughness: value.roughness, ior: value.ior, renderRule: value.renderRule };
+  const surface: SurfaceValues = { hex: value.hex, transparency: value.transparency, metalness: value.metalness, roughness: value.roughness, ior: value.ior, renderRule: value.renderRule, optics: value.optics };
   const mode = material.overrides?.colorMode ?? (material.supplier?.origin === 'local-usda' ? 'linear-srgb' : 'catalog');
   const color = material.supplier?.source.parameters.base_color;
-  if (mode !== 'catalog' && Array.isArray(color) && color.length === 3 && !material.overrides?.hex) {
+  if (!material.appearanceBinding && mode !== 'catalog' && Array.isArray(color) && color.length === 3 && !material.overrides?.hex) {
     surface.baseColor = color as [number, number, number];
     surface.baseColorSpace = mode;
   }
@@ -74,6 +81,8 @@ export function supplierIssue(issue: string, english = false): string {
     'material-name-needs-confirmation': ['材质名后缀需确认对应关系', 'Material name suffix needs SKU confirmation'],
     'sku-not-in-spreadsheet': ['SKU 未对应表格，暂不能应用', 'SKU is absent from the spreadsheet; assignment disabled'],
     'openpbr-missing': ['缺少 OpenPBR，使用色卡与演示外观参数', 'No OpenPBR; using catalog color and demo appearance values'],
+    'sku-not-provided': ['供应商未提供 SKU；目录编号仅供 Demo 使用', 'Supplier SKU not provided; catalog ID is for this demo'],
+    'hex-swatch-mismatch': ['表格 HEX 与色块不一致，预览和匹配使用 HEX 文字', 'Spreadsheet HEX differs from the swatch; preview and matching use the HEX text'],
   };
   return messages[issue]?.[english ? 1 : 0] ?? issue;
 }

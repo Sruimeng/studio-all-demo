@@ -22,4 +22,5 @@ export interface PrintProject {
   snapshot: PrintSnapshot | null;
   viewerSettings?: ViewerSettings;
   validationMaterial?: MaterialRecord | null;
+  validationReference?: MaterialRecord | null;
 }

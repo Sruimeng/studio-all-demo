@@ -15,11 +15,11 @@ const colorName = (region: RegionAssignment) => region.material.supplier
 <template>
   <section class="region-tray" :aria-label="t('Region filaments', '区域耗材')">
     <div class="tray-heading">
-      <div><span>SKU COLOR MATCH</span><h3>{{ t('Approximate color matches. Select to replace.', '颜色近似匹配，选择区域可替换耗材') }}</h3></div>
+      <div><span>CATALOG COLOR MATCH</span><h3>{{ t('Approximate color matches. Select to replace.', '颜色近似匹配，选择区域可替换耗材') }}</h3></div>
       <strong>{{ regions.length.toString().padStart(2, '0') }} <small>{{ t('regions', '区域') }}</small></strong>
     </div>
     <div class="region-list">
-      <ModuleTooltip v-for="region in regions" :key="region.index" :title="`${region.material.materialId} · ${colorName(region)}`" :description="region.match ? t('Model representative color → SKU catalog HEX. ΔE00 is the area-weighted mean color difference at generation; lower is closer. The swatch shows the current preview color.', '模型代表色 → SKU 色卡 HEX。ΔE00 是生成时模型采样色与色卡的面积加权平均色差，越小越接近。色块显示当前预览颜色。') : t('Manual assignment. Select a region, then apply a material from the library. Region boundaries stay the same.', '手动绑定。选择区域后从材质库应用耗材，区域边界保持。')" side="top">
+      <ModuleTooltip v-for="region in regions" :key="region.index" :title="`${region.material.materialId} · ${colorName(region)}`" :description="region.match ? t('Model representative color → supplier catalog HEX. ΔE00 is the area-weighted mean color difference at generation; lower is closer. The swatch shows the current preview color.', '模型代表色 → 供应商色卡 HEX。ΔE00 是生成时模型采样色与色卡的面积加权平均色差，越小越接近。色块显示当前预览颜色。') : t('Manual assignment. Select a region, then apply a material from the library. Region boundaries stay the same.', '手动绑定。选择区域后从材质库应用耗材，区域边界保持。')" side="top">
         <button class="region-slot" :class="{ active: selected === region.index }" type="button" :disabled="busy" :aria-pressed="selected === region.index" @click="emit('select', region.index)">
           <span class="region-chip" :style="{ background: materialHex(region.material) }"><b>{{ (region.index + 1).toString().padStart(2, '0') }}</b><i v-if="selected === region.index">✓</i></span>
           <strong>{{ region.material.materialId }}<template v-if="region.material.supplier"> · {{ region.material.supplier.materialType }}</template></strong>

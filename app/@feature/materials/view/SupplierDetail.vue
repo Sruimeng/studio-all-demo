@@ -10,16 +10,22 @@ const { language } = storeToRefs(locale);
 </script>
 <template>
   <section v-if="material.supplier" class="supplier-detail">
-    <strong>{{ material.supplier.vendor || t('Local USDA', '本地 USDA') }} · {{ material.supplier.sku }}</strong>
+    <strong>{{ material.supplier.vendor || t('Local USDA', '本地 USDA') }} · {{ material.materialId }}</strong>
     <p>{{ material.supplier.product || t('Product unconfirmed', '产品系列待确认') }}</p>
     <dl>
+      <div><dt>SKU</dt><dd>{{ material.supplier.sku || t('Not provided', '未提供') }}</dd></div>
+      <div v-if="material.supplier.catalogId"><dt>{{ t('Demo catalog ID', 'Demo 目录编号') }}</dt><dd>{{ material.supplier.catalogId }}</dd></div>
+      <div v-if="material.supplier.colorFamily"><dt>{{ t('Color family', '色系') }}</dt><dd>{{ material.supplier.colorFamily }}</dd></div>
       <div><dt>{{ t('Material type', '材料类型') }}</dt><dd>{{ material.supplier.materialType || t('Unconfirmed', '待确认') }}</dd></div>
       <div><dt>{{ t('Catalog HEX', '表格 HEX') }}</dt><dd>{{ material.supplier.catalogHex || '—' }}</dd></div>
+      <div v-if="material.supplier.source.rawHex"><dt>{{ t('Original HEX text', '原始 HEX 文字') }}</dt><dd>{{ material.supplier.source.rawHex }}</dd></div>
+      <div v-if="material.supplier.source.swatchHex"><dt>{{ t('Spreadsheet swatch', '表格色块') }}</dt><dd>{{ material.supplier.source.swatchHex }}</dd></div>
       <div><dt>Pantone</dt><dd>{{ material.supplier.pantone || '—' }}</dd></div>
       <div><dt>D65 Lab</dt><dd>{{ material.supplier.d65Lab?.join(' / ') || '—' }}</dd></div>
       <div><dt>{{ t('Source color', '源颜色') }}</dt><dd>{{ material.supplier.source.parameters.base_color || '—' }}</dd></div>
       <div><dt>{{ t('Preview color', '预览颜色来源') }}</dt><dd>{{ material.overrides?.hex ? t('Local HEX', '本地 HEX') : (material.overrides?.colorMode ?? (material.supplier.origin === 'local-usda' ? 'linear-srgb' : 'catalog')) === 'linear-srgb' ? t('Assumed linear sRGB', '假设线性 sRGB') : material.overrides?.colorMode === 'srgb' ? t('Assumed sRGB', '假设 sRGB') : material.supplier.origin === 'local-usda' ? t('Imported preview HEX', '导入时预览 HEX') : t('Catalog HEX', '表格 HEX') }}</dd></div>
       <div><dt>{{ t('Source file', '来源文件') }}</dt><dd>{{ material.supplier.source.file?.split('/').pop() || '—' }}</dd></div>
+      <div v-if="material.supplier.source.spreadsheet"><dt>{{ t('Spreadsheet', '来源表格') }}</dt><dd>{{ material.supplier.source.spreadsheet }}<template v-if="material.supplier.source.row"> · {{ material.supplier.source.sheet }} {{ t('Row', '第') }} {{ material.supplier.source.row }} {{ t('', '行') }}</template></dd></div>
       <div><dt>{{ t('Revision', '源文件版本') }}</dt><dd :title="material.supplier.source.sha256 || ''">{{ material.supplier.source.sha256?.slice(0, 12) || '—' }}</dd></div>
     </dl>
     <ul class="supplier-issues"><li v-for="issue in material.supplier.issues" :key="issue">{{ supplierIssue(issue, language === 'en') }}</li></ul>
