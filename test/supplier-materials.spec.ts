@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MeshStandardMaterial, LinearSRGBColorSpace, SRGBColorSpace, Color } from 'three';
-import { supplierMaterials, supplierCatalog, supplierCatalogs, cloneMaterial, materialSurface, materialProblem, restoreSupplier, withOverrides } from '../app/@feature/materials/supplier';
+import { supplierMaterials, supplierCatalog, supplierCatalogs, cloneMaterial, materialSurface, materialProblem, restoreSupplier, supplierModification, withOverrides } from '../app/@feature/materials/supplier';
 import { validateMaterial, materialsCSV } from '../app/@feature/materials/catalog';
 import { createPrintMaterial, applySurface, patchStudioMaterial } from '../app/@engine/viewer/material';
 
@@ -43,6 +43,8 @@ describe('supplier material adaptation', () => {
     expect(supplierMaterials.filter(material => material.supplier!.vendor === 'SUNLU' && material.supplier!.issues.includes('hex-swatch-mismatch'))).toHaveLength(9);
     expect(materialsCSV([magenta])).toContain('"SUNLU-PLA-MAGENTA","品红 · Magenta","#D9027D"');
     expect(restoreSupplier(withOverrides({ ...magenta, hex: '#123456' })).hex).toBe('#D9027D');
+    expect(materialsCSV([withOverrides({ ...magenta, hex: '#123456' })])).toContain('"supplier_modifications"');
+    expect(materialsCSV([withOverrides({ ...magenta, hex: '#123456' })])).toContain('""source"":""#D9027D"",""value"":""#123456""');
   });
   it('retains all sheet rows and unmatched USDA records without enabling unconfirmed SKUs', () => {
     expect(supplierCatalog.records).toHaveLength(28);
@@ -93,6 +95,18 @@ describe('supplier material adaptation', () => {
     expect(restoreSupplier(edited).roughness).toBe(0.45);
     expect(restoreSupplier(edited).hex).toBe(original.hex);
     expect(restoreSupplier(edited).overrides).toEqual({});
+  });
+  it('reports local supplier changes against the catalog value', () => {
+    const edited = withOverrides({ ...source('SUNLU-PLA-COFFEE-BROWN'), hex: '#123456', roughness: 0.2 });
+    expect(supplierModification(edited)).toEqual({
+      id: edited.id,
+      materialId: edited.materialId,
+      vendor: 'SUNLU',
+      changes: [
+        { field: 'hex', source: edited.supplier!.catalogHex, value: '#123456' },
+        { field: 'roughness', source: 0.35, value: 0.2 },
+      ],
+    });
   });
   it('rejects active unsupported lobes rather than silently approximating them', () => {
     const material = source('CA19017'); material.supplier!.source.parameters.transmission_weight = 0.5;

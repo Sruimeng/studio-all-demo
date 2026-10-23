@@ -3,13 +3,39 @@ import { defineStore } from 'pinia';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { readRecord, writeRecord, downloadFile } from '~/@base/storage';
 import { useLocale } from '~/@base/locale';
-import { filamentIdentity, importUSDAMaterials, type MaterialImportResult, withoutLegacySamples, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
+import { filamentIdentity, importUSDAMaterials, type MaterialImportResult, withoutLegacySamples, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, supplierModification, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
 import { collectModelResources, disposeModelResources } from '~/@engine/model';
 import { loadLocalModel } from '~/@engine/import';
 import { toPrintMesh, uvHit } from '~/@engine/print-mesh';
 import { MulticolorClient, type InitResult, type LowResult, type EditResult, type PaletteSlot, type PaletteOptions } from '~/@engine/multicolor';
 import type { PrintDisplay, ViewerContent, ViewerHit, ViewerSettings } from '~/@engine/viewer';
 import type { PrintProject, RegionAssignment } from './types';
+
+type SupplierMaterialStore = Record<string, MaterialRecord[]>;
+
+function supplierVendor(material: MaterialRecord): string {
+  return material.supplier?.vendor?.trim() || 'Unknown';
+}
+
+function groupSupplierEdits(materials: MaterialRecord[]): SupplierMaterialStore {
+  return materials.reduce<SupplierMaterialStore>((groups, material) => {
+    const vendor = supplierVendor(material);
+    (groups[vendor] ??= []).push(material);
+    return groups;
+  }, {});
+}
+
+function normalizeSupplierStore(value: unknown): { edits: MaterialRecord[]; groups: SupplierMaterialStore; migrated: boolean } {
+  if (Array.isArray(value)) {
+    const edits = value as MaterialRecord[];
+    return { edits, groups: groupSupplierEdits(edits), migrated: true };
+  }
+  if (!value || typeof value !== 'object') throw new Error('Invalid supplier overrides');
+  const groups = value as Record<string, unknown>;
+  if (Object.values(groups).some(records => !Array.isArray(records))) throw new Error('Invalid supplier overrides');
+  const normalized = Object.fromEntries(Object.entries(groups).map(([vendor, records]) => [vendor, records as MaterialRecord[]]));
+  return { edits: Object.values(normalized).flat(), groups: normalized, migrated: false };
+}
 
 const matchingCandidates = supplierMaterials.flatMap(material => {
   const hex = material.supplier?.catalogHex;
@@ -22,7 +48,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const materials = ref<MaterialRecord[]>([]);
   const supplierEdits = ref<MaterialRecord[]>([]);
   const allMaterials = computed(() => [...materials.value, ...supplierMaterials.map(material => {
-    const edit = supplierEdits.value.find(item => item.id === material.id);
+    const edit = supplierEdits.value.find(item => item.id === material.id && supplierVendor(item) === supplierVendor(material));
     return edit ? { ...cloneMaterial(material), ...edit.overrides, overrides: edit.overrides, renderRule: edit.renderRule, optics: edit.optics, appearance: edit.appearance ?? material.appearance, appearanceBinding: edit.appearanceBinding, referenceImage: edit.referenceImage } : material;
   })]);
   const validationMaterial = ref<MaterialRecord | null>(cloneMaterial(supplierMaterials.find(material => material.materialId === 'CA19017')!));
@@ -58,7 +84,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const validationSurface = computed(() => selected.value ? materialSurface(draft.value ?? selected.value) : null);
   const scale = computed(() => settings.value.height / ((modelInfo.value?.bbox.maxY ?? 1) - (modelInfo.value?.bbox.minY ?? 0) || 1));
   const labelOptions = () => ({ slotHex: regions.value.map(region => region.sourceHex), slotCount: regions.value.length, regionMap: regions.value.map((_, i) => i), precision: precision.value, scale: scale.value });
-  const materialData = (items = allMaterials.value) => ({ version: 2, colorSpace: 'srgb', renderRules: [...new Set(items.map(item => item.renderRule))], materials: items, viewerSettings: settings.value, validationMaterial: validationMaterial.value, validationReference: validationReference.value, project: project.value ? { id: project.value.id, name: project.value.name, heightMM: settings.value.height, regions: regions.value } : null });
+  const materialData = (items = allMaterials.value) => ({ version: 2, colorSpace: 'srgb', renderRules: [...new Set(items.map(item => item.renderRule))], materials: items, supplierModifications: items.flatMap(item => { const modification = supplierModification(item); return modification ? [modification] : []; }), viewerSettings: settings.value, validationMaterial: validationMaterial.value, validationReference: validationReference.value, project: project.value ? { id: project.value.id, name: project.value.name, heightMM: settings.value.height, regions: regions.value } : null });
   watch(settings, () => { saved.value = false; }, { deep: true, flush: 'sync' });
   function report(error: unknown) { failure.value = error instanceof Error ? error.message : String(error); }
   async function operation(action: () => Promise<void>) {
@@ -198,14 +224,22 @@ export const useWorkspace = defineStore('workspace', () => {
       const nextMaterial = withOverrides(material);
       const problem = materialProblem(nextMaterial); if (problem) throw new Error(problem);
       const isSupplier = material.supplier && material.supplier.origin !== 'local-usda';
-      const records = isSupplier ? supplierEdits : materials;
-      const next = [...records.value.filter(item => item.id !== material.id), nextMaterial];
-      await writeRecord(isSupplier ? 'supplier-overrides' : 'materials', JSON.parse(JSON.stringify(next)));
-      records.value = next;
+      if (isSupplier) {
+        const groups = groupSupplierEdits(supplierEdits.value);
+        const vendor = supplierVendor(nextMaterial);
+        groups[vendor] = [...(groups[vendor] ?? []).filter(item => item.id !== nextMaterial.id), nextMaterial];
+        const next = Object.values(groups).flat();
+        await writeRecord('supplier-overrides', JSON.parse(JSON.stringify(groups)));
+        supplierEdits.value = next;
+      } else {
+        const next = [...materials.value.filter(item => item.id !== nextMaterial.id), nextMaterial];
+        await writeRecord('materials', JSON.parse(JSON.stringify(next)));
+        materials.value = next;
+      }
       let found = false; for (const region of regions.value) if (region.material.id === material.id) { assignMaterial(region, nextMaterial); found = true; }
       if (settings.value.workflow === 'validation') validationMaterial.value = cloneMaterial(nextMaterial);
       else if (!found && regions.value[selectedRegion.value]) assignMaterial(regions.value[selectedRegion.value]!, nextMaterial);
-      saved.value = false; success = true; status.value = t('Material saved locally', '材质已保存到本地');
+      saved.value = false; success = true; status.value = isSupplier ? t(`Saved ${supplierVendor(nextMaterial)} supplier material locally`, `已保存 ${supplierVendor(nextMaterial)} 供应商材质`) : t('Material saved locally', '材质已保存到本地');
     });
     return success;
   }
@@ -286,7 +320,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const backup = () => operation(async () => {
     const data = await snapshot(); const entries: Record<string, Uint8Array> = {};
     const files = await Promise.all(data.files.map(async (file, index) => { const entry = `assets/${index}`; entries[entry] = new Uint8Array(await file.data.arrayBuffer()); return { name: file.name, path: file.path, type: file.type, entry }; }));
-    entries['project.json'] = strToU8(JSON.stringify({ ...data, files, materials: materials.value, supplierEdits: supplierEdits.value }));
+    entries['project.json'] = strToU8(JSON.stringify({ ...data, files, materials: materials.value, supplierEditsByVendor: groupSupplierEdits(supplierEdits.value) }));
     downloadFile(new Blob([zipSync(entries) as Uint8Array<ArrayBuffer>]), `${data.name}.tripo.zip`);
   });
   async function restoreBackup(file: File) {
@@ -304,32 +338,38 @@ export const useWorkspace = defineStore('workspace', () => {
       const restored: PrintProject = { ...data, files: files.map((file: File) => ({ name: file.name, path: file.webkitRelativePath, type: file.type, data: file })) };
       const catalog = withoutLegacySamples(Array.isArray(data.materials) ? data.materials as MaterialRecord[] : []);
       for (const material of catalog) { const error = validateMaterial(material, catalog); if (error) throw new Error(error); }
-      const edits = Array.isArray(data.supplierEdits) ? data.supplierEdits as MaterialRecord[] : [];
+      const normalizedSupplier = normalizeSupplierStore(data.supplierEditsByVendor ?? data.supplierEdits ?? []);
+      const edits = normalizedSupplier.edits;
       for (const material of edits) { const error = validateMaterial(material, edits); if (error || !material.supplier) throw new Error(error ?? 'Invalid supplier edit'); }
       await loadFiles(files, restored);
       if (!failure.value) saved.value = false;
       if (!failure.value && Array.isArray(data.materials)) { await writeRecord('materials', catalog); materials.value = catalog; saved.value = false; }
-      if (!failure.value && data.version === 2) { await writeRecord('supplier-overrides', edits); supplierEdits.value = edits; }
+      if (!failure.value && data.version === 2) { await writeRecord('supplier-overrides', normalizedSupplier.groups); supplierEdits.value = edits; }
     } catch (error) { report(error); }
   }
   const export3mf = () => operation(async () => {
     if (!client) return;
     if (settings.value.workflow === 'validation') throw new Error(t('Switch to region assignment before exporting 3MF.', '请切换到区域应用，确认每个区域的耗材后再导出 3MF。'));
-    const result = await client.request('export3mf', { scheme: scheme.value, name: project.value?.name ?? 'Tripo', scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), ...filamentIdentity(region.material), materialVersion: region.material.supplier?.source.sha256 ?? null })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true });
+    const result = await client.request('export3mf', { scheme: scheme.value, name: project.value?.name ?? 'Tripo', scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), catalogHex: region.material.supplier?.catalogHex ?? null, modifications: supplierModification(region.material)?.changes ?? [], ...filamentIdentity(region.material), materialVersion: region.material.supplier?.source.sha256 ?? null })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true });
     downloadFile(result.blob, `${project.value?.name ?? 'Tripo'}.3mf`); status.value = t('3MF exported', '3MF 已导出');
   });
   const selftest = () => operation(async () => { if (client) { const result = await client.request('selftest', { withConfig: true }); downloadFile(result.blob, 'four-color-selftest.3mf'); } });
   async function initialize() {
     try {
-      const stored = await readRecord<MaterialRecord[]>('materials');
-      if (stored) {
-        for (const material of stored) { const error = validateMaterial(material, stored); if (error) throw new Error(error); }
-        const catalog = withoutLegacySamples(stored);
-        if (catalog.length !== stored.length) await writeRecord('materials', JSON.parse(JSON.stringify(catalog)));
+      const storedMaterials = await readRecord<MaterialRecord[]>('materials');
+      if (storedMaterials) {
+        for (const material of storedMaterials) { const error = validateMaterial(material, storedMaterials); if (error) throw new Error(error); }
+        const catalog = withoutLegacySamples(storedMaterials);
+        if (catalog.length !== storedMaterials.length) await writeRecord('materials', JSON.parse(JSON.stringify(catalog)));
         materials.value = catalog;
       }
-      const edits = await readRecord<MaterialRecord[]>('supplier-overrides');
-      if (edits) { for (const material of edits) { const error = validateMaterial(material, edits); if (error) throw new Error(error); } supplierEdits.value = edits; }
+      const stored = await readRecord<unknown>('supplier-overrides');
+      if (stored) {
+        const normalized = normalizeSupplierStore(stored);
+        for (const material of normalized.edits) { const error = validateMaterial(material, normalized.edits); if (error) throw new Error(error); }
+        if (normalized.migrated) await writeRecord('supplier-overrides', normalized.groups);
+        supplierEdits.value = normalized.edits;
+      }
       projects.value = await readRecord('projects') ?? [];
     } catch (error) { report(error); }
     const active = await readRecord<string>('active-project').catch(() => undefined);

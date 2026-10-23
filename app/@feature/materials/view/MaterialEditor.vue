@@ -14,6 +14,7 @@ const { t } = useLocale();
 const draft = ref(cloneMaterial(props.material));
 const validation = shallowRef('');
 const supplier = computed(() => !!draft.value.supplier);
+const supplierVendor = computed(() => draft.value.supplier?.vendor ?? '');
 const filament = computed(() => draft.value.renderRule === FILAMENT_RULE);
 const directRoughness = computed(() => draft.value.renderRule === OPENPBR_RULE || filament.value);
 const opticalFields = [
@@ -53,8 +54,9 @@ watch(draft, value => {
 }, { deep: true, immediate: true });
 </script>
 <template>
-  <div class="editor-title"><button class="text-button" @click="close">← {{ t('Library', '材质库') }}</button><span>{{ supplier ? t('Local adjustment', '本地调整') : t('Material editor', '材质编辑') }}</span></div>
+  <div class="editor-title"><button class="text-button" @click="close">← {{ t('Library', '材质库') }}</button><span>{{ supplier ? t(`Adjust ${supplierVendor} material`, `调整 ${supplierVendor} 供应商材质`) : t('Material editor', '材质编辑') }}</span></div>
   <SupplierDetail v-if="supplier" :material="draft" />
+  <p v-if="supplier" class="supplier-save-note">{{ t(`Changes are saved under ${supplierVendor}.`, `修改将保存到 ${supplierVendor} 供应商材质。`) }}</p>
   <div class="editor-fields">
     <label>{{ t('Name', '名称') }}<input v-model="draft.name" data-testid="material-name" :readonly="supplier && draft.supplier?.origin !== 'local-usda'"></label>
     <label>{{ t('Material ID / SKU', '材质 ID / SKU') }}<input v-model="draft.materialId" data-testid="material-id" :readonly="supplier && draft.supplier?.origin !== 'local-usda'"></label>
@@ -84,7 +86,7 @@ watch(draft, value => {
     <label class="reference-upload"><img v-if="draft.referenceImage" :src="draft.referenceImage" alt="Material reference">{{ t('＋ Reference image (optional)', '＋ 参考图（可选）') }}<input type="file" accept="image/*" @change="reference"></label>
     <button v-if="supplier" class="secondary" :disabled="busy" @click="restore">{{ t('Restore source parameters', '恢复源参数') }}</button>
     <p v-if="validation" role="alert" class="error-message">{{ validation }}</p>
-    <div class="button-row"><button class="secondary" :disabled="busy" @click="close">{{ t('Cancel', '取消') }}</button><button class="primary" :disabled="busy || !!materialProblem(draft)" @click="save">{{ t('Save locally', '保存到本地') }}</button></div>
+    <div class="button-row"><button class="secondary" :disabled="busy" @click="close">{{ t('Cancel', '取消') }}</button><button class="primary" :disabled="busy || !!materialProblem(draft)" @click="save">{{ supplier ? t('Save supplier material', '保存供应商材质') : t('Save locally', '保存到本地') }}</button></div>
   </div>
 </template>
 <style scoped>
@@ -92,4 +94,5 @@ watch(draft, value => {
 .editor-fields input[readonly] { color: #999; }
 .appearance-adjustments { display: grid; gap: 12px; }
 .appearance-adjustments summary { cursor: pointer; color: #b1b9ac; font-size: 11px; padding: 8px 0; }
+.supplier-save-note { margin: 0 0 12px; color: #beb2ff; font-size: 10px; }
 </style>

@@ -1,5 +1,5 @@
 import { FILAMENT_RULE, OPENPBR_RULE, RENDER_RULE, type MaterialRecord } from './types';
-import { materialHex } from './supplier';
+import { materialHex, supplierModification } from './supplier';
 import { filamentIdentity, materialSeries, materialTemplates } from './filaments';
 
 const legacySampleIds = new Map([
@@ -59,11 +59,11 @@ export function materialsCSV(materials: MaterialRecord[]): string {
     if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`;
     return `"${text.replaceAll('"', '""')}"`;
   };
-  const rows: unknown[][] = [['material_id', 'name', 'hex', 'r', 'g', 'b', 'transparency', 'metalness', 'roughness', 'color_space', 'render_rule', 'vendor', 'material_type', 'catalog_hex', 'pantone', 'd65_l', 'd65_a', 'd65_b', 'ior', 'color_interpretation', 'source_file', 'source_sha256', 'issues', 'status', 'series_id', 'template_id', 'color_code', 'sales_sku', 'color_source', 'appearance_origin', 'transmission', 'thickness_mm', 'attenuation_distance_mm', 'sheen', 'clearcoat']];
+  const rows: unknown[][] = [['material_id', 'name', 'hex', 'r', 'g', 'b', 'transparency', 'metalness', 'roughness', 'color_space', 'render_rule', 'vendor', 'material_type', 'catalog_hex', 'pantone', 'd65_l', 'd65_a', 'd65_b', 'ior', 'color_interpretation', 'source_file', 'source_sha256', 'issues', 'status', 'series_id', 'template_id', 'color_code', 'sales_sku', 'color_source', 'appearance_origin', 'transmission', 'thickness_mm', 'attenuation_distance_mm', 'sheen', 'clearcoat', 'supplier_modifications']];
   for (const item of materials) {
     const hex = item.supplier?.status === 'unmatched' ? '' : materialHex(item);
     const identity = filamentIdentity(item);
-    rows.push([item.materialId, item.name, hex, ...(hex ? rgb(hex) : ['', '', '']), item.transparency, item.metalness, item.roughness, item.colorSpace, item.renderRule, identity.vendor, identity.type, item.supplier?.catalogHex ?? '', item.supplier?.pantone ?? '', ...(item.supplier?.d65Lab ?? ['', '', '']), item.ior ?? '', item.overrides?.colorMode ?? (item.supplier?.origin === 'local-usda' ? 'linear-srgb' : 'catalog'), item.supplier?.source.file ?? '', item.supplier?.source.sha256 ?? '', item.supplier?.issues.join('; ') ?? '', item.supplier?.status ?? 'local', item.appearance?.seriesId ?? '', item.appearance?.templateId ?? '', item.appearance?.colorCode ?? '', item.appearance?.sku ?? item.supplier?.sku ?? '', item.appearance?.source ?? '', item.appearance?.origin ?? '', item.optics?.transmission ?? 0, item.optics?.thickness ?? 0, item.optics?.attenuationDistance ?? '', item.optics?.sheen ?? 0, item.optics?.clearcoat ?? 0]);
+    rows.push([item.materialId, item.name, hex, ...(hex ? rgb(hex) : ['', '', '']), item.transparency, item.metalness, item.roughness, item.colorSpace, item.renderRule, identity.vendor, identity.type, item.supplier?.catalogHex ?? '', item.supplier?.pantone ?? '', ...(item.supplier?.d65Lab ?? ['', '', '']), item.ior ?? '', item.overrides?.colorMode ?? (item.supplier?.origin === 'local-usda' ? 'linear-srgb' : 'catalog'), item.supplier?.source.file ?? '', item.supplier?.source.sha256 ?? '', item.supplier?.issues.join('; ') ?? '', item.supplier?.status ?? 'local', item.appearance?.seriesId ?? '', item.appearance?.templateId ?? '', item.appearance?.colorCode ?? '', item.appearance?.sku ?? item.supplier?.sku ?? '', item.appearance?.source ?? '', item.appearance?.origin ?? '', item.optics?.transmission ?? 0, item.optics?.thickness ?? 0, item.optics?.attenuationDistance ?? '', item.optics?.sheen ?? 0, item.optics?.clearcoat ?? 0, JSON.stringify(supplierModification(item)?.changes ?? [])]);
   }
   rows[0]!.push('appearance_material_id', 'appearance_material_name', 'appearance_source_id', 'appearance_overridden', 'appearance_source_file', 'appearance_source_sha256');
   materials.forEach((item, index) => rows[index + 1]!.push(item.appearanceBinding?.materialId ?? '', item.appearanceBinding?.name ?? '', item.appearanceBinding?.id ?? '', item.appearanceBinding?.overridden ?? '', item.appearanceBinding?.sourceFile ?? '', item.appearanceBinding?.sourceSha256 ?? ''));

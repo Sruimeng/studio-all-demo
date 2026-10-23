@@ -76,6 +76,12 @@ export interface MaterialOverrides {
   ior?: number;
   colorMode?: ColorMode;
 }
+export interface SupplierMaterialModification {
+  id: string;
+  materialId: string;
+  vendor: string;
+  changes: Array<{ field: keyof MaterialOverrides; source: string | number | null; value: string | number | null }>;
+}
 export interface AppearanceBinding {
   id: string;
   materialId: string;

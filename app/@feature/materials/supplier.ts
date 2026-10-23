@@ -3,7 +3,7 @@ import type { SurfaceValues } from '~/@engine/viewer';
 import data from './data/polymaker-pla.json';
 import sunlu from './data/sunlu-pla.json';
 import { catalogAppearance } from './filaments';
-import { OPENPBR_RULE, RENDER_RULE, type MaterialRecord, type SupplierCatalog, type SupplierProfile } from './types';
+import { OPENPBR_RULE, RENDER_RULE, type MaterialOverrides, type MaterialRecord, type SupplierCatalog, type SupplierMaterialModification, type SupplierProfile } from './types';
 
 export const supplierCatalog = data as SupplierCatalog;
 export const supplierCatalogs: SupplierCatalog[] = [supplierCatalog, sunlu as SupplierCatalog];
@@ -59,6 +59,23 @@ export function materialHex(material: MaterialRecord): string {
   if (!surface.baseColor) return surface.hex;
   const color = new Color().setRGB(...surface.baseColor, surface.baseColorSpace === 'srgb' ? SRGBColorSpace : LinearSRGBColorSpace);
   return `#${color.getHexString().toUpperCase()}`;
+}
+export function supplierCatalogHex(material: MaterialRecord): string | null {
+  if (!material.supplier || material.supplier.origin === 'local-usda') return material.hex;
+  return material.supplier.catalogHex;
+}
+export function supplierModification(material: MaterialRecord): SupplierMaterialModification | null {
+  const supplier = material.supplier;
+  if (!supplier || supplier.origin === 'local-usda') return null;
+  const overrides = material.overrides ?? {};
+  const baseline = supplierMaterial(supplier);
+  const changes = (Object.entries(overrides) as Array<[keyof MaterialOverrides, unknown]>).flatMap(([field, value]) => {
+    if (!['hex', 'transparency', 'metalness', 'roughness', 'ior', 'colorMode'].includes(field) || (field === 'colorMode' && value === 'catalog')) return [];
+    const source = field === 'hex' ? supplier.catalogHex : field === 'colorMode' ? 'catalog' : baseline[field as keyof MaterialRecord] as string | number | null | undefined;
+    const current = field === 'hex' ? materialHex(material) : value;
+    return [{ field, source: source ?? null, value: (current as string | number | null) ?? null }];
+  });
+  return changes.length ? { id: material.id, materialId: material.materialId, vendor: supplier.vendor, changes } : null;
 }
 export function materialProblem(material: MaterialRecord): string | null {
   if (material.supplier?.status === 'unmatched') return 'SKU is not in the spreadsheet / SKU 未对应表格，请先向供应商确认';

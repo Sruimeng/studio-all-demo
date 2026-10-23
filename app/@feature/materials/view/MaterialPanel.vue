@@ -3,7 +3,7 @@ import { computed, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useLocale } from '~/@base/locale';
 import ModuleTooltip from '~/@base/ui/ModuleTooltip.vue';
-import { cloneMaterial, materialHex, materialProblem, supplierIssue } from '../supplier';
+import { cloneMaterial, materialHex, materialProblem, supplierCatalogHex, supplierIssue } from '../supplier';
 import { RENDER_RULE, type MaterialRecord, type MaterialImportResult } from '../types';
 import MaterialEditor from './MaterialEditor.vue';
 import SupplierDetail from './SupplierDetail.vue';
@@ -49,7 +49,7 @@ watch(() => props.selected?.id, close);
       <div class="material-list">
         <article v-for="item in visible" :key="item.id" class="material-card" :class="{ selected: selected?.id === item.id }">
           <input class="material-check" type="checkbox" :checked="checked.includes(item.id)" :aria-label="`Select ${item.name} for export`" @change="emit('check', item.id)">
-          <ModuleTooltip :title="t('Color swatch', '颜色色卡')" :description="t('Catalog sRGB color only. Evaluate surface appearance in the central 3D view.', '仅展示色卡颜色。表面材质效果请在中央 3D 视图评估。')" side="left"><button class="material-swatch" :style="{ background: item.supplier?.status === 'unmatched' ? 'repeating-linear-gradient(45deg,#444 0 4px,#777 4px 8px)' : materialHex(item) }" :disabled="busy || !!materialProblem(item)" :aria-label="`Apply ${item.materialId}`" @click="emit('apply', item)" /></ModuleTooltip>
+          <ModuleTooltip :title="t('Color swatch', '颜色色卡')" :description="t('Catalog sRGB color only. Evaluate surface appearance in the central 3D view.', '仅展示色卡颜色。表面材质效果请在中央 3D 视图评估。')" side="left"><button class="material-swatch" :style="{ background: item.supplier?.status === 'unmatched' ? 'repeating-linear-gradient(45deg,#444 0 4px,#777 4px 8px)' : supplierCatalogHex(item) ?? materialHex(item) }" :disabled="busy || !!materialProblem(item)" :aria-label="`Apply ${item.materialId}`" @click="emit('apply', item)" /></ModuleTooltip>
           <button class="material-description" :disabled="busy || !!materialProblem(item)" @click="emit('apply', item)"><strong>{{ item.name }}</strong><span>{{ item.supplier?.vendor ? item.supplier.vendor + ' · ' : '' }}{{ item.supplier?.catalogId ?? item.materialId }} · {{ item.supplier ? item.supplier.materialType || t('Unconfirmed', '待确认') : t('Local', '本地') }}</span><small v-if="item.supplier" class="material-status">{{ ['paired', 'imported'].includes(item.supplier.status) ? 'OpenPBR' : item.supplier.status === 'color-only' ? t('Color only', '仅颜色') : t('SKU unconfirmed', 'SKU 待确认') }} · {{ t('Pending verification', '待验证') }}</small></button>
           <ModuleTooltip :title="t('Inspect / adjust', '查看 / 调整')" :description="item.supplier?.issues.map(issue => supplierIssue(issue, language === 'en')).join('；') || t('Edit this local material.', '编辑此本地材质。')" side="left"><button class="edit-material" :aria-label="`Edit ${item.materialId}`" :disabled="busy" @click="edit(item)">↗</button></ModuleTooltip>
           <button v-if="!isSupplier(item)" class="delete-material" :aria-label="t(`Delete ${item.materialId}`, `删除 ${item.materialId}`)" :title="t('Delete from local library', '从本地库删除')" :disabled="busy" @click="deleting = item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg></button>

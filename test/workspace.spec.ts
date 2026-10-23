@@ -180,6 +180,30 @@ it('supplier overrides use separate storage and survive project save and reopen'
   expect(store.validationSurface!.roughness).toBe(0.12); expect(store.saved).toBe(true);
 });
 
+it('stores supplier overrides in vendor groups without cross-vendor replacement', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files()); store.setWorkflow('validation');
+  const polymaker = await supplier('CA19017'); polymaker.roughness = 0.12;
+  const sunlu = await supplier('SUNLU-PLA-MAGENTA'); sunlu.roughness = 0.21;
+  expect(await store.saveMaterial(polymaker)).toBe(true);
+  expect(await store.saveMaterial(sunlu)).toBe(true);
+  expect(mocks.records.get('supplier-overrides')).toMatchObject({
+    Polymaker: [expect.objectContaining({ id: polymaker.id, roughness: 0.12 })],
+    SUNLU: [expect.objectContaining({ id: sunlu.id, roughness: 0.21 })],
+  });
+  expect(store.allMaterials.find(item => item.id === polymaker.id)!.roughness).toBe(0.12);
+  expect(store.allMaterials.find(item => item.id === sunlu.id)!.roughness).toBe(0.21);
+});
+
+it('migrates legacy flat supplier overrides into vendor groups on initialization', async () => {
+  const { withOverrides } = await import('../app/@feature/materials/supplier');
+  const polymaker = withOverrides({ ...(await supplier('CA19017')), roughness: 0.18 });
+  mocks.records.set('supplier-overrides', [polymaker]);
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false } as Response);
+  const store = useWorkspace(); await store.initialize(); fetch.mockRestore();
+  expect(mocks.records.get('supplier-overrides')).toEqual({ Polymaker: [polymaker] });
+  expect(store.allMaterials.find(item => item.id === polymaker.id)!.roughness).toBe(0.18);
+});
+
 it('retains supplier appearance bindings, render rules and optics through library reload and ZIP restore', async () => {
   const { bindAppearance } = await import('../app/@feature/materials/binding');
   const { filamentPreview } = await import('../app/@feature/materials/filaments');
@@ -229,6 +253,18 @@ it('exports actual supplier material type, brand and revision and blocks unmatch
   expect(call[1].filaments[0]).toMatchObject({ id: 'CA19017', type: 'PETG', vendor: 'Polymaker', materialVersion: material.supplier!.source.sha256 });
   store.apply(await supplier('CA19010')); expect(store.failure).toContain('未对应');
   expect(store.selected!.materialId).toBe('CA19017');
+});
+
+it('exports supplier catalog colors separately from model overrides', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  const material = await supplier('SUNLU-PLA-COFFEE-BROWN'); material.hex = '#123456';
+  store.apply(material); expect(await store.saveMaterial(material)).toBe(true);
+  await store.exportMaterials('json');
+  const json = JSON.parse(await (mocks.download.mock.calls.at(-1)![0] as Blob).text());
+  expect(json.supplierModifications).toEqual([{ id: material.id, materialId: material.materialId, vendor: 'SUNLU', changes: [{ field: 'hex', source: material.supplier!.catalogHex, value: '#123456' }] }]);
+  await store.export3mf();
+  const payload = mocks.request.mock.calls.find(([type]) => type === 'export3mf')![1];
+  expect(payload.filaments[0]).toMatchObject({ catalogHex: material.supplier!.catalogHex, hex: '#123456', modifications: [{ field: 'hex', source: material.supplier!.catalogHex, value: '#123456' }] });
 });
 
 it('applies, saves and exports SUNLU colors while keeping their catalog identity and missing SKU', async () => {
