@@ -1,3 +1,4 @@
+import type { SegmentDocument } from '../../segmentation/types';
 import type { PreparationState } from '../print-preparation';
 import type { MaterialRecord } from '../../materials';
 import type { PrintSnapshot } from '../../../@engine/multicolor';
@@ -24,4 +25,8 @@ export interface PrintProject {
   viewerSettings?: ViewerSettings;
   validationMaterial?: MaterialRecord | null;
   preparation?: PreparationState;
+  sourceSample?: 'chicken' | 'turkey';
+  segmentation?: SegmentDocument | null;
+  segmentSourceId?: string;
+  segmentOpenPieces?: number;
 }

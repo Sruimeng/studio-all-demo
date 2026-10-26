@@ -5,11 +5,11 @@ import type { RegionAssignment } from './types';
 
 export const slicers = ['Bambu Studio', 'Creality Print', 'OrcaSlicer', 'Anycubic'] as const;
 export type Slicer = typeof slicers[number];
-export type PrepTask = 'check' | 'size' | 'color' | '';
+export type PrepTask = 'check' | 'color' | '';
 export interface PreparationState {
   version: 1;
   engaged: boolean;
-  activeModule: 'multi-color' | 'print';
+  activeModule: 'multi-color' | 'print' | 'segment';
   origin: 'print' | null;
   slicer: Slicer;
   mode: 'single' | 'multi';
@@ -19,11 +19,12 @@ export interface PreparationState {
   colorStarted: boolean;
   confirmedColor: { fingerprint: string; geometryKey: string } | null;
 }
-export const newPreparation = (): PreparationState => ({ version: 1, engaged: false, activeModule: 'multi-color', origin: null, slicer: 'Bambu Studio', mode: 'single', expanded: 'size', sizeConfirmedHeight: null, checkedKey: null, colorStarted: false, confirmedColor: null });
+export const newPreparation = (): PreparationState => ({ version: 1, engaged: false, activeModule: 'multi-color', origin: null, slicer: 'Bambu Studio', mode: 'single', expanded: 'check', sizeConfirmedHeight: null, checkedKey: null, colorStarted: false, confirmedColor: null });
 export function restorePreparation(value?: PreparationState): PreparationState {
   if (!value) return newPreparation();
-  if (value.version !== 1 || !slicers.includes(value.slicer) || !['single', 'multi'].includes(value.mode) || !['print', 'multi-color'].includes(value.activeModule) || ![null, 'print'].includes(value.origin) || !['check', 'size', 'color', ''].includes(value.expanded) || typeof value.engaged !== 'boolean' || typeof value.colorStarted !== 'boolean' || (value.sizeConfirmedHeight !== null && (!Number.isFinite(value.sizeConfirmedHeight) || value.sizeConfirmedHeight < 10 || value.sizeConfirmedHeight > 320)) || (value.checkedKey !== null && typeof value.checkedKey !== 'string') || (value.confirmedColor !== null && (typeof value.confirmedColor?.fingerprint !== 'string' || typeof value.confirmedColor?.geometryKey !== 'string'))) throw new Error('Invalid print preparation data');
-  return JSON.parse(JSON.stringify(value));
+  if (value.version !== 1 || !slicers.includes(value.slicer) || !['single', 'multi'].includes(value.mode) || !['print', 'multi-color', 'segment'].includes(value.activeModule) || ![null, 'print'].includes(value.origin) || !['check', 'size', 'color', ''].includes(value.expanded) || typeof value.engaged !== 'boolean' || typeof value.colorStarted !== 'boolean' || (value.sizeConfirmedHeight !== null && (!Number.isFinite(value.sizeConfirmedHeight) || value.sizeConfirmedHeight < 10 || value.sizeConfirmedHeight > 320)) || (value.checkedKey !== null && typeof value.checkedKey !== 'string') || (value.confirmedColor !== null && (typeof value.confirmedColor?.fingerprint !== 'string' || typeof value.confirmedColor?.geometryKey !== 'string'))) throw new Error('Invalid print preparation data');
+  // Older projects kept size as a checklist accordion; its controls now stay above the checklist.
+  return { ...JSON.parse(JSON.stringify(value)), expanded: String(value.expanded) === 'size' ? 'check' : value.expanded };
 }
 
 // Two independent 32-bit accumulators: stable across reloads, independent of view and scale.

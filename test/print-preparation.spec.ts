@@ -19,3 +19,7 @@ it('old projects default to unconfirmed size and invalid preparation backups are
   expect(restorePreparation()).toEqual(newPreparation());
   expect(() => restorePreparation({ ...newPreparation(), sizeConfirmedHeight: NaN })).toThrow('Invalid');
 });
+it('restores the old size accordion into the check item without losing size or color confirmations', () => {
+  const legacy = { ...newPreparation(), expanded: 'size', sizeConfirmedHeight: 80, checkedKey: 'checked', confirmedColor: { fingerprint: 'colors', geometryKey: 'geometry' } };
+  expect(restorePreparation(JSON.parse(JSON.stringify(legacy)))).toEqual({ ...legacy, expanded: 'check' });
+});

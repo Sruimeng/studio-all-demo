@@ -9,6 +9,7 @@ import { loadLocalModel } from '~/@engine/import';
 import { toPrintMesh, uvHit } from '~/@engine/print-mesh';
 import { MulticolorClient, type RefinementResult, type SelectionScope, type InitResult, type LowResult, type EditResult, type PaletteSlot, type PaletteOptions } from '~/@engine/multicolor';
 import type { PrintDisplay, ViewerContent, ViewerHit, ViewerSettings } from '~/@engine/viewer';
+import type { SegmentDocument } from '../segmentation/types';
 import type { PrintProject, RegionAssignment } from './types';
 import { colorResult, inspectMesh, monochromeSTL, newPreparation, restorePreparation, slicers, type Slicer, type PrepTask } from './print-preparation';
 
@@ -84,6 +85,7 @@ export const useWorkspace = defineStore('workspace', () => {
     });
   }
   const preparation = ref(newPreparation());
+  const segmentation = shallowRef<SegmentDocument | null>(null);
   const prepSaving = ref(false); const prepSaveError = ref(''); const prepDirty = ref(false);
   const prepNotice = ref('');
   let restoringPreparation = false;
@@ -102,16 +104,17 @@ export const useWorkspace = defineStore('workspace', () => {
   });
   const printSizeReady = computed(() => preparation.value.sizeConfirmedHeight === settings.value.height && Object.values(printDimensions.value).every(n => Number.isFinite(n) && n > 0));
   const printCheckKey = computed(() => `${printMeshCheck.value.geometryKey}:${settings.value.height}:basic-v1`);
-  const printCheckReady = computed(() => printMeshCheck.value.available && preparation.value.checkedKey === printCheckKey.value);
+  const printCheckReady = computed(() => printSizeReady.value && printMeshCheck.value.available && preparation.value.checkedKey === printCheckKey.value);
   const printCompatibility = computed(() => preparation.value.mode === 'single' || ['Bambu Studio', 'OrcaSlicer'].includes(preparation.value.slicer) ? '' : `${preparation.value.slicer} 的多色映射尚未验证，请选择 Bambu Studio 或 OrcaSlicer。`);
-  const printTasks = computed<Exclude<PrepTask, ''>[]>(() => preparation.value.mode === 'multi' ? ['check', 'size', 'color'] : ['check', 'size']);
-  function printTaskDone(task: PrepTask) { return task === 'check' ? printCheckReady.value : task === 'size' ? printSizeReady.value : task === 'color' && printColorState.value === 'ready'; }
+  const printTasks = computed<Exclude<PrepTask, ''>[]>(() => preparation.value.mode === 'multi' ? ['check', 'color'] : ['check']);
+  function printTaskDone(task: PrepTask) { return task === 'check' ? printCheckReady.value : task === 'color' && printColorState.value === 'ready'; }
   function expandNextPrintTask() { preparation.value.expanded = printTasks.value.find(task => !printTaskDone(task)) ?? ''; }
   const printTodo = computed(() => {
     if (!content.value) return '请先导入模型';
     if (busy.value || prepSaving.value) return '正在处理或保存，请稍候';
     if (prepSaveError.value) return '保存失败，请重试保存';
-    const names = { check: '复核可打印性', size: '确认尺寸', color: '确认分色与耗材' };
+    if (!printSizeReady.value) return '待完成：确认顶部模型尺寸，再复核可打印性';
+    const names = { check: '复核可打印性', color: '确认分色与耗材' };
     const todo = printTasks.value.filter(task => !printTaskDone(task)).map(task => names[task]);
     if (todo.length) return `待完成：${todo.join('、')}`;
     if (printCompatibility.value) return printCompatibility.value;
@@ -132,11 +135,12 @@ export const useWorkspace = defineStore('workspace', () => {
   watch(() => JSON.stringify(preparation.value, (key, value) => key === 'expanded' ? undefined : value), markPreparationDirty, { flush: 'sync' });
   watch(() => currentColorResult.value.fingerprint, markPreparationDirty, { flush: 'sync' });
   watch([colorCount, precision, scheme], markPreparationDirty, { flush: 'sync' });
+  watch(segmentation, markPreparationDirty, { flush: 'sync' });
   watch(() => settings.value.height, (height, previous) => {
     if (restoringPreparation || height === previous) return;
     preparation.value.sizeConfirmedHeight = null;
     preparation.value.checkedKey = null;
-    if (preparation.value.activeModule === 'print') preparation.value.expanded = 'size';
+    if (preparation.value.activeModule === 'print') preparation.value.expanded = 'check';
     markPreparationDirty();
   }, { flush: 'sync' });
   const durations = ref({ load: 0, analyze: 0, segment: 0 });
@@ -189,7 +193,7 @@ export const useWorkspace = defineStore('workspace', () => {
     durations.value.segment = performance.now() - started;
     status.value = t('Color regions are ready', '分色完成');
   }
-  async function loadFiles(files: File[], restore?: PrintProject) {
+  async function loadFiles(files: File[], restore?: PrintProject, sourceSample?: 'chicken' | 'turkey') {
     await operation(async () => {
       const nextPreparation = restorePreparation(restore?.preparation);
       if (preparation.value.engaged && project.value && (prepDirty.value || !saved.value || prepSaveError.value)) await persistProject();
@@ -230,6 +234,8 @@ export const useWorkspace = defineStore('workspace', () => {
         clearTimeout(prepTimer);
         client?.dispose(); client = candidate; adopted = true;
         project.value = restore ?? { version: 2, id, name: files.find(file => /\.(glb|fbx)$/i.test(file.name))?.name.replace(/\.(glb|fbx)$/i, '') ?? 'Untitled', updatedAt: new Date().toISOString(), files: files.map(file => ({ name: file.name, path: file.webkitRelativePath || file.name, type: file.type, data: file })), regions: [], height: 80, colorCount: 4, precision: 4, scheme: 'high', snapshot: null };
+        if (sourceSample) project.value = { ...project.value, sourceSample };
+        segmentation.value = restore?.segmentation ? JSON.parse(JSON.stringify(restore.segmentation)) : null;
         content.value = markRaw({ id: `${id}:${own}`, root: loaded.root, mesh });
         refinement.value = null; clearSelection();
         display.value = markRaw(nextDisplay); low = nextLow ? markRaw(nextLow) : null;
@@ -259,10 +265,11 @@ export const useWorkspace = defineStore('workspace', () => {
       }
     });
   }
-  async function demo() {
-    const response = await fetch('/samples/stylized-pine-tree.glb');
+  async function demo(variant: 'textured' | 'white' = 'textured') {
+    const white = variant === 'white';
+    const response = await fetch(white ? '/samples/stylized-turkey-white.glb' : '/samples/cartoon-chicken-textured.glb');
     if (!response.ok) { report(new Error('Demo asset is missing')); return; }
-    await loadFiles([new File([await response.blob()], 'Stylized pine tree.glb', { type: 'model/gltf-binary' })]);
+    await loadFiles([new File([await response.blob()], white ? 'Stylized turkey · white.glb' : 'Cartoon chicken.glb', { type: 'model/gltf-binary' })], undefined, white ? 'turkey' : 'chicken');
   }
   async function validationSample() {
     const response = await fetch('/samples/material-check.glb');
@@ -401,7 +408,7 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   async function snapshot(): Promise<PrintProject> {
     if (!project.value || !client) throw new Error(t('Import a model first', '请先导入模型'));
-    return { ...project.value, version: 2, updatedAt: new Date().toISOString(), regions: JSON.parse(JSON.stringify(regions.value)), height: settings.value.height, colorCount: colorCount.value, precision: precision.value, scheme: scheme.value, snapshot: (await client.request('snapshot', {})).snapshot, viewerSettings: JSON.parse(JSON.stringify({ ...settings.value, tool: 'orbit' })), validationMaterial: validationMaterial.value ? cloneMaterial(validationMaterial.value) : null, preparation: JSON.parse(JSON.stringify(preparation.value)) };
+    return { ...project.value, version: 2, updatedAt: new Date().toISOString(), regions: JSON.parse(JSON.stringify(regions.value)), height: settings.value.height, colorCount: colorCount.value, precision: precision.value, scheme: scheme.value, snapshot: (await client.request('snapshot', {})).snapshot, viewerSettings: JSON.parse(JSON.stringify({ ...settings.value, tool: 'orbit' })), validationMaterial: validationMaterial.value ? cloneMaterial(validationMaterial.value) : null, preparation: JSON.parse(JSON.stringify(preparation.value)), segmentation: segmentation.value ? JSON.parse(JSON.stringify(segmentation.value)) : null };
   }
   async function persistProject(input?: PrintProject) {
     prepSaving.value = true;
@@ -424,7 +431,7 @@ export const useWorkspace = defineStore('workspace', () => {
     await operation(async () => { await persistProject(); success = true; });
     return success;
   }
-  async function navigatePreparation(target: 'print' | 'multi-color', fromPrint = false) {
+  async function navigatePreparation(target: 'print' | 'multi-color' | 'segment', fromPrint = false) {
     if (busy.value || !content.value) return;
     const previous = restorePreparation(preparation.value);
     await operation(async () => {
@@ -432,7 +439,7 @@ export const useWorkspace = defineStore('workspace', () => {
       preparation.value.activeModule = target;
       preparation.value.origin = fromPrint ? 'print' : null;
       if (fromPrint) preparation.value.colorStarted = true;
-      if (target === 'print') { if (!previous.engaged) preparation.value.expanded = 'size'; else expandNextPrintTask(); }
+      if (target === 'print') expandNextPrintTask();
       settings.value.tool = 'orbit'; clearSelection(); draft.value = null;
       if (fromPrint || target === 'print') setWorkflow('assignment');
       try { await persistProject(); }
@@ -466,6 +473,7 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   async function acknowledgePrintCheck() {
     if (busy.value || !printMeshCheck.value.available) return;
+    if (!printSizeReady.value) { report(new Error('请先确认顶部模型尺寸，再复核可打印性。')); return; }
     preparation.value.checkedKey = printCheckKey.value;
     expandNextPrintTask(); await savePreparation();
   }
@@ -511,6 +519,11 @@ export const useWorkspace = defineStore('workspace', () => {
       downloadFile(blob, `${data.name}.${multi ? '3mf' : 'stl'}`);
       prepNotice.value = `已生成 ${multi ? '3MF' : 'STL'} 并发起下载。请在 ${preparation.value.slicer} 中手动打开文件${multi ? '并核对耗材槽位' : '，单位选择 mm'}。尚未向切片器导入。`;
     });
+  }
+  async function loadSegmentResult(file: File, sourceId: string, height: number, openPieces: number, id: string) {
+    const restored: PrintProject = { version: 2, id, name: file.name.replace(/\.glb$/i, ''), updatedAt: new Date().toISOString(), files: [{ name: file.name, path: file.name, type: file.type, data: file }], regions: [], height, colorCount: 4, precision: 4, scheme: 'high', snapshot: null, preparation: newPreparation(), segmentSourceId: sourceId, segmentOpenPieces: openPieces };
+    await loadFiles([file], restored);
+    if (!failure.value) await savePreparation();
   }
   async function openProject(id: string) {
     if (busy.value) return;
@@ -576,9 +589,15 @@ export const useWorkspace = defineStore('workspace', () => {
     const active = await readRecord<string>('active-project').catch(() => undefined);
     if (active && projects.value.some(item => item.id === active)) await openProject(active);
     else await demo();
+    // Preserve previous pine work as a local project before opening the new bundled default once.
+    const migrated = await readRecord<boolean>('chicken-default-v1').catch(() => false);
+    if (!migrated) {
+      if (project.value && /^(stylized[ -])?pine[ -]tree$/i.test(project.value.name)) { if (await savePreparation()) await demo(); }
+      if (!failure.value) await writeRecord('chicken-default-v1', true);
+    }
   }
   onScopeDispose(() => { clearTimeout(prepTimer); generation++; client?.dispose(); });
-  return { preparation, prepSaving, prepDirty, prepSaveError, prepNotice, printDimensions, printMeshCheck, currentColorResult, printColorState, printSizeReady, printCheckReady, printCompatibility, printTasks, printTaskDone, printTodo, navigatePreparation, changePrintMode, changePrintSlicer, setPrintDimension, confirmPrintSize, acknowledgePrintCheck, completePrintColors, downloadPreparedModel, savePreparation, refinement, selection, selectionScope, selectionMaterial, selectionIslandCount, prepareRefinement, selectRefinement, assignSelection, clearSelection, materials, allMaterials, validationMaterial, validationSurface, checked, content, display, regions, selectedRegion, selected, surfaces, draft, project, projects, busy, status, failure, progress, warnings, colorCount, precision, scheme, settings, undoCount, saved, modelInfo, durations,
+  return { segmentation, loadSegmentResult, preparation, prepSaving, prepDirty, prepSaveError, prepNotice, printDimensions, printMeshCheck, currentColorResult, printColorState, printSizeReady, printCheckReady, printCompatibility, printTasks, printTaskDone, printTodo, navigatePreparation, changePrintMode, changePrintSlicer, setPrintDimension, confirmPrintSize, acknowledgePrintCheck, completePrintColors, downloadPreparedModel, savePreparation, refinement, selection, selectionScope, selectionMaterial, selectionIslandCount, prepareRefinement, selectRefinement, assignSelection, clearSelection, materials, allMaterials, validationMaterial, validationSurface, checked, content, display, regions, selectedRegion, selected, surfaces, draft, project, projects, busy, status, failure, progress, warnings, colorCount, precision, scheme, settings, undoCount, saved, modelInfo, durations,
     loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, replaceMaterial, saveMaterial, deleteMaterial, importMaterials, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
 });
 
