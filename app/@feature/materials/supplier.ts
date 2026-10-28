@@ -1,12 +1,13 @@
 import { Color, LinearSRGBColorSpace, SRGBColorSpace } from 'three';
 import type { SurfaceValues } from '~/@engine/viewer';
+import { includesVendor } from '~/@base/site';
 import data from './data/polymaker-pla.json';
 import sunlu from './data/sunlu-pla.json';
 import { catalogAppearance } from './filaments';
 import { OPENPBR_RULE, RENDER_RULE, type MaterialOverrides, type MaterialRecord, type SupplierCatalog, type SupplierMaterialModification, type SupplierProfile } from './types';
 
-export const supplierCatalog = data as SupplierCatalog;
-export const supplierCatalogs: SupplierCatalog[] = [supplierCatalog, sunlu as SupplierCatalog];
+export const supplierCatalogs = ([data, sunlu] as SupplierCatalog[]).filter(catalog => includesVendor(catalog.vendor));
+export const supplierCatalog = supplierCatalogs[0]!;
 export const cloneMaterial = (material: MaterialRecord): MaterialRecord => JSON.parse(JSON.stringify(material));
 const numeric = (profile: SupplierProfile, key: string, fallback: number) => {
   const value = profile.source.parameters[key];

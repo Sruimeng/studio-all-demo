@@ -1,4 +1,5 @@
 import { FILAMENT_RULE, type FinishId, type MaterialRecord, type MaterialSeries, type MaterialTemplate, type SupplierProfile } from './types';
+import { includesVendor } from '~/@base/site';
 
 export const materialTemplates: MaterialTemplate[] = [
   { id: 'basic', name: 'Basic', nameCN: '常规', roughness: 0.38, metalness: 0, optics: {} },
@@ -14,7 +15,7 @@ const esun = 'https://esun3dstore.com/';
 const kex = 'https://kexcelled3d.com/collections/aesthetic';
 const cai = 'https://www.cailab3d.com/';
 const series = (vendor: string, baseMaterial: string, id: string, name: string, source: string, templateId?: FinishId, aliases?: string[]): MaterialSeries => ({ id, vendor, baseMaterial, name, source, templateId, aliases });
-export const materialSeries: MaterialSeries[] = [
+const allSeries: MaterialSeries[] = [
   series('SUNLU', 'PLA', 'sunlu-pla-catalog', 'PLA 色卡 · 质感待确认', sunlu),
   series('Polymaker', 'PLA', 'polymaker-panchroma-catalog', 'Panchroma™ PLA 色卡 · 质感待确认', polymaker),
   ...(['matte', 'silk', 'metallic', 'translucent'] as const).map(id => series('Polymaker', 'PLA', `polymaker-${id}`, `Panchroma ${materialTemplates.find(t => t.id === id)!.name}`, polymaker, id, id === 'matte' ? ['PolyTerra PLA'] : undefined)),
@@ -38,8 +39,9 @@ export const materialSeries: MaterialSeries[] = [
     ['CAILAB', ['PETG', 'ABS'], cai],
   ] as const).flatMap(([vendor, bases, source]) => bases.map(base => series(vendor, base, `${vendor.toLowerCase()}-${base.toLowerCase()}`, `${base} · 通用外观参考`, source))),
 ];
-export const filamentVendors = ['SUNLU', 'Polymaker', 'eSUN', 'Kexcelled', 'CAILAB'];
-export const baseMaterials = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PA', 'PC'];
+export const materialSeries = allSeries.filter(item => includesVendor(item.vendor));
+export const filamentVendors = ['SUNLU', 'Polymaker', 'eSUN', 'Kexcelled', 'CAILAB'].filter(includesVendor);
+export const baseMaterials = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PA', 'PC'].filter(base => materialSeries.some(item => item.baseMaterial === base));
 
 export function catalogAppearance(profile: SupplierProfile): MaterialRecord['appearance'] {
   if (profile.origin || !profile.catalogHex) return undefined;

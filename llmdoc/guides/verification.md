@@ -4,6 +4,18 @@ type: guide
 ---
 # 验证记录
 
+## 2026-10-28：SUNLU / Polymaker 专属站点
+
+同一代码按 `VITE_MATERIAL_VENDOR` 构建。SUNLU 内置 33 条 / 33 个配色候选；Polymaker 28 条 / 26 个候选，另两条未对应档案继续禁用。综合站 61 条 / 59 个候选保持。每家使用独立 Vercel 项目、域名和 IndexedDB 名称。
+
+13 个测试文件、112 项通过；类型检查、lint、两家生产构建和 `git diff --check` 通过。测试覆盖单厂商目录 / 系列 / 初始验证材质 / Worker 配色候选、默认样件、供应商分组保存和综合站兼容性。
+
+独立本地页面 `127.0.0.1:3111` / `3112` 验证厂商选择仅含对应品牌、五类通用外观保留、SUNLU 33 色 / Polymaker 26 色。SUNLU 白色预览改为 `#123456` 后保存、刷新恢复，色卡仍为 `#FFFFFF`。本地测试记录留在专用数据库，不写入线上浏览器。
+
+生产站 `https://tripo-material-sunlu.vercel.app`（`dpl_AtHQ6r87t8n8DCHCLgVjdSRpnCUj`）与 `https://tripo-material-polymaker.vercel.app`（`dpl_6xDa8Wj48DaquMPmtrjbS4JY2uPa`）均为 `READY`，公开网址 HTTP 200，标题与 `material-vendor` meta 对应厂商。浏览器加载标准样件、厂商与色卡列表正常，未捕获 error 日志；线上截图在 `artifacts/vendor-sites/`。原综合站 HTTP 200，标题保持 `Tripo · Material Studio`。
+
+本轮已发布静态产物；源码仍在工作区，未提交或推送。发布命令与存储边界见 [厂商专属站点](vendor-sites.md)。
+
 ## 2026-10-23：通用外观绑定
 
 Basic / Matte / Silk / Metallic / Translucent 作为统一绑定来源；卡片与下拉框共用绑定状态，保留颜色、厂商系列和 SKU。库内创建或 USDA 导入的独立材质作为附加来源。绑定保存外观快照；高级调整标记本地覆盖，可显式重新继承。

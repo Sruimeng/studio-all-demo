@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 import { Icon, Popover, PopoverClose, PopoverContent, PopoverTrigger, Tabs, TabsContent, TabsList, TabsTrigger, Tooltip, TooltipContent, TooltipTrigger } from '@tripo3d/design';
 import { useWorkspace, ValidationControls, RegionAssignments } from '~/@feature/workspace';
 import { useLocale } from '~/@base/locale';
+import { site } from '~/@base/site';
 import { ModelViewport } from '~/@engine/viewer';
 import { FilamentValidation, MaterialPanel } from '~/@feature/materials';
 import ModuleTooltip from '~/@base/ui/ModuleTooltip.vue';
@@ -120,7 +121,7 @@ onBeforeUnmount(() => {
           <span>tripo</span>
         </a>
         <button class="workspace-trigger" type="button">
-          <span>{{ t('3D Workspace', '3D 工作台') }}</span>
+          <span>{{ site.vendor ? `${site.vendor} · ${t('Material Studio', '材质工作台')}` : t('3D Workspace', '3D 工作台') }}</span>
           <Icon icon="i-tripo:caret" class="size-3.5 rotate-180" />
         </button>
         <span class="header-divider" />

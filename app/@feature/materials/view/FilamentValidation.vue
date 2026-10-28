@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch } from 'vue';
 import { useLocale } from '~/@base/locale';
+import { site } from '~/@base/site';
 import { materialSeries, filamentVendors, filamentPreview, createFilamentColor } from '../filaments';
 import { cloneMaterial, materialHex } from '../supplier';
 import { appearanceTemplates, bindAppearance, inheritAppearance } from '../binding';
@@ -13,9 +14,9 @@ import AppearanceBinding from './AppearanceBinding.vue';
 const props = defineProps<{ materials: MaterialRecord[]; selected: MaterialRecord | null; reference: MaterialRecord | null; busy: boolean; saveMaterial: (material: MaterialRecord) => Promise<boolean> }>();
 const emit = defineEmits<{ apply: [material: MaterialRecord]; preview: [material: MaterialRecord | null]; compare: [material: MaterialRecord | null] }>();
 const { t } = useLocale();
-const vendor = ref('Polymaker');
+const vendor = ref<string>(site.vendor ?? 'Polymaker');
 const baseMaterial = ref('PLA');
-const seriesId = ref('polymaker-panchroma-catalog');
+const seriesId = ref(site.seriesId);
 const finish = ref<FinishId | undefined>();
 const keepColor = ref(true);
 const keepFinish = ref(true);

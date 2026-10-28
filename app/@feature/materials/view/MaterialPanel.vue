@@ -2,6 +2,7 @@
 import { computed, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useLocale } from '~/@base/locale';
+import { site } from '~/@base/site';
 import ModuleTooltip from '~/@base/ui/ModuleTooltip.vue';
 import { cloneMaterial, materialHex, materialProblem, supplierCatalogHex, supplierIssue } from '../supplier';
 import { RENDER_RULE, type MaterialRecord, type MaterialImportResult } from '../types';
@@ -17,7 +18,7 @@ const { t } = locale;
 const { language } = storeToRefs(locale);
 const search = shallowRef('');
 const tab = shallowRef<'supplier' | 'local'>('supplier');
-const vendor = shallowRef('');
+const vendor = shallowRef(site.vendor ?? '');
 const editing = shallowRef<MaterialRecord | null>(null);
 const deleting = shallowRef<MaterialRecord | null>(null);
 async function remove() {
@@ -40,7 +41,7 @@ watch(() => props.selected?.id, close);
       <MaterialImport :busy="busy" :import-materials="importMaterials" @imported="tab = 'local'; search = ''" />
       <label class="search-field"><span>⌕</span><input v-model="search" :placeholder="t('Search SKU, color or material', '搜索 SKU、颜色或材料')" aria-label="Search materials"></label>
       <div class="library-tabs"><button :class="{ active: tab === 'supplier' }" @click="tab = 'supplier'">{{ t('Suppliers', '供应商') }} {{ counts.supplier }}</button><button :class="{ active: tab === 'local' }" @click="tab = 'local'">{{ t('Local', '本地') }} {{ counts.local }}</button></div>
-      <label v-if="tab === 'supplier'" class="vendor-filter">{{ t('Manufacturer', '厂商') }}<select v-model="vendor" :aria-label="t('Filter manufacturer', '筛选厂商')"><option value="">{{ t('All manufacturers', '全部厂商') }}</option><option v-for="entry in vendors" :key="entry.name" :value="entry.name">{{ entry.name }} · {{ entry.count }}</option></select></label>
+      <label v-if="tab === 'supplier'" class="vendor-filter">{{ t('Manufacturer', '厂商') }}<select v-model="vendor" :disabled="!!site.vendor" :aria-label="t('Filter manufacturer', '筛选厂商')"><option v-if="!site.vendor" value="">{{ t('All manufacturers', '全部厂商') }}</option><option v-for="entry in vendors" :key="entry.name" :value="entry.name">{{ entry.name }} · {{ entry.count }}</option></select></label>
       <div v-if="deleting" class="delete-confirm" role="group" :aria-label="t('Confirm deletion', '确认删除')">
         <p>{{ t(`Delete ${deleting.materialId} from the library? Applied materials will be retained.`, `从材质库删除 ${deleting.materialId}？已应用的材质保持不变。`) }}</p>
         <div class="button-row"><button :disabled="busy" @click="deleting = null">{{ t('Cancel', '取消') }}</button><button class="delete-material" :disabled="busy" @click="remove">{{ t('Confirm delete', '确认删除') }}</button></div>

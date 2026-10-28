@@ -1,7 +1,9 @@
+import { site } from '~/@base/site';
+
 let database: Promise<IDBDatabase> | undefined;
 function open(): Promise<IDBDatabase> {
   database ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open('tripo-material-studio', 1);
+    const request = indexedDB.open(site.database, 1);
     request.onupgradeneeded = () => request.result.createObjectStore('records');
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => { database = undefined; reject(request.error); };

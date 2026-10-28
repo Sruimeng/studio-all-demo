@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { readRecord, writeRecord, downloadFile } from '~/@base/storage';
 import { useLocale } from '~/@base/locale';
+import { site } from '~/@base/site';
 import { filamentIdentity, importUSDAMaterials, type MaterialImportResult, withoutLegacySamples, supplierMaterials, cloneMaterial, withOverrides, materialSurface, materialHex, materialProblem, supplierModification, materialsCSV, validateMaterial, type MaterialRecord } from '~/@feature/materials';
 import { collectModelResources, disposeModelResources } from '~/@engine/model';
 import { loadLocalModel } from '~/@engine/import';
@@ -51,7 +52,7 @@ export const useWorkspace = defineStore('workspace', () => {
     const edit = supplierEdits.value.find(item => item.id === material.id && supplierVendor(item) === supplierVendor(material));
     return edit ? { ...cloneMaterial(material), ...edit.overrides, overrides: edit.overrides, renderRule: edit.renderRule, optics: edit.optics, appearance: edit.appearance ?? material.appearance, appearanceBinding: edit.appearanceBinding, referenceImage: edit.referenceImage } : material;
   })]);
-  const validationMaterial = ref<MaterialRecord | null>(cloneMaterial(supplierMaterials.find(material => material.materialId === 'CA19017')!));
+  const validationMaterial = ref<MaterialRecord | null>(cloneMaterial(supplierMaterials.find(material => material.materialId === site.materialId)!));
   const validationReference = ref<MaterialRecord | null>(null);
   const referenceSurface = computed(() => validationReference.value ? materialSurface(validationReference.value) : null);
   const checked = ref<string[]>([]); const selectedRegion = ref(0); const draft = ref<MaterialRecord | null>(null);
@@ -374,6 +375,7 @@ export const useWorkspace = defineStore('workspace', () => {
     } catch (error) { report(error); }
     const active = await readRecord<string>('active-project').catch(() => undefined);
     if (active && projects.value.some(item => item.id === active)) await openProject(active);
+    else if (site.vendor) await validationSample();
     else await demo();
   }
   onScopeDispose(() => { generation++; client?.dispose(); });

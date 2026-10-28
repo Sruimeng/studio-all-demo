@@ -9,6 +9,7 @@ type: index
 - [供应商材质](reference/supplier-materials.md)
 - [跨厂商材质验证](reference/filament-validation.md)
 - [验证记录](guides/verification.md)
+- [厂商专属站点](guides/vendor-sites.md)
 - [文档规范](guides/doc-standard.md)
 
 公共入口：`@engine/import`、`@engine/model`、`@engine/viewer`、`@engine/multicolor`、`@engine/print-mesh`、`@feature/materials`、`@feature/workspace`。
