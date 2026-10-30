@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { disposePinia, getActivePinia } from 'pinia';
 import { createPinia, setActivePinia } from 'pinia';
+import { toRaw } from 'vue';
 import { initialMaterials } from './fixtures/materials';
 import { Group } from 'three';
 import { unzipSync, strFromU8, zipSync, strToU8 } from 'fflate';
@@ -18,9 +19,10 @@ vi.mock('~/@engine/multicolor', () => ({ MulticolorClient: class {
   dispose() { this.disposed = true; }
   setRevision() {}
   async request(type: string, payload: unknown) {
-    mocks.request(type, payload);
+    const override = mocks.request(type, payload);
     structuredClone(payload);
     if (this.disposed) throw new Error('disposed');
+    if (override !== undefined) return await override;
     if (type === 'init') return { bbox: { minX: 0, maxX: 2, minY: 0, maxY: 1, minZ: 0, maxZ: 3 }, warnings: [], nf: 1, wpos: new Float32Array([0,0,0,2,1,0,0,0,3]), widx: new Uint32Array([0,1,2]) };
     if (type === 'palette') {
       const candidates = (payload as { cands?: Array<{ id: string; hex: string }> }).cands ?? [];
@@ -40,16 +42,101 @@ const workspaceWithMaterials = () => {
 
 beforeEach(() => {
   setActivePinia(createPinia()); mocks.records.clear(); mocks.clients.length = 0;
-  mocks.request.mockClear(); mocks.download.mockClear();
+  mocks.request.mockReset(); mocks.download.mockClear();
   mocks.write.mockReset().mockImplementation(async (key: string, value: unknown) => { mocks.records.set(key, structuredClone(value)); });
   mocks.load.mockReset().mockImplementation(async () => ({ root: new Group(), warnings: [] }));
 });
-afterEach(() => { const pinia = getActivePinia(); if (pinia) disposePinia(pinia); });
+afterEach(() => { const pinia = getActivePinia(); if (pinia) disposePinia(pinia); vi.unstubAllGlobals(); });
 const files = () => [new File(['model'], 'test.glb')];
 const supplier = async (sku = 'CA19017') => {
   const { supplierMaterials, cloneMaterial } = await import('../app/@feature/materials/supplier');
   return cloneMaterial(supplierMaterials.find(material => material.materialId === sku)!);
 };
+
+const mockSampleFetch = () => {
+  const fetch = vi.fn(async () => new Response('sample model', { status: 200 }));
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+};
+
+it('defaults to the role model for printing and restores separate chicken and role edits across module switches', async () => {
+  const fetch = mockSampleFetch(), store = workspaceWithMaterials();
+  await store.initialize();
+  expect(fetch).toHaveBeenLastCalledWith('/samples/role-model.glb');
+  expect(store.project).toMatchObject({ name: '角色模型（去光）', sourceSample: 'role' });
+  const roleId = store.project!.id;
+  store.setHeight(120); store.apply(store.materials[0]!);
+  await store.navigateModule('print');
+  expect(store.project!.id).toBe(roleId); expect(store.preparation.activeModule).toBe('print');
+  await store.navigateModule('segment');
+  expect(fetch).toHaveBeenLastCalledWith('/samples/cartoon-chicken-textured.glb');
+  expect(store.project!.sourceSample).toBe('chicken'); expect(store.preparation.activeModule).toBe('segment');
+  const chickenId = store.project!.id;
+  store.setHeight(60);
+  await store.navigateModule('multi-color');
+  expect(store.project!.id).toBe(roleId); expect(store.settings.height).toBe(120);
+  expect(store.regions[0]!.material.id).toBe(initialMaterials[0]!.id);
+  await store.navigateModule('segment');
+  expect(store.project!.id).toBe(chickenId); expect(store.settings.height).toBe(60);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  await store.navigateModule('print');
+  expect(store.project!.id).toBe(roleId); expect(store.settings.height).toBe(120);
+});
+
+it('loads each module sample without leaving that module and retains the white turkey option', async () => {
+  const fetch = mockSampleFetch(), store = workspaceWithMaterials();
+  await store.demo(); await store.navigateModule('print'); await store.demo();
+  expect(fetch).toHaveBeenLastCalledWith('/samples/role-model.glb');
+  expect(store.preparation.activeModule).toBe('print');
+  await store.navigateModule('segment'); await store.demo();
+  expect(fetch).toHaveBeenLastCalledWith('/samples/cartoon-chicken-textured.glb');
+  expect(store.preparation.activeModule).toBe('segment');
+  await store.demo('white');
+  expect(fetch).toHaveBeenLastCalledWith('/samples/stylized-turkey-white.glb');
+  expect(store.project!.sourceSample).toBe('turkey'); expect(store.preparation.activeModule).toBe('segment');
+});
+
+it('preserves the previous chicken print project when migrating the default to the role model once', async () => {
+  const fetch = mockSampleFetch(), store = workspaceWithMaterials();
+  await store.loadFiles(files(), undefined, 'chicken'); store.setHeight(110); await store.save();
+  const chickenId = store.project!.id;
+  await store.initialize();
+  expect(store.project!.sourceSample).toBe('role');
+  const roleId = store.project!.id;
+  expect(mocks.records.get(`project:${chickenId}`)).toMatchObject({ sourceSample: 'chicken', height: 110 });
+  expect(mocks.records.get('role-default-v1')).toBe(true);
+  await store.initialize();
+  expect(store.project!.id).toBe(roleId); expect(fetch).toHaveBeenCalledTimes(1);
+  await store.navigateModule('segment');
+  expect(store.project!.id).toBe(chickenId); expect(store.settings.height).toBe(110);
+});
+
+it('keeps a saved Segment chicken project on reload and loads the role only when opening Print', async () => {
+  const fetch = mockSampleFetch(), store = workspaceWithMaterials();
+  await store.loadFiles(files(), undefined, 'chicken'); await store.navigatePreparation('segment');
+  const chickenId = store.project!.id;
+  await store.initialize();
+  expect(store.project!.id).toBe(chickenId); expect(store.preparation.activeModule).toBe('segment');
+  expect(fetch).not.toHaveBeenCalled();
+  await store.navigateModule('print');
+  expect(store.project!.sourceSample).toBe('role'); expect(store.preparation.activeModule).toBe('print');
+});
+
+it('keeps imported models in place and stops sample switching if saving or loading fails', async () => {
+  const fetch = mockSampleFetch(), store = workspaceWithMaterials();
+  await store.loadFiles(files()); const importedId = store.project!.id;
+  await store.navigateModule('segment'); await store.navigateModule('print');
+  expect(store.project!.id).toBe(importedId); expect(fetch).not.toHaveBeenCalled();
+  await store.demo(); const roleId = store.project!.id;
+  mocks.write.mockRejectedValueOnce(new Error('disk full'));
+  await store.navigateModule('segment');
+  expect(store.project!.id).toBe(roleId); expect(store.preparation.activeModule).toBe('print');
+  expect(store.failure).toBe('disk full'); expect(fetch).toHaveBeenCalledTimes(1);
+  fetch.mockResolvedValueOnce(new Response('', { status: 404 }));
+  await store.navigateModule('segment');
+  expect(store.project!.id).toBe(roleId); expect(store.preparation.activeModule).toBe('print');
+  expect(store.failure).toBe('Demo asset is missing');
+});
 
 it('failed replacement keeps the active model and worker usable', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); const id = store.project!.id;
@@ -57,6 +144,74 @@ it('failed replacement keeps the active model and worker usable', async () => {
   await store.loadFiles(files()); expect(store.failure).toBe('Invalid GLB');
   expect(store.project!.id).toBe(id); expect(mocks.clients[0]!.disposed).toBe(false);
   await store.save(); expect(mocks.records.get('active-project')).toBe(id);
+});
+it('previews without editing, then fills with the chosen filament without a selection step', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.settings.tool = 'fill';
+  store.refinement = { positions: new Float32Array(27), labels: new Uint8Array([0, 0, 0]), sourceFaces: new Uint32Array([0, 1, 2]), uvs: new Float32Array(18), faceIsland: new Int32Array(3), facePart: new Uint32Array(3), faceAtlas: new Int32Array(3), islandCount: 1, partCount: 1 };
+  store.display = { positions: store.refinement.positions, labels: store.refinement.labels };
+  store.selectedRegion = 1; store.saved = true;
+  mocks.request.mockImplementation((type, payload) => {
+    if (type === 'selectRefinement') return { faces: new Uint32Array([0, 1]) };
+    if (type === 'fillRefinement') return { left: 1, label: null, refinementLabels: new Uint8Array([payload.label, payload.label, 0]) };
+  });
+  store.previewFill(0); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  expect(Array.from(store.fillPreview)).toEqual([0, 1]);
+  expect(store.busy).toBe(false); expect(store.saved).toBe(true);
+  expect(store.selection.length).toBe(0); expect(store.undoCount).toBe(0);
+  const hit = { face: 0, point: [0, 0, 0] as [number, number, number], radius: 3 };
+  await store.fill(hit);
+  expect(mocks.request).toHaveBeenCalledWith('fillRefinement', { face: 0, label: 1, materialGroups: [0, 1] });
+  expect(Array.from(store.display!.labels)).toEqual([1, 1, 0]);
+  expect(store.selectedRegion).toBe(1); expect(store.undoCount).toBe(1);
+  expect(store.selection.length).toBe(0); expect(store.fillPreview.length).toBe(0);
+  store.saved = true; mocks.request.mockClear();
+  await store.fill(hit);
+  expect(mocks.request).not.toHaveBeenCalled(); expect(store.saved).toBe(true);
+});
+it('lists only preview filaments and highlights every matching face across slots as paint and undo change labels', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  const first = store.regions[0]!.material, second = store.regions[1]!.material;
+  store.regions.push({ index: 2, sourceHex: '#FF0000', material: structuredClone(toRaw(first)) });
+  const labels = new Uint8Array([0, 1, 2, 1]);
+  store.refinement = { positions: new Float32Array(36), labels, sourceFaces: new Uint32Array([0, 1, 2, 3]), uvs: new Float32Array(24), faceIsland: new Int32Array(4), facePart: new Uint32Array(4), faceAtlas: new Int32Array(4), islandCount: 1, partCount: 1 };
+  store.display = { positions: store.refinement.positions, labels };
+  store.saved = true; mocks.request.mockClear();
+  store.selectPlanFilament(0);
+  expect(store.planFilaments.map(item => item.material.id)).toEqual([first.id, second.id]);
+  expect(store.planFilaments[0]!.indices).toEqual([0, 2]);
+  expect(Array.from(store.planHighlight)).toEqual([0, 2]);
+  expect(store.saved).toBe(true); expect(mocks.request).not.toHaveBeenCalled();
+  for (const tool of ['orbit', 'brush', 'fill'] as const) {
+    store.settings.tool = tool;
+    store.selectPlanFilament(0);
+    expect(store.highlightedFilamentId).toBeNull();
+    expect(store.planHighlight).toHaveLength(0);
+    expect(store.selected!.id).toBe(first.id);
+    store.selectPlanFilament(0);
+    expect(Array.from(store.planHighlight)).toEqual([0, 2]);
+  }
+  expect(Array.from(store.display!.labels)).toEqual([0, 1, 2, 1]);
+  expect(mocks.request).not.toHaveBeenCalled();
+  // The mask uses displayed face indices even when the preview maps them to source faces.
+  store.display = { ...store.display, faceMap: new Uint32Array([9, 8, 7, 6]) };
+  expect(Array.from(store.planHighlight)).toEqual([0, 2]);
+  store.selectPlanFilament(1);
+  expect(Array.from(store.planHighlight)).toEqual([1, 3]);
+  mocks.request.mockImplementation(type => {
+    if (type === 'brushRefinement') return { left: 1, label: null, refinementLabels: new Uint8Array([1, 1, 1, 1]) };
+    if (type === 'undo') return { left: 0, label: null, refinementLabels: labels };
+  });
+  await store.stroke([{ face: 0, point: [0, 0, 0], radius: 3 }]);
+  expect(store.planFilaments.map(item => item.material.id)).toEqual([second.id]);
+  expect(Array.from(store.planHighlight)).toEqual([0, 1, 2, 3]);
+  await store.undo();
+  expect(store.planFilaments.map(item => item.material.id)).toEqual([first.id, second.id]);
+  expect(Array.from(store.planHighlight)).toEqual([1, 3]);
+  store.selectedRegion = 0;
+  expect(store.planHighlight).toHaveLength(0);
+  store.selectPlanFilament(0); store.clearPlanHighlight();
+  expect(store.planHighlight).toHaveLength(0);
 });
 it('loads and regenerates regions with supplier SKU matches and keeps source colors for labels', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files());
@@ -99,6 +254,40 @@ it('failed material writes leave saved catalog and bindings intact', async () =>
   expect(store.materials[0]!.roughness).toBe(0.35); expect(store.regions[0]!.material).toEqual(original);
   expect(store.regions[0]!.match!.meanDeltaE).toBe(0.25);
   expect(store.failure).toBe('Quota exceeded');
+});
+
+it('adding a custom owned filament persists it without changing the active plan or confirmation', async () => {
+  const { customFilament } = await import('../app/@feature/materials/filaments');
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  const material = customFilament('My PETG', 'PETG', '#1729AB');
+  const regions = structuredClone(JSON.parse(JSON.stringify(store.regions))), display = store.display;
+  const preparation = JSON.parse(JSON.stringify(store.preparation));
+  mocks.request.mockClear();
+  expect(await store.addFilament(material)).toBe(true);
+  expect(mocks.records.get('materials')).toContainEqual(material);
+  expect(store.regions).toEqual(regions); expect(store.display).toBe(display);
+  expect(store.preparation).toEqual(preparation); expect(mocks.request).not.toHaveBeenCalled();
+  expect(await store.addFilament(material)).toBe(false);
+  mocks.write.mockRejectedValueOnce(new Error('Quota exceeded'));
+  const failed = customFilament('Failed', 'PLA', '#FFFFFF');
+  expect(await store.addFilament(failed)).toBe(false);
+  expect(store.materials.some(item => item.id === failed.id)).toBe(false);
+  expect(store.regions).toEqual(regions);
+});
+
+it('uses current owned custom filaments only on regeneration with preference enabled', async () => {
+  const { customFilament } = await import('../app/@feature/materials/filaments');
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  const material = customFilament('Custom blue', 'PLA', '#1729AB');
+  await store.addFilament(material);
+  const candidates = () => mocks.request.mock.calls.filter(([type]) => type === 'palette').at(-1)![1].cands;
+  await store.segment({ ownedIds: [material.id], preferOwned: true });
+  expect(candidates()).toContainEqual({ id: material.id, hex: '#1729AB', penalty: 0 });
+  expect(candidates().filter((item: { id: string }) => item.id !== material.id).every((item: { penalty: number }) => item.penalty === 6)).toBe(true);
+  await store.segment({ ownedIds: [], preferOwned: true });
+  expect(candidates().some((item: { id: string }) => item.id === material.id)).toBe(false);
+  await store.segment({ ownedIds: [material.id], preferOwned: false });
+  expect(candidates().some((item: { id: string }) => item.id === material.id)).toBe(false);
 });
 it('binding and shared material updates preserve region labels and distinct same-color IDs', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); const labels = store.display!.labels;
@@ -468,4 +657,40 @@ it('returning to Print leaves local material validation and retains the confirme
   store.setWorkflow('validation'); await store.completePrintColors();
   expect(store.printColorState).toBe('ready'); expect(store.settings.workflow).toBe('assignment');
   expect(store.saved).toBe(true);
+});
+
+it('adds/selects a plan filament without recoloring, changing the tool or claiming ownership', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.settings.tool = 'fill';
+  const display = store.display, fingerprint = store.currentColorResult.fingerprint;
+  const records = new Map(mocks.records), used = store.currentColorResult.used.length;
+  const material = await supplier('CA19017');
+  expect(await store.addPlanFilament(material)).toBe(true);
+  expect(store.regions).toHaveLength(3); expect(store.selectedRegion).toBe(2);
+  expect(store.display).toBe(display); expect(store.undoCount).toBe(0);
+  expect(store.currentColorResult.fingerprint).toBe(fingerprint); expect(store.currentColorResult.used).toHaveLength(used);
+  expect(store.settings.tool).toBe('fill'); expect(mocks.records).toEqual(records);
+  expect(mocks.request).toHaveBeenCalledWith('appendSlot', { expectedCount: 2 });
+  mocks.request.mockClear();
+  expect(await store.addPlanFilament(material)).toBe(true); expect(store.regions).toHaveLength(3); expect(mocks.request).not.toHaveBeenCalled();
+  const sameColor = { ...material, id: 'custom:different', materialId: 'OTHER' };
+  expect(await store.addPlanFilament(sameColor)).toBe(true); expect(store.regions).toHaveLength(4);
+  await store.save();
+  const saved = mocks.records.get('project:' + store.project!.id) as { regions: unknown[] };
+  // Project data includes every palette slot, including unused materials.
+  expect(saved.regions).toHaveLength(4);
+});
+
+it('rejects a failed append without changing the palette or selection, and reuses a slot at the limit', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  const selected = store.selectedRegion, material = await supplier('CA19017');
+  mocks.request.mockImplementation(type => type === 'appendSlot' ? Promise.reject(new Error('append failed')) : undefined);
+  expect(await store.addPlanFilament(material)).toBe(false);
+  expect(store.regions).toHaveLength(2); expect(store.selectedRegion).toBe(selected);
+  mocks.request.mockReset();
+  const original = store.regions[0]!;
+  while (store.regions.length < 12) store.regions.push({ ...original, index: store.regions.length });
+  expect(await store.addPlanFilament(material)).toBe(false);
+  expect(await store.addPlanFilament(original.material)).toBe(true);
+  expect(mocks.request).not.toHaveBeenCalled();
 });

@@ -901,6 +901,36 @@ function requireLabel(label) {
   if (!Number.isInteger(label) || label < 0 || label >= S.nSlots) throw new Error("Invalid paint slot.");
 }
 
+// Extend the paint palette without introducing a new segmentation candidate.
+function appendSlot(expectedCount) {
+  if (!Number.isInteger(expectedCount) || expectedCount !== S.nSlots || expectedCount < 1 || expectedCount >= 12) throw new Error('Cannot add another material slot.');
+  S.nSlots++;
+  if (S.lastLabel) S.lastLabel = { ...S.lastLabel, slotCount: S.nSlots };
+  if (S.lastLow) S.lastLow = { ...S.lastLow, slotCount: S.nSlots };
+}
+
+function sampleSource(face, weights) {
+  if (!Number.isInteger(face) || face < 0 || face >= S.nf || !Array.isArray(weights) || weights.length !== 3 || weights.some(w => !Number.isFinite(w) || w < -1e-5 || w > 1.00001) || Math.abs(weights.reduce((a, b) => a + b, 0) - 1) > 1e-4) throw new Error('Invalid source color sample.');
+  const vertices = Array.from(S.indices.subarray(face * 3, face * 3 + 3));
+  const mix = (data, stride, channel) => vertices.reduce((sum, vertex, i) => sum + weights[i] * data[vertex * stride + channel], 0);
+  const mt = S.materials[S.faceMat[face]], texture = S.tex[mt.image];
+  const linear = value => value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+  let rgb;
+  if (texture && S.uvs) {
+    const u = mix(S.uvs, 2, 0), v = mix(S.uvs, 2, 1);
+    const x = (u - Math.floor(u)) * texture.w - 0.5, y = (v - Math.floor(v)) * texture.h - 0.5;
+    const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+    const pixel = (px, py, c) => linear(texture.data[(((py + texture.h) % texture.h) * texture.w + (px + texture.w) % texture.w) * 4 + c] / 255);
+    rgb = [0, 1, 2].map(c => {
+      const value = (pixel(x0, y0, c) * (1 - fx) + pixel(x0 + 1, y0, c) * fx) * (1 - fy) + (pixel(x0, y0 + 1, c) * (1 - fx) + pixel(x0 + 1, y0 + 1, c) * fx) * fy;
+      return value * mt.factor[c] * (mt.vertexColors && S.refineInput.vertexFactors ? mix(S.refineInput.vertexFactors, 3, c) : 1);
+    });
+  } else if (S.colors) {
+    rgb = [0, 1, 2].map(c => vertices.reduce((sum, vertex, i) => sum + weights[i] * linear(S.colors[vertex * 3 + c] / 255), 0));
+  } else rgb = mt.factor;
+  return '#' + rgb.map(value => Math.round(Math.max(0, Math.min(1, MC.linearToSrgb(value))) * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
 function refreshHigh() {
   if (!S.autoLabel) return;
   S.label = S.autoLabel.slice();
@@ -1006,11 +1036,21 @@ async function dispatch(m) {
     if (m.type !== "init" && m.type !== "selftest" && !S.positions) throw new Error("Load a model first.");
     switch (m.type) {
       case "init": await init(m, reqId); break;
+      case "appendSlot": appendSlot(m.expectedCount); post('slot', { reqId, slotCount: S.nSlots }); break;
+      case "sampleSource": post('sourceColor', { reqId, hex: sampleSource(m.face, m.barycentric) }); break;
       case "prepareRefinement": prepareRefinement(m.scheme); post('refinement', { reqId, ...refinementResult() }); break;
       case "selectRefinement":
         if (!S.refinement || !Array.isArray(m.materialGroups) || m.materialGroups.length !== S.nSlots) throw new Error('Prepare refinement first.');
         post('selection', { reqId, faces: MCRefine.select(S.refinement, m.face, m.scope, m.materialGroups) }); break;
       case "paintRefinement": paintRefinement(m.faces, m.label); editAck(reqId); break;
+      case "fillRefinement": {
+        if (!S.refinement || !Array.isArray(m.materialGroups) || m.materialGroups.length !== S.nSlots) throw new Error('Prepare refinement first.');
+        requireLabel(m.label);
+        const faces = MCRefine.select(S.refinement, m.face, 'color', m.materialGroups);
+        // Selecting another slot of the same filament is not a color edit.
+        if (m.materialGroups[S.refinement.labels[m.face]] !== m.materialGroups[m.label]) paintRefinement(faces, m.label);
+        editAck(reqId); break;
+      }
       case "brushRefinement": {
         const r = S.refinement; if (!r) throw new Error('Prepare refinement first.');
         const idx = Uint32Array.from({ length: r.positions.length / 3 }, (_, i) => i);

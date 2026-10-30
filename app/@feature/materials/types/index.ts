@@ -44,6 +44,7 @@ export interface MaterialRecord {
   transparency: number;
   metalness: number;
   roughness: number;
+  filament?: { brand?: string; series?: string; materialType: string };
   referenceImage?: string;
   colorSpace: 'srgb';
   renderRule: typeof RENDER_RULE | typeof OPENPBR_RULE;

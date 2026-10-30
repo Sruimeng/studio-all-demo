@@ -4,7 +4,7 @@ import { Mesh } from 'three';
 import { downloadFile } from '~/@base/storage';
 import type { useWorkspace } from '~/@feature/workspace/use-workspace';
 import { assignFaces, connectedPieces, extractGroup, faceColors, geometryKey, suggestReferenceGeometry, validatePlan } from './geometry';
-import { assignPixels, chickenReference, connectedPixels, legacyChickenReference, makeReferenceMask, mergePlanGroups, presetTarget, promptExamples, readReference, referenceGroups, splitProblem, suggestedPrompt, validateMask } from './reference';
+import { applyPreviewToGeometry, assignPixels, chickenReference, connectedPixels, legacyChickenReference, makeReferenceMask, mergePlanGroups, presetTarget, previewGroupMapping, promptExamples, readReference, referenceGroups, splitProblem, suggestedPrompt, validateMask } from './reference';
 import { freshDraft, markerColors, optionsKey, type SegmentDocument, type SegmentMode, type SegmentOptions, type SegmentPlan } from './types';
 
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -12,48 +12,59 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
   const busy = ref(false), processingLabel = ref(''), message = ref(''), error = ref('');
   const stage = ref<'input' | 'plan' | 'result'>('input');
   const view = computed(() => '3d' as const), sourceView = ref(false);
+  const displayPlan = shallowRef<SegmentPlan | null>(null);
   const overlay = ref<'overlay' | 'labels'>('labels'), explosion = ref(0);
   const selectedGroups = ref<number[]>([]), selectedFaces = shallowRef<number[]>([]), selectedPixels = shallowRef<number[]>([]), hidden = ref<number[]>([]), solo = ref<number | null>(null);
   const editing = ref(false), editPlan = shallowRef<SegmentPlan | null>(null), history = shallowRef<SegmentPlan[]>([]), future = shallowRef<SegmentPlan[]>([]);
+  const baseline2d = shallowRef<SegmentPlan | null>(null), previewing2d = ref(false), editorPrompt = ref(''), confirmPreviewRefresh = ref(false);
+  const editorSettings = shallowRef<SegmentOptions | null>(null);
+  let initialEditorPlan: SegmentPlan | null = null, initialEditorPrompt = '';
+  const editorNewPart = ref<string | null>(null);
   const meshTool = ref<'select' | 'brush' | 'picker'>('select'), meshRadius = ref(50), brushGroup = ref(0), newBrushPart = ref(false);
   const meshHistory = shallowRef<SegmentPlan[]>([]), meshFuture = shallowRef<SegmentPlan[]>([]);
   const selectTool = ref<'region' | 'lasso' | 'brush' | 'pan'>('region'), selectAction = ref<'replace' | 'add' | 'subtract'>('replace'), radius = ref(22), targetGroup = ref(0), newName = ref('');
-  const confirmRegenerate = ref(false), confirmPrompt = ref(false);
+  const confirmPrompt = ref(false);
   let colors: Float32Array | undefined, inputKey = '', editStage: 'input' | 'plan' | 'result' = 'plan';
   const doc = computed(() => studio.segmentation);
   const mode = computed(() => doc.value?.mode ?? 'parts');
   const draft = computed(() => doc.value?.drafts[mode.value]);
   const options = computed(() => draft.value?.options ?? freshDraft().options);
+  const preview2d = computed(() => draft.value?.preview2d ?? false);
+  const editorStale = computed(() => !!(editing.value && editPlan.value && editorSettings.value && editPlan.value.optionsKey !== optionsKey(mode.value, { ...editorSettings.value, prompt: editorPrompt.value })));
   const reference = computed(() => doc.value?.reference);
   const splitBlocked = computed(() => splitProblem(draft.value?.plan, reference.value?.id));
   const plan = computed(() => editing.value ? editPlan.value : stage.value === 'result' ? draft.value?.result?.plan ?? null : draft.value?.plan ?? null);
   const recoverable = computed(() => !!draft.value?.previousPlan);
   const staleReason = computed(() => {
     const saved = draft.value?.plan; if (!saved) return '';
-    if (saved.mask && saved.mask.referenceId !== reference.value?.id) return '参考图已更新为高清版，请点击“重新拆分”更新分区。原方案会保留，可恢复或下载。';
-    return saved.optionsKey !== optionsKey(mode.value, options.value) ? '拆分要求已修改，请重新拆分。' : '';
+    if (saved.mask && saved.mask.referenceId !== reference.value?.id) return '参考图已更新为高清版，请点击“开始拆分”更新分区。原方案会保留，可恢复或下载。';
+    return saved.optionsKey !== optionsKey(mode.value, options.value) ? '拆分要求已修改，请点击“开始拆分”更新方案。' : '';
   });
-  const stale = computed(() => !!staleReason.value);
+  const stale = computed(() => editing.value ? editorStale.value : !!staleReason.value);
   const confirmed = computed(() => !!draft.value?.result?.confirmed && !stale.value && !splitBlocked.value);
   const supported = computed(() => studio.project?.sourceSample === 'chicken');
   const colorAvailable = computed(() => supported.value && !!reference.value);
   const locked = computed(() => busy.value || studio.busy || studio.prepSaving);
   const resultEditing = computed(() => !!plan.value && !editing.value && !stale.value && !splitBlocked.value);
   const nextGroupId = computed(() => Math.max(-1, ...(plan.value?.groups.map(g => g.id) ?? [])) + 1);
+  const editorTarget = computed(() => editorNewPart.value !== null ? { id: nextGroupId.value, name: editorNewPart.value, color: markerColors[nextGroupId.value % markerColors.length]! } : plan.value?.groups.find(g => g.id === targetGroup.value));
   const brushColor = computed(() => newBrushPart.value ? markerColors[nextGroupId.value % markerColors.length]! : plan.value?.groups.find(g => g.id === brushGroup.value)?.color ?? '#83b8ff');
   const canUndo = computed(() => editing.value ? history.value.length > 0 : !stale.value && meshHistory.value.length > 0);
   const canRedo = computed(() => editing.value ? future.value.length > 0 : !stale.value && meshFuture.value.length > 0);
-  const pieces = computed(() => plan.value && !plan.value.mappingDirty && !stale.value && studio.content ? connectedPieces(studio.content.mesh, plan.value) : []);
+  const pieces = computed(() => !editing.value && plan.value && !plan.value.mappingDirty && !stale.value && studio.content ? connectedPieces(studio.content.mesh, plan.value) : []);
+  const displayPieces = computed(() => displayPlan.value && studio.content ? connectedPieces(studio.content.mesh, displayPlan.value) : []);
+  const displayPending = computed(() => !!displayPlan.value && (!draft.value?.plan || !!staleReason.value));
   const openPieces = computed(() => pieces.value.filter(p => p.boundary || p.nonManifold).length);
   const groupCounts = computed(() => { const counts = new Map<number, number>(); for (const label of plan.value?.labels ?? []) counts.set(label, (counts.get(label) ?? 0) + 1); return counts; });
   const pixelCounts = computed(() => { const counts = new Map<number, number>(); for (const label of plan.value?.mask?.labels ?? []) if (label >= 0) counts.set(label, (counts.get(label) ?? 0) + 1); return counts; });
   const selected = computed(() => editing.value ? Uint32Array.from(selectedFaces.value) : Uint32Array.from((plan.value?.labels ?? []).flatMap((id, f) => selectedGroups.value.includes(id) ? [f] : [])));
 
   watch(() => studio.content?.id, () => {
+    displayPlan.value = null;
     colors = undefined; inputKey = studio.content ? geometryKey(studio.content.mesh) : '';
-    editing.value = false; editPlan.value = null; selectedGroups.value = []; selectedFaces.value = []; selectedPixels.value = []; hidden.value = []; solo.value = null; explosion.value = 0;
+    editing.value = false; editPlan.value = null; baseline2d.value = null; previewing2d.value = false; editorPrompt.value = ''; editorSettings.value = null; confirmPreviewRefresh.value = false; selectedGroups.value = []; selectedFaces.value = []; selectedPixels.value = []; hidden.value = []; solo.value = null; explosion.value = 0;
     resetMeshTools();
-    message.value = ''; error.value = ''; confirmRegenerate.value = false; confirmPrompt.value = false;
+    message.value = ''; error.value = ''; confirmPrompt.value = false;
     const saved = studio.segmentation;
     if (saved && saved.version === 1 && saved.geometryKey === inputKey && saved.drafts?.parts && saved.drafts?.colors) {
       try { for (const d of Object.values(saved.drafts)) { if (d.plan) validatePlan(d.plan, studio.content!.mesh); if (d.result) validatePlan(d.result.plan, studio.content!.mesh); } }
@@ -78,7 +89,19 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
       studio.segmentation = next;
     }
     restoreStage();
+    sourceView.value = !draft.value?.plan;
+    updateDisplayPlan(draft.value?.plan);
   }, { immediate: true });
+
+  // Keep the last generated mesh visible while settings are being changed,
+  // including a mode with no draft yet. It is only a display snapshot: stale
+  // results remain unavailable for editing, confirmation and export.
+  watch(() => draft.value?.plan, updateDisplayPlan, { flush: 'sync' });
+
+  function updateDisplayPlan(next: SegmentPlan | null | undefined) {
+    if (next?.mappingDirty) displayPlan.value = null;
+    else if (next && studio.content && next.key === inputKey && next.labels.length === studio.content.mesh.positions.length / 9) displayPlan.value = next;
+  }
 
   function resetMeshTools() { meshHistory.value = []; meshFuture.value = []; meshTool.value = 'select'; newBrushPart.value = false; brushGroup.value = 0; }
   function change(action: (next: SegmentDocument) => void) {
@@ -86,7 +109,16 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
     const next = copy(doc.value); action(next); studio.segmentation = next;
     studio.preparation.engaged = true; studio.saved = false;
   }
-  async function persist() { const ok = await studio.savePreparation(); error.value = ok ? '' : studio.prepSaveError || studio.failure || '保存失败，请重试。'; return ok; }
+  async function persist() {
+    const modelId = studio.content?.id;
+    // A queued workspace autosave can start while segmentation awaits texture
+    // decoding. Finish that snapshot before explicitly saving the latest result.
+    if (studio.busy || studio.prepSaving) await new Promise<void>(resolve => {
+      const stop = watch(() => studio.busy || studio.prepSaving, pending => { if (!pending) { stop(); resolve(); } });
+    });
+    if (studio.content?.id !== modelId) { error.value = '模型已切换，请在对应模型中保存。'; return false; }
+    const ok = await studio.savePreparation(); error.value = ok ? '' : studio.prepSaveError || studio.failure || '保存失败，请重试。'; return ok;
+  }
   async function task(action: () => Promise<void>, label = '正在处理…') {
     if (locked.value) return; busy.value = true; processingLabel.value = label; error.value = ''; message.value = '';
     try { await action(); } catch (e) { error.value = e instanceof Error ? e.message : String(e); } finally { busy.value = false; processingLabel.value = ''; }
@@ -98,12 +130,12 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
   }
   function restoreStage() {
     stage.value = confirmed.value ? 'result' : draft.value?.plan ? 'plan' : 'input';
-    sourceView.value = false; brushGroup.value = plan.value?.groups[0]?.id ?? 0;
+    brushGroup.value = plan.value?.groups[0]?.id ?? 0;
   }
   function setMode(next: SegmentMode) {
     if (locked.value || editing.value || (next === 'colors' && !colorAvailable.value)) return;
     resetMeshTools(); change(d => { d.mode = next; }); selectedGroups.value = []; hidden.value = []; solo.value = null; explosion.value = 0;
-    confirmRegenerate.value = false; confirmPrompt.value = false; error.value = ''; message.value = '';
+    confirmPrompt.value = false; error.value = ''; message.value = '';
     restoreStage();
   }
   function setOption<K extends keyof SegmentOptions>(key: K, value: SegmentOptions[K]) {
@@ -111,35 +143,53 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
     change(d => { const current = d.drafts[mode.value]; current.options[key] = value; if (current.result) current.result.confirmed = false; });
     stage.value = draft.value?.plan ? 'plan' : 'input'; meshTool.value = 'select'; message.value = ''; error.value = '';
   }
+  function setPreview2d(value: boolean) {
+    if (locked.value || editing.value || draft.value?.preview2d === value) return;
+    change(d => { d.drafts[mode.value].preview2d = value; });
+  }
   function recognize(confirmed = false) {
     if (locked.value || editing.value || !reference.value) return;
     if (options.value.prompt && options.value.prompt !== suggestedPrompt(mode.value) && !confirmed) { confirmPrompt.value = true; return; }
     confirmPrompt.value = false; setOption('prompt', suggestedPrompt(mode.value));
     message.value = '已填入小鸡参考图的默认拆分要求。';
   }
-  async function split(replaceEdited = false) {
+  async function create2dProposal(settings: SegmentOptions): Promise<SegmentPlan> {
+    if (!studio.content || !reference.value) throw new Error('请先选择有生成参考图的小鸡示例。');
+    const input = await readReference(reference.value);
+    const mask = makeReferenceMask(input.data, input.width, input.height, mode.value, settings, reference.value.id);
+    const groups = referenceGroups(mode.value, mask.labels, presetTarget(mode.value, settings.prompt));
+    validateMask(mask, groups, reference.value.id);
+    // No face labels or mesh extraction until explicit confirmation in the dialog.
+    return { key: inputKey, optionsKey: optionsKey(mode.value, settings), labels: [], groups, mask, edited: false, method: 'reference-demo-v1' };
+  }
+  function commitSplit(next: SegmentPlan, settings: SegmentOptions) {
+    change(d => { const value = d.drafts[mode.value]; if (value.plan) value.previousPlan = copy(value.plan); value.options = settings; value.plan = next; value.result = { plan: copy(next), createdAt: new Date().toISOString(), confirmed: false }; });
+    stage.value = 'plan'; sourceView.value = false; selectedGroups.value = []; hidden.value = []; solo.value = null; explosion.value = 0;
+    resetMeshTools(); brushGroup.value = next.groups[0]?.id ?? 0;
+  }
+  async function split() {
     if (!supported.value || editing.value || locked.value) return;
-    if (draft.value?.plan?.edited && !replaceEdited) { confirmRegenerate.value = true; return; }
-    confirmRegenerate.value = false;
     await task(async () => {
       if (!studio.content || !reference.value) throw new Error('请先选择有生成参考图的小鸡示例。');
-      message.value = '正在拆分示例模型…';
+      const settings = { ...options.value, detail: 'standard' as const };
       await showProcessing();
+      if (preview2d.value) {
+        const next = await create2dProposal(settings);
+        openEditor(next, settings, true); baseline2d.value = next;
+        return;
+      }
       colors ??= await faceColors(studio.content.mesh);
       const input = await readReference(reference.value);
-      const settings = { ...options.value, detail: 'standard' as const };
       const next = suggestReferenceGeometry(studio.content.mesh, mode.value, settings, colors);
       next.mask = makeReferenceMask(input.data, input.width, input.height, mode.value, settings, reference.value.id);
       next.groups = referenceGroups(mode.value, [...next.labels, ...next.mask.labels], presetTarget(mode.value, settings.prompt));
       validateMask(next.mask, next.groups, reference.value.id);
       const count = connectedPieces(studio.content.mesh, next).length;
       if (!count) throw new Error('没有生成有效部件，请调整要求后重试。');
-      if (draft.value?.plan) history.value = [copy(draft.value.plan)]; else history.value = [];
-      change(d => { const value = d.drafts[mode.value]; if (value.plan) value.previousPlan = copy(value.plan); value.options = settings; value.plan = next; value.result = { plan: copy(next), createdAt: new Date().toISOString(), confirmed: false }; });
-      stage.value = 'plan'; sourceView.value = false; selectedGroups.value = []; hidden.value = []; solo.value = null; explosion.value = 0;
-      resetMeshTools(); brushGroup.value = next.groups[0]?.id ?? 0;
-      message.value = `已生成 ${count} 个示例表面网格。已进入编辑模式，可多选合并或笔刷精修，再点击 Save 保存确认。`; await persist();
-    }, '拆分中…');
+      commitSplit(next, settings);
+      if (await persist()) message.value = `已生成 ${count} 个示例表面网格。已进入编辑模式，可多选合并或笔刷精修，再点击 Save 保存确认。`;
+      else message.value = '拆分结果已保留在当前草稿中，保存失败，请重试保存。';
+    }, preview2d.value ? '生成 2D 分区方案中…' : '拆分中…');
   }
   function restorePrevious() {
     const previous = draft.value?.previousPlan;
@@ -154,7 +204,12 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
   }
   function selectGroup(id: number, additive = false) {
     if (locked.value || !plan.value?.groups.some(g => g.id === id)) return;
-    if (editing.value) targetGroup.value = id;
+    if (editing.value && plan.value.mask) {
+      const pixels = plan.value.mask.labels.flatMap((label, i) => label === id ? [i] : []);
+      const selected = new Set(selectedPixels.value);
+      pickPixels(pixels, additive ? pixels.every(i => selected.has(i)) ? 'subtract' : 'add' : 'replace');
+      return;
+    }
     selectedGroups.value = additive ? selectedGroups.value.includes(id) ? selectedGroups.value.filter(v => v !== id) : [...selectedGroups.value, id] : [id];
     if (resultEditing.value) { brushGroup.value = id; newBrushPart.value = false; }
   }
@@ -165,10 +220,8 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
     const set = new Set(action === 'replace' ? [] : selectedPixels.value);
     for (const i of valid) { if (action === 'subtract') set.delete(i); else set.add(i); }
     selectedPixels.value = [...set];
-    // Highlight the owners of the final selection, including additive and
-    // subtractive edits. Choosing a destination in the dropdown stays separate.
+    // Selection never changes the destination color for assignment or painting.
     selectedGroups.value = [...new Set(selectedPixels.value.map(i => plan.value!.mask!.labels[i]!))];
-    if (selectedGroups.value.length && !selectedGroups.value.includes(targetGroup.value)) targetGroup.value = selectedGroups.value[0]!;
   }
   function pickRegion(seed: number, action = selectAction.value) {
     if (!plan.value?.mask || locked.value) return;
@@ -188,15 +241,34 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
   }
   function beginEdit() {
     if (editing.value || !plan.value?.mask || stale.value || locked.value) return;
-    if (plan.value.maskOutdated) { error.value = '3D 笔刷已改变部件归属，参考图分区尚未同步。请撤销笔刷修改或重新拆分后再编辑 2D。'; return; }
-    meshTool.value = 'select';
-    editStage = stage.value;
-    editPlan.value = copy(plan.value); editing.value = true; stage.value = 'plan'; sourceView.value = false; overlay.value = 'labels';
-    error.value = ''; newName.value = ''; selectTool.value = 'region'; selectAction.value = 'replace';
-    selectedGroups.value = []; selectedFaces.value = []; selectedPixels.value = []; history.value = []; future.value = []; hidden.value = []; solo.value = null; targetGroup.value = plan.value.groups[0]!.id;
+    if (plan.value.maskOutdated) { error.value = '3D 笔刷已改变部件归属，参考图分区尚未同步。请撤销笔刷修改，或点击“开始拆分”更新方案后再编辑 2D。'; return; }
+    openEditor(plan.value, options.value, false);
   }
-  function closeEditor() { editing.value = false; editPlan.value = null; selectedGroups.value = []; selectedFaces.value = []; selectedPixels.value = []; history.value = []; future.value = []; hidden.value = []; solo.value = null; stage.value = editStage; }
+  function openEditor(next: SegmentPlan, settings: SegmentOptions, before3d: boolean) {
+    meshTool.value = 'select';
+    if (!editing.value) { editStage = stage.value; initialEditorPlan = next; initialEditorPrompt = settings.prompt; }
+    previewing2d.value = before3d; editorSettings.value = { ...settings }; editorPrompt.value = settings.prompt;
+    editPlan.value = copy(next); editing.value = true; stage.value = 'plan'; overlay.value = 'labels'; confirmPreviewRefresh.value = false;
+    error.value = ''; newName.value = ''; editorNewPart.value = null; selectTool.value = 'region'; selectAction.value = 'replace';
+    selectedGroups.value = []; selectedFaces.value = []; selectedPixels.value = []; history.value = []; future.value = []; hidden.value = []; solo.value = null; targetGroup.value = next.groups[0]!.id;
+  }
+  function closeEditor() { editing.value = false; editPlan.value = null; baseline2d.value = null; previewing2d.value = false; editorPrompt.value = ''; editorSettings.value = null; initialEditorPlan = null; editorNewPart.value = null; confirmPreviewRefresh.value = false; selectedGroups.value = []; selectedFaces.value = []; selectedPixels.value = []; history.value = []; future.value = []; hidden.value = []; solo.value = null; stage.value = editStage; }
+  function hasEditorChanges() { return editing.value && (editorPrompt.value !== initialEditorPrompt || JSON.stringify(editPlan.value) !== JSON.stringify(initialEditorPlan)); }
   function cancelEdit() { if (!editing.value || locked.value) return; closeEditor(); error.value = ''; }
+  function setEditorPrompt(value: string) {
+    if (!editing.value || locked.value) return;
+    editorPrompt.value = value.slice(0, 600); confirmPreviewRefresh.value = false; error.value = '';
+  }
+  async function refreshPreview(replaceEdited = false) {
+    if (!editing.value || !editorSettings.value || locked.value) return;
+    if (editPlan.value?.edited && !replaceEdited) { confirmPreviewRefresh.value = true; return; }
+    await task(async () => {
+      const settings = { ...editorSettings.value!, prompt: editorPrompt.value, detail: 'standard' as const };
+      await showProcessing();
+      const next = await create2dProposal(settings);
+      openEditor(next, settings, true); baseline2d.value = next;
+    }, '更新 2D 分区方案中…');
+  }
   function updatePlan(next: SegmentPlan) {
     change(d => {
       const value = d.drafts[mode.value]; value.plan = copy(next);
@@ -206,9 +278,39 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
   }
   async function applyEdit() {
     if (!editing.value || !editPlan.value || locked.value) return;
+    if (editorStale.value) { error.value = '拆分要求已修改，请先更新分区方案再确认。'; return; }
     const next = copy(editPlan.value);
     await task(async () => {
       validateMask(next.mask!, next.groups, reference.value?.id);
+      if (previewing2d.value) {
+        const preview = baseline2d.value;
+        if (!preview?.mask) throw new Error('2D 预览已失效，请点击“开始拆分”更新方案。');
+        // Validate mapping before closing: unsupported local pixel edits stay
+        // recoverable in the dialog, without generating a mismatched 3D result.
+        previewGroupMapping(preview.mask, next);
+        const settings = { ...editorSettings.value! }, previousHistory = history.value, previousFuture = future.value;
+        const originalEditorPlan = initialEditorPlan, originalEditorPrompt = initialEditorPrompt;
+        const modelId = studio.content!.id;
+        closeEditor();
+        let generated: SegmentPlan, count: number;
+        try {
+          await showProcessing();
+          colors ??= await faceColors(studio.content!.mesh);
+          if (studio.content?.id !== modelId) throw new Error('模型已切换，请重新生成方案。');
+          const geometry = suggestReferenceGeometry(studio.content.mesh, mode.value, settings, colors);
+          generated = applyPreviewToGeometry(geometry, preview.mask, next);
+          validatePlan(generated, studio.content.mesh);
+          count = connectedPieces(studio.content.mesh, generated).length;
+          if (!count) throw new Error('没有生成有效部件，请调整 2D 方案后重试。');
+        } catch (e) {
+          if (studio.content?.id === modelId) { openEditor(next, settings, true); baseline2d.value = preview; history.value = previousHistory; future.value = previousFuture; initialEditorPlan = originalEditorPlan; initialEditorPrompt = originalEditorPrompt; }
+          throw e;
+        }
+        commitSplit(generated, settings);
+        if (await persist()) message.value = `已生成 ${count} 个 3D 示例表面网格，请检查并点击 Save 确认。`;
+        else message.value = '拆分结果已保留在当前草稿中，保存失败，请重试保存。';
+        return;
+      }
       validatePlan(next, studio.content!.mesh);
       const changed = JSON.stringify(draft.value?.plan) !== JSON.stringify(next);
       closeEditor();
@@ -222,14 +324,49 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
       message.value = next.mappingDirty ? '2D 修改已保存。局部边界需要算法映射到 3D，当前显示原始模型；可继续调整或下载方案。' : confirmed.value ? '拆分结果保持已确认。' : '拆分结果已更新，请检查并确认。';
     }, '拆分中…');
   }
-  function setEdit(next: SegmentPlan) { if (!editPlan.value) return; history.value = [...history.value.slice(-19), copy(editPlan.value)]; future.value = []; editPlan.value = next; }
+  function setEdit(next: SegmentPlan) { if (!editPlan.value) return; history.value = [...history.value.slice(-19), editPlan.value]; future.value = []; editPlan.value = next; error.value = ''; }
+  function chooseEditorTarget(id: number) {
+    if (locked.value || !editing.value || !plan.value?.groups.some(g => g.id === id)) return;
+    targetGroup.value = id; editorNewPart.value = null;
+  }
+  function prepareEditorPart(name: string) {
+    if (locked.value || !editing.value || !name.trim()) return;
+    editorNewPart.value = name.trim().slice(0, 60);
+  }
+  function syncEditorSelection() {
+    const mask = editPlan.value?.mask; if (!mask) return;
+    selectedPixels.value = selectedPixels.value.filter(i => mask.labels[i] !== undefined && mask.labels[i]! >= 0);
+    selectedGroups.value = [...new Set(selectedPixels.value.map(i => mask.labels[i]!))];
+    const ids = new Set(editPlan.value!.groups.map(g => g.id));
+    if (!ids.has(targetGroup.value)) targetGroup.value = editPlan.value!.groups[0]!.id;
+    hidden.value = hidden.value.filter(id => ids.has(id)); if (solo.value !== null && !ids.has(solo.value)) solo.value = null;
+  }
+  function editPixels(pixels: number[], clearSelection: boolean, name = editorNewPart.value) {
+    if (locked.value || !editPlan.value?.mask) return;
+    const current = editPlan.value, mask = current.mask!;
+    const valid = [...new Set(pixels)].filter(i => Number.isInteger(i) && i >= 0 && i < mask.labels.length && mask.labels[i]! >= 0);
+    if (!valid.length) return;
+    try {
+      if (name || valid.some(i => mask.labels[i] !== targetGroup.value)) {
+        const next = assignPixels(current, valid, targetGroup.value, name ?? undefined);
+        if (name) targetGroup.value = next.mask!.labels[valid[0]!]!;
+        setEdit(next); editorNewPart.value = null;
+      }
+      if (clearSelection) selectedPixels.value = [];
+      syncEditorSelection();
+    } catch (e) { error.value = e instanceof Error ? e.message : String(e); }
+  }
   function assign(create = false) {
     if (locked.value || !editPlan.value || !selectedPixels.value.length) return;
-    try { setEdit(assignPixels(editPlan.value, selectedPixels.value, targetGroup.value, create ? newName.value || '新部件' : undefined)); newName.value = ''; selectedPixels.value = []; selectedGroups.value = []; targetGroup.value = editPlan.value.groups[0]!.id; }
-    catch (e) { error.value = String(e); }
+    editPixels(selectedPixels.value, true, create ? newName.value || '新部件' : editorNewPart.value); newName.value = '';
   }
-  function undo() { if (!editing.value) { travelMeshHistory(false); return; } if (!editing.value || !history.value.length || locked.value) return; selectedPixels.value = []; selectedGroups.value = []; future.value = [...future.value, copy(editPlan.value!)]; editPlan.value = history.value[history.value.length - 1]!; targetGroup.value = editPlan.value.groups[0]!.id; history.value = history.value.slice(0, -1); }
-  function redo() { if (!editing.value) { travelMeshHistory(true); return; } if (!editing.value || !future.value.length || locked.value) return; selectedPixels.value = []; selectedGroups.value = []; history.value = [...history.value, copy(editPlan.value!)]; editPlan.value = future.value[future.value.length - 1]!; targetGroup.value = editPlan.value.groups[0]!.id; future.value = future.value.slice(0, -1); }
+  function paintPixels(pixels: number[]) {
+    if (!editing.value || !editPlan.value?.mask) return;
+    const selection = selectedPixels.value.length ? new Set(selectedPixels.value) : null, mask = editPlan.value.mask;
+    editPixels(pixels.filter(i => (!selection || selection.has(i)) && !hidden.value.includes(mask.labels[i]!) && (solo.value === null || mask.labels[i] === solo.value)), false);
+  }
+  function undo() { if (!editing.value) { travelMeshHistory(false); return; } if (!history.value.length || locked.value) return; future.value = [...future.value, editPlan.value!]; editPlan.value = history.value[history.value.length - 1]!; history.value = history.value.slice(0, -1); editorNewPart.value = null; syncEditorSelection(); error.value = ''; }
+  function redo() { if (!editing.value) { travelMeshHistory(true); return; } if (!future.value.length || locked.value) return; history.value = [...history.value, editPlan.value!]; editPlan.value = future.value[future.value.length - 1]!; future.value = future.value.slice(0, -1); editorNewPart.value = null; syncEditorSelection(); error.value = ''; }
   function rename(id: number, name: string) {
     if (!name.trim() || !plan.value || locked.value || stale.value) return;
     const next = copy(plan.value), group = next.groups.find(g => g.id === id); if (!group || group.name === name.trim()) return; group.name = name.trim().slice(0, 60); next.edited = true;
@@ -239,8 +376,8 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
   function merge() {
     if (selectedGroups.value.length < 2 || !plan.value || locked.value || stale.value) return;
     const target = selectedGroups.value[0]!, next = mergePlanGroups(plan.value, selectedGroups.value);
-    if (editing.value) setEdit(next);
-    else commitMeshEdit(next); selectedGroups.value = [target];
+    if (editing.value) { setEdit(next); syncEditorSelection(); }
+    else { commitMeshEdit(next); selectedGroups.value = [target]; }
   }
   // Plan snapshots are immutable after commit; share the large reference mask
   // in history rather than cloning it for every brush stroke.
@@ -261,7 +398,7 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
   }
   function setMeshTool(tool: 'select' | 'brush' | 'picker') {
     if (!resultEditing.value || locked.value) return;
-    meshTool.value = tool; if (tool !== 'select') sourceView.value = false; selectedGroups.value = [];
+    meshTool.value = tool; selectedGroups.value = [];
     if (!plan.value?.groups.some(g => g.id === brushGroup.value)) brushGroup.value = plan.value!.groups[0]!.id;
     if (tool === 'select') newBrushPart.value = false;
   }
@@ -296,11 +433,11 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
       if (splitBlocked.value) throw new Error(splitBlocked.value);
       validatePlan(draft.value!.plan!, studio.content!.mesh);
       validateMask(draft.value!.plan!.mask!, draft.value!.plan!.groups, reference.value?.id);
-      if (!pieces.value.length) throw new Error('没有可确认的拆分结果，请重新拆分。');
+      if (!pieces.value.length) throw new Error('没有可确认的拆分结果，请点击“开始拆分”生成方案。');
       const previous = draft.value?.result ? copy(draft.value.result) : null;
       change(d => { const value = d.drafts[mode.value]; value.result = { ...value.result, plan: copy(value.plan!), createdAt: value.result?.createdAt ?? new Date().toISOString(), confirmed: true }; });
       if (!await persist()) { change(d => { d.drafts[mode.value].result = previous; }); return; }
-      stage.value = 'result'; sourceView.value = false;
+      stage.value = 'result';
       message.value = `已确认 ${pieces.value.length} 个独立表面网格，可继续多色或打印准备。`;
     });
   }
@@ -346,13 +483,13 @@ export function useSegmentation(studio: ReturnType<typeof useWorkspace>) {
     if (plan.value.maskOutdated) { error.value = '3D 精修后参考图分区尚未同步，请使用 Export 导出当前 3D 结果。'; return; }
     // An archived low-resolution mask must retain its original source metadata.
     const source = plan.value.mask.referenceId === legacyChickenReference.id ? legacyChickenReference : reference.value;
-    if (source.id !== plan.value.mask.referenceId) { error.value = '方案与参考图版本不匹配，请重新拆分。'; return; }
+    if (source.id !== plan.value.mask.referenceId) { error.value = '方案与参考图版本不匹配，请点击“开始拆分”更新方案。'; return; }
     const payload = { version: 1, modelId: studio.project?.id, geometryKey: inputKey, reference: source, mode: mode.value, options: options.value, groups: plan.value.groups, mask: plan.value.mask, requires3dMapping: !!plan.value.mappingDirty };
     downloadFile(new Blob([JSON.stringify(payload)], { type: 'application/json' }), 'chicken-segment-plan.json');
     message.value = '已下载 2D 方案，包含参考图标识、分组与像素归属；不是可打印的模型文件。';
   }
-  const ui = { sourceView, overlay, explosion, selectedFaces, selectedPixels, hidden, solo, selectTool, selectAction, radius, targetGroup, newName, confirmRegenerate, confirmPrompt };
+  const ui = { sourceView, overlay, explosion, selectedFaces, selectedPixels, hidden, solo, selectTool, selectAction, radius, targetGroup, newName, confirmPrompt, confirmPreviewRefresh };
   function setUi<K extends keyof typeof ui>(key: K, value: (typeof ui)[K]['value']) { ui[key].value = value; }
-  return reactive({ setUi, busy, processingLabel, message, error, stage, confirmed, view, sourceView, overlay, explosion, selectedGroups, selectedFaces, selectedPixels, selected, hidden, solo, editing, resultEditing, brushGroup, brushColor, meshTool, meshRadius, newBrushPart, canUndo, canRedo, selectTool, selectAction, radius, targetGroup, newName, confirmRegenerate, confirmPrompt, recognize, reference, recoverable, restorePrevious, mode, options, plan, stale, staleReason, supported, colorAvailable, locked, pieces, openPieces, groupCounts, pixelCounts, history, future, setMode, setOption, split, selectGroup, pick, pickPixels, pickRegion, beginEdit, cancelEdit, applyEdit, assign, undo, redo, rename, merge, setMeshTool, setMeshRadius, chooseBrushGroup, pickBrushGroup, addBrushPart, paintFaces, toggleHidden, toggleSolo, confirmResult, splitBlocked, adjust, exportResult, exportPlan, forward, sample, selectModel, persist });
+  return reactive({ editorTarget, editorNewPart, chooseEditorTarget, prepareEditorPart, paintPixels, hasEditorChanges, setUi, busy, processingLabel, message, error, stage, confirmed, view, sourceView, displayPlan, displayPieces, displayPending, overlay, explosion, selectedGroups, selectedFaces, selectedPixels, selected, hidden, solo, editing, resultEditing, brushGroup, brushColor, meshTool, meshRadius, newBrushPart, canUndo, canRedo, selectTool, selectAction, radius, targetGroup, newName, confirmPrompt, recognize, reference, recoverable, restorePrevious, mode, options, plan, stale, staleReason, supported, colorAvailable, locked, pieces, openPieces, groupCounts, pixelCounts, history, future, preview2d, setPreview2d, previewing2d, editorPrompt, editorStale, setEditorPrompt, refreshPreview, confirmPreviewRefresh, setMode, setOption, split, selectGroup, pick, pickPixels, pickRegion, beginEdit, cancelEdit, applyEdit, assign, undo, redo, rename, merge, setMeshTool, setMeshRadius, chooseBrushGroup, pickBrushGroup, addBrushPart, paintFaces, toggleHidden, toggleSolo, confirmResult, splitBlocked, adjust, exportResult, exportPlan, forward, sample, selectModel, persist });
 }
 export type SegmentationController = ReturnType<typeof useSegmentation>;

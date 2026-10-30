@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { useLocale } from '~/@base/locale';
 import type { RefinementResult } from '~/@engine/multicolor';
+const { tr } = useLocale();
 const props = defineProps<{ data: RefinementResult; selection: Uint32Array; colors: string[]; busy: boolean }>();
 const emit = defineEmits<{ select: [face: number | null, additive: boolean] }>();
 const { t } = useLocale();
@@ -135,10 +136,10 @@ onBeforeUnmount(() => { resize?.disconnect(); cancelAnimationFrame(frame); });
 </script>
 <template>
   <div class="uv-atlas" :class="{ expanded }" @keydown.esc.stop="expanded = false">
-    <div class="uv-atlas-heading"><strong>{{ t('UV islands', 'UV 展开图') }}</strong><button type="button" @click="expanded = !expanded">{{ expanded ? t('Close', '收起') : t('Expand', '放大') }}</button></div>
-    <select v-if="atlases.length > 1" v-model.number="atlas" :aria-label="t('UV atlas', 'UV 图集')"><option v-for="(id, index) in atlases" :key="id" :value="id">{{ t('Atlas', '图集') }} {{ index + 1 }}</option></select>
+    <div class="uv-atlas-heading"><strong>{{ t('UV islands', 'UV 展开图') }}</strong><button type="button" @click="expanded = !expanded">{{ tr(expanded ? t('Close', '收起') : t('Expand', '放大')) }}</button></div>
+    <select v-if="atlases.length > 1" v-model.number="atlas" :aria-label="t('UV atlas', 'UV 图集')"><option v-for="(id, index) in atlases" :key="id" :value="id">{{ t('Atlas', '图集') }} {{ tr(index + 1) }}</option></select>
     <canvas ref="canvas" tabindex="0" :aria-label="t('Select UV islands; drag to pan, scroll to zoom', '点击选择 UV 岛；拖动平移，滚轮缩放')" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp" @wheel.prevent="wheel" @contextmenu.prevent />
-    <div class="uv-atlas-footer"><span>{{ Math.round(zoom * 100) }}%</span><button type="button" @click="fit">{{ t('Fit', '适配') }}</button></div>
+    <div class="uv-atlas-footer"><span>{{ tr(Math.round(zoom * 100)) }}%</span><button type="button" @click="fit">{{ t('Fit', '适配') }}</button></div>
     <p class="print-help">{{ t('Shift-click to multi-select. Click stacked islands again to cycle, or select on the model.', 'Shift 多选；重叠岛可重复点击切换，也可直接在模型上选。') }}</p>
   </div>
 </template>

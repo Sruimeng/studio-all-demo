@@ -166,9 +166,12 @@ export interface PrintProgress extends RequestIdentity { p: number; text: string
 
 export interface PrintCommands {
   init: [PrintMeshInput, InitResult];
+  appendSlot: [{ expectedCount: number }, { slotCount: number }];
+  sampleSource: [{ face: number; barycentric: [number, number, number] }, { hex: string }];
   prepareRefinement: [{ scheme: 'high' | 'low' }, RefinementResult];
   selectRefinement: [{ face: number; scope: SelectionScope; materialGroups: number[] }, { faces: Uint32Array }];
   paintRefinement: [{ faces: Uint32Array; label: number }, EditResult];
+  fillRefinement: [{ face: number; label: number; materialGroups: number[] }, EditResult];
   brushRefinement: [{ hits: Array<{ face: number; point: [number, number, number]; radius: number }>; label: number }, EditResult];
   palette: [PaletteOptions, PaletteResult];
   label: [LabelOptions, LabelResult];
