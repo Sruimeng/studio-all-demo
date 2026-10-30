@@ -12,7 +12,7 @@ export interface SegmentPlan {
   method?: 'reference-demo-v1';
 }
 export interface SegmentResult { plan: SegmentPlan; createdAt: string; confirmed?: boolean; projectId?: string }
-export interface SegmentDraft { options: SegmentOptions; plan: SegmentPlan | null; result: SegmentResult | null; previousPlan?: SegmentPlan }
+export interface SegmentDraft { options: SegmentOptions; plan: SegmentPlan | null; result: SegmentResult | null; previousPlan?: SegmentPlan; preview2d?: boolean }
 export interface SegmentDocument {
   version: 1; geometryKey: string; mode: SegmentMode; drafts: Record<SegmentMode, SegmentDraft>;
   reference?: SegmentReference;

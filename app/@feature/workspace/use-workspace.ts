@@ -11,15 +11,24 @@ import { MulticolorClient, type RefinementResult, type SelectionScope, type Init
 import type { PrintDisplay, ViewerContent, ViewerHit, ViewerSettings } from '~/@engine/viewer';
 import type { SegmentDocument } from '../segmentation/types';
 import type { PrintProject, RegionAssignment } from './types';
-import { colorResult, inspectMesh, monochromeSTL, newPreparation, restorePreparation, slicers, type Slicer, type PrepTask } from './print-preparation';
+import { filamentBrand, filamentType } from '../materials/filaments';
+import { createFillPreview } from './fill-preview';
+import { colorResult, inspectMesh, monochromeSTL, newPreparation, restorePreparation, slicers, type Slicer, type PrepTask, type PreparationState } from './print-preparation';
+
+const demoSamples = {
+  role: { url: '/samples/role-model.glb', name: '角色模型（去光）.glb', source: 'role' },
+  textured: { url: '/samples/cartoon-chicken-textured.glb', name: 'Cartoon chicken.glb', source: 'chicken' },
+  white: { url: '/samples/stylized-turkey-white.glb', name: 'Stylized turkey · white.glb', source: 'turkey' },
+} as const;
+const sampleWorkspace = (source: PrintProject['sourceSample']) => source === 'role' ? 'print' : source === 'chicken' || source === 'turkey' ? 'segment' : null;
 
 const matchingCandidates = supplierMaterials.flatMap(material => {
   const hex = material.supplier?.catalogHex;
   return hex && /^#[\da-f]{6}$/i.test(hex) && !materialProblem(material) ? [{ id: material.id, hex }] : [];
 });
-const paletteOptions = (N: number, ownedIds: string[] = [], preferOwned = false): PaletteOptions => ({
+const paletteOptions = (N: number, ownedIds: string[] = [], preferOwned = false, candidates = matchingCandidates): PaletteOptions => ({
   mode: 'owned', N, protect: true,
-  cands: matchingCandidates.map(candidate => ({ ...candidate, penalty: preferOwned && ownedIds.length && !ownedIds.includes(candidate.id) ? 6 : 0 })),
+  cands: candidates.map(candidate => ({ ...candidate, penalty: preferOwned && ownedIds.length && !ownedIds.includes(candidate.id) ? 6 : 0 })),
 });
 
 export const useWorkspace = defineStore('workspace', () => {
@@ -41,6 +50,16 @@ export const useWorkspace = defineStore('workspace', () => {
   const undoCount = ref(0); const saved = ref(true); const modelInfo = shallowRef<InitResult | null>(null);
   const refinement = shallowRef<RefinementResult | null>(null);
   const selection = shallowRef<Uint32Array>(new Uint32Array());
+  const fillPreview = shallowRef<Uint32Array>(new Uint32Array());
+  const materialGroups = computed(() => regions.value.map(region => regions.value.findIndex(other => other.material.id === region.material.id)));
+  const fillHover = createFillPreview(async face => {
+    if (!client || !refinement.value) return new Uint32Array();
+    return (await client.request('selectRefinement', { face, scope: 'color', materialGroups: materialGroups.value })).faces;
+  }, faces => { fillPreview.value = faces; });
+  function previewFill(face: number | null) {
+    fillHover.hover(!busy.value && settings.value.tool === 'fill' && settings.value.workflow !== 'validation' && settings.value.mode !== 'original' && refinement.value ? face : null);
+  }
+  watch(() => [refinement.value, materialGroups.value, settings.value.tool, settings.value.mode, settings.value.workflow, busy.value, content.value], () => fillHover.clear(), { flush: 'sync' });
   const selectionScope = ref<SelectionScope>('island');
   const selectionMaterial = computed(() => {
     if (!selection.value.length || !refinement.value) return null;
@@ -56,7 +75,7 @@ export const useWorkspace = defineStore('workspace', () => {
   async function prepareRefinement() {
     await operation(async () => {
       if (!client || refinement.value) return;
-      status.value = t('Preparing real UV islands…', '正在解析真实 UV 岛…');
+      status.value = '正在准备精修工具…';
       showRefinement(await client.request('prepareRefinement', { scheme: scheme.value }));
     });
   }
@@ -97,6 +116,29 @@ export const useWorkspace = defineStore('workspace', () => {
     return b ? { width: (b.maxX - b.minX) * scale.value, depth: (b.maxZ - b.minZ) * scale.value, height: settings.value.height } : { width: 0, depth: 0, height: 0 };
   });
   const currentColorResult = computed(() => colorResult(display.value, regions.value));
+  const planFilaments = computed(() => currentColorResult.value.used.map(material => ({
+    material,
+    indices: regions.value.flatMap((region, index) => region.material.id === material.id ? [index] : []),
+  })));
+  const highlightedFilamentId = ref<string | null>(null);
+  const planHighlight = computed(() => {
+    const faces: number[] = [];
+    if (highlightedFilamentId.value && display.value) {
+      const slots = new Set(regions.value.flatMap((region, index) => region.material.id === highlightedFilamentId.value ? [index] : []));
+      display.value.labels.forEach((label, face) => { if (slots.has(label)) faces.push(face); });
+    }
+    return Uint32Array.from(faces);
+  });
+  function clearPlanHighlight() { highlightedFilamentId.value = null; }
+  function selectPlanFilament(index: number) {
+    const material = regions.value[index]?.material;
+    if (busy.value || !material || !planFilaments.value.some(item => item.material.id === material.id)) return;
+    const deselect = highlightedFilamentId.value === material.id;
+    selectedRegion.value = index;
+    highlightedFilamentId.value = deselect ? null : material.id;
+    clearSelection(); fillHover.clear();
+  }
+  watch(() => [content.value, settings.value.workflow, preparation.value.activeModule], clearPlanHighlight, { flush: 'sync' });
   const printColorState = computed(() => {
     const confirmed = preparation.value.confirmedColor;
     if (confirmed) return !currentColorResult.value.problem && confirmed.fingerprint === currentColorResult.value.fingerprint && confirmed.geometryKey === printMeshCheck.value.geometryKey ? 'ready' : 'review';
@@ -146,14 +188,14 @@ export const useWorkspace = defineStore('workspace', () => {
   const durations = ref({ load: 0, analyze: 0, segment: 0 });
   let client: MulticolorClient | null = null; let low: LowResult | null = null; let revision = 0; let generation = 0;
   let assignmentView: Pick<ViewerSettings, 'mode' | 'layers' | 'preview'> | null = null;
-  function regionFromPaletteSlot(slot: PaletteSlot, index: number): RegionAssignment {
-    const candidate = matchingCandidates.find(item => item.id === slot.filamentId);
+  function regionFromPaletteSlot(slot: PaletteSlot, index: number, candidates = matchingCandidates): RegionAssignment {
+    const candidate = candidates.find(item => item.id === slot.filamentId);
     const matched = allMaterials.value.findLast(material => material.id === candidate?.id);
     if (!candidate || !matched) throw new Error(t('The palette returned an unknown SKU.', '分色引擎返回了未知 SKU。'));
     return {
       index,
       sourceHex: slot.sourceHex ?? slot.hex,
-      match: { basis: 'catalog-hex-d65-deltae00', materialId: candidate.id, hex: candidate.hex, meanDeltaE: slot.de, areaShare: slot.w },
+      ...(matchingCandidates.some(item => item.id === candidate.id) ? { match: { basis: 'catalog-hex-d65-deltae00' as const, materialId: candidate.id, hex: candidate.hex, meanDeltaE: slot.de, areaShare: slot.w } } : {}),
       material: cloneMaterial(matched),
     };
   }
@@ -162,6 +204,7 @@ export const useWorkspace = defineStore('workspace', () => {
     delete region.match;
   }
   const selected = computed(() => settings.value.workflow === 'validation' ? validationMaterial.value : regions.value[selectedRegion.value]?.material ?? materials.value[0] ?? null);
+  watch(() => selected.value?.id, id => { if (id !== highlightedFilamentId.value) clearPlanHighlight(); }, { flush: 'sync' });
   const surfaces = computed(() => regions.value.map(region => materialSurface(draft.value && region.index === selectedRegion.value ? draft.value : region.material)));
   const validationSurface = computed(() => selected.value ? materialSurface(draft.value ?? selected.value) : null);
   const scale = computed(() => settings.value.height / ((modelInfo.value?.bbox.maxY ?? 1) - (modelInfo.value?.bbox.minY ?? 0) || 1));
@@ -184,21 +227,24 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   async function segmentInternal(options: { ownedIds?: string[]; preferOwned?: boolean } = {}) {
     if (!client) return;
+    clearPlanHighlight();
     const started = performance.now(); advance();
-    const palette = await client.request('palette', paletteOptions(colorCount.value, options.ownedIds, options.preferOwned));
-    regions.value = palette.slots.map((slot, index) => regionFromPaletteSlot(slot, index));
+    const ownedLocal = options.preferOwned ? materials.value.filter(material => options.ownedIds?.includes(material.id) && !materialProblem(material) && !matchingCandidates.some(candidate => candidate.id === material.id)).map(material => ({ id: material.id, hex: materialHex(material) })) : [];
+    const candidates = [...matchingCandidates, ...ownedLocal];
+    const palette = await client.request('palette', paletteOptions(colorCount.value, options.ownedIds, options.preferOwned, candidates));
+    regions.value = palette.slots.map((slot, index) => regionFromPaletteSlot(slot, index, candidates));
     selectedRegion.value = Math.min(selectedRegion.value, regions.value.length - 1);
     refinement.value = null; clearSelection();
     await client.request('reset', {}); await rebuild(); undoCount.value = 0;
     durations.value.segment = performance.now() - started;
-    status.value = t('Color regions are ready', '分色完成');
+    status.value = '分色完成';
   }
-  async function loadFiles(files: File[], restore?: PrintProject, sourceSample?: 'chicken' | 'turkey') {
+  async function loadFiles(files: File[], restore?: PrintProject, sourceSample?: PrintProject['sourceSample']) {
     await operation(async () => {
       const nextPreparation = restorePreparation(restore?.preparation);
       if (preparation.value.engaged && project.value && (prepDirty.value || !saved.value || prepSaveError.value)) await persistProject();
       const own = ++generation;
-      status.value = t('Reading model…', '正在读取模型…'); const started = performance.now();
+      status.value = '正在读取模型…'; const started = performance.now();
       const loaded = await loadLocalModel(files);
       let candidate: MulticolorClient | null = null;
       let adopted = false;
@@ -258,18 +304,26 @@ export const useWorkspace = defineStore('workspace', () => {
         prepDirty.value = false; prepSaveError.value = ''; prepNotice.value = '';
         revision = 0; undoCount.value = 0;
         durations.value.segment = performance.now() - startedSegment;
-        saved.value = Boolean(restore); status.value = t('Ready to create', '可以开始编辑');
+        saved.value = Boolean(restore); status.value = '可以开始编辑';
       } finally {
         restoringPreparation = false;
         if (!adopted) { candidate?.dispose(); disposeModelResources(collectModelResources(loaded.root)); }
       }
     });
   }
-  async function demo(variant: 'textured' | 'white' = 'textured') {
-    const white = variant === 'white';
-    const response = await fetch(white ? '/samples/stylized-turkey-white.glb' : '/samples/cartoon-chicken-textured.glb');
-    if (!response.ok) { report(new Error('Demo asset is missing')); return; }
-    await loadFiles([new File([await response.blob()], white ? 'Stylized turkey · white.glb' : 'Cartoon chicken.glb', { type: 'model/gltf-binary' })], undefined, white ? 'turkey' : 'chicken');
+  async function loadSample(variant: keyof typeof demoSamples) {
+    const sample = demoSamples[variant];
+    try {
+      const response = await fetch(sample.url);
+      if (!response.ok) throw new Error('Demo asset is missing');
+      await loadFiles([new File([await response.blob()], sample.name, { type: 'model/gltf-binary' })], undefined, sample.source);
+    } catch (error) { report(error); }
+  }
+  async function demo(variant?: keyof typeof demoSamples) {
+    if (busy.value) return;
+    const target = preparation.value.activeModule;
+    await loadSample(variant ?? (target === 'segment' ? 'textured' : 'role'));
+    if (!failure.value && target !== 'multi-color') await navigatePreparation(target);
   }
   async function validationSample() {
     const response = await fetch('/samples/material-check.glb');
@@ -310,10 +364,17 @@ export const useWorkspace = defineStore('workspace', () => {
     });
   }
   async function fill(hit: ViewerHit) {
+    if (settings.value.workflow === 'validation' || !regions.value[selectedRegion.value]) return;
+    if (refinement.value) {
+      const label = refinement.value.labels[hit.face];
+      if (label === undefined || materialGroups.value[label] === materialGroups.value[selectedRegion.value]) return;
+    }
+    const target = selectedRegion.value;
     await operation(async () => {
       if (!client) return; advance();
-      if (scheme.value === 'high') await editResult(await client.request('fillHigh', { seed: hit.face, label: selectedRegion.value, tol: 0 }));
-      else if (low) { const uv = uvHit(hit, low); if (uv && uv.img >= 0) await editResult(await client.request('fillLow', { ...uv, label: selectedRegion.value, tol: 0 })); }
+      if (refinement.value) await editResult(await client.request('fillRefinement', { face: hit.face, label: target, materialGroups: materialGroups.value }));
+      else if (scheme.value === 'high') await editResult(await client.request('fillHigh', { seed: hit.face, label: target, tol: 0 }));
+      else if (low) { const uv = uvHit(hit, low); if (uv && uv.img >= 0) await editResult(await client.request('fillLow', { ...uv, label: target, tol: 0 })); }
     });
   }
   const undo = () => operation(async () => { if (client) { advance(); await editResult(await client.request('undo', {})); } });
@@ -333,7 +394,7 @@ export const useWorkspace = defineStore('workspace', () => {
     for (const region of regions.value) {
       if (region.material.id === materialId) { assignMaterial(region, material); changed = true; }
     }
-    if (changed) { draft.value = null; saved.value = false; status.value = t('Filament replaced', '耗材已替换'); }
+    if (changed) { draft.value = null; saved.value = false; status.value = '耗材已替换'; }
   }
   async function saveMaterial(material: MaterialRecord) {
     let success = false;
@@ -349,9 +410,43 @@ export const useWorkspace = defineStore('workspace', () => {
       let found = false; for (const region of regions.value) if (region.material.id === material.id) { assignMaterial(region, nextMaterial); found = true; }
       if (settings.value.workflow === 'validation') validationMaterial.value = cloneMaterial(nextMaterial);
       else if (!found && regions.value[selectedRegion.value]) assignMaterial(regions.value[selectedRegion.value]!, nextMaterial);
-      saved.value = false; success = true; status.value = t('Material saved locally', '材质已保存到本地');
+      saved.value = false; success = true; status.value = '材质已保存到本地';
     });
     return success;
+  }
+  async function addFilament(material: MaterialRecord): Promise<boolean> {
+    if (busy.value) return false;
+    const message = validateMaterial(material, allMaterials.value);
+    if (message || materialProblem(material)) { report(new Error(message || materialProblem(material)!)); return false; }
+    if (allMaterials.value.some(item => item.id === material.id)) return false;
+    const next = [...materials.value, cloneMaterial(material)];
+    try { await writeRecord('materials', JSON.parse(JSON.stringify(next))); materials.value = next; return true; }
+    catch (error) { report(error); return false; }
+  }
+  async function addPlanFilament(material: MaterialRecord): Promise<boolean> {
+    let success = false;
+    await operation(async () => {
+      if (!client || !content.value || !regions.value.length) return;
+      const problem = validateMaterial(material, allMaterials.value) || materialProblem(material); if (problem) throw new Error(problem);
+      const existing = regions.value.findIndex(region => region.material.id === material.id);
+      if (existing >= 0) { selectedRegion.value = existing; draft.value = null; clearSelection(); success = true; return; }
+      if (regions.value.length >= 12) throw new Error(t('The plan supports up to 12 filaments.', '方案最多支持 12 种耗材。'));
+      const copy = cloneMaterial(material), index = regions.value.length;
+      advance();
+      await client.request('appendSlot', { expectedCount: index });
+      regions.value.push({ index, sourceHex: materialHex(copy), material: copy });
+      selectedRegion.value = index; draft.value = null; clearSelection();
+      markPreparationDirty(); success = true;
+    });
+    return success;
+  }
+  async function sampleSource(face: number, barycentric: [number, number, number]): Promise<string | null> {
+    if (!client || busy.value) return null;
+    const source = content.value, revisionAtStart = revision;
+    try {
+      const result = await client.request('sampleSource', { face, barycentric });
+      return source === content.value && revisionAtStart === revision ? result.hex : null;
+    } catch (error) { if (source === content.value && revisionAtStart === revision) report(error); return null; }
   }
   async function deleteMaterial(id: string): Promise<boolean> {
     let success = false;
@@ -364,7 +459,7 @@ export const useWorkspace = defineStore('workspace', () => {
       checked.value = checked.value.filter(value => value !== id);
       if (draft.value?.id === id) draft.value = null;
       success = true;
-      status.value = t('Removed from the library. Applied materials are retained.', '已从材质库删除，已应用的材质保持不变。');
+      status.value = '已从材质库删除，已应用的材质保持不变。';
     });
     return success;
   }
@@ -390,7 +485,7 @@ export const useWorkspace = defineStore('workspace', () => {
       try { await writeRecord('materials', JSON.parse(JSON.stringify(next))); }
       catch (error) { result.errors.push(error instanceof Error ? error.message : String(error)); return; }
       materials.value = next; result.imported = additions.length;
-      status.value = t(`Imported ${result.imported} materials`, `已导入 ${result.imported} 个材质`);
+      status.value = `已导入 ${result.imported} 个材质`;
     });
     return result;
   }
@@ -415,7 +510,10 @@ export const useWorkspace = defineStore('workspace', () => {
     try {
       const data = input ?? await snapshot();
       const list = [{ id: data.id, name: data.name, updatedAt: data.updatedAt }, ...projects.value.filter(item => item.id !== data.id)];
-      await writeRecords([['projects', JSON.parse(JSON.stringify(list))], ['active-project', data.id], [`project:${data.id}`, data]]);
+      const entries: Array<[string, unknown]> = [['projects', JSON.parse(JSON.stringify(list))], ['active-project', data.id], [`project:${data.id}`, data]];
+      const workspace = sampleWorkspace(data.sourceSample);
+      if (workspace) entries.push([`sample-project:${workspace}`, data.id]);
+      await writeRecords(entries);
       projects.value = list; project.value = data; saved.value = true;
       prepDirty.value = false; prepSaveError.value = '';
     } catch (error) {
@@ -423,13 +521,31 @@ export const useWorkspace = defineStore('workspace', () => {
       prepDirty.value = true; saved.value = false; throw error;
     } finally { prepSaving.value = false; }
   }
-  const save = () => operation(async () => { await persistProject(); status.value = t('Project saved on this device', '项目已保存到此设备'); });
+  const save = () => operation(async () => { await persistProject(); status.value = '项目已保存到此设备'; });
   async function savePreparation() {
     if (busy.value) return false;
     clearTimeout(prepTimer);
     let success = false;
     await operation(async () => { await persistProject(); success = true; });
     return success;
+  }
+  async function navigateModule(target: PreparationState['activeModule']) {
+    if (busy.value || !content.value) return;
+    const current = sampleWorkspace(project.value?.sourceSample);
+    const destination = target === 'segment' ? 'segment' : 'print';
+    // Default samples keep separate saved projects; imported models and explicit
+    // Segment result handoffs continue through the existing preparation flow.
+    if (current && current !== destination) {
+      if (!await savePreparation()) return;
+      try {
+        const id = await readRecord<string>(`sample-project:${destination}`);
+        const stored = id ? await readRecord<PrintProject>(`project:${id}`) : undefined;
+        if (stored && sampleWorkspace(stored.sourceSample) === destination) await openProject(stored.id);
+        else await loadSample(destination === 'segment' ? 'textured' : 'role');
+      } catch (error) { report(error); return; }
+      if (failure.value) return;
+    }
+    await navigatePreparation(target);
   }
   async function navigatePreparation(target: 'print' | 'multi-color' | 'segment', fromPrint = false) {
     if (busy.value || !content.value) return;
@@ -513,7 +629,7 @@ export const useWorkspace = defineStore('workspace', () => {
       if (multi) {
         validatePrintColors(data);
         if (printColorState.value !== 'ready') throw new Error('请先确认最新分色结果。');
-        blob = (await client!.request('export3mf', { scheme: scheme.value, name: data.name, scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), type: region.material.supplier?.materialType || 'Unknown', vendor: region.material.supplier?.vendor || 'Generic' })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true, preservePartition: true })).blob;
+        blob = (await client!.request('export3mf', { scheme: scheme.value, name: data.name, scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), type: filamentType(region.material) || 'Unknown', vendor: filamentBrand(region.material) || 'Generic' })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true, preservePartition: true })).blob;
       } else blob = monochromeSTL(modelInfo.value!, scale.value);
       await persistProject(data);
       downloadFile(blob, `${data.name}.${multi ? '3mf' : 'stl'}`);
@@ -569,8 +685,8 @@ export const useWorkspace = defineStore('workspace', () => {
   const export3mf = () => operation(async () => {
     if (!client) return;
     if (settings.value.workflow === 'validation') throw new Error(t('Switch to region assignment before exporting 3MF.', '请切换到区域应用，确认每个区域的耗材后再导出 3MF。'));
-    const result = await client.request('export3mf', { scheme: scheme.value, name: project.value?.name ?? 'Tripo', scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), type: region.material.supplier?.materialType || 'Unknown', vendor: region.material.supplier?.vendor || 'Generic', materialVersion: region.material.supplier?.source.sha256 ?? null })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true });
-    downloadFile(result.blob, `${project.value?.name ?? 'Tripo'}.3mf`); status.value = t('3MF exported', '3MF 已导出');
+    const result = await client.request('export3mf', { scheme: scheme.value, name: project.value?.name ?? 'Tripo', scale: scale.value, filaments: regions.value.map(region => ({ id: region.material.materialId, name: region.material.name, hex: materialHex(region.material), type: filamentType(region.material) || 'Unknown', vendor: filamentBrand(region.material) || 'Generic', materialVersion: region.material.supplier?.source.sha256 ?? null })), materialData: JSON.parse(JSON.stringify(materialData())), withConfig: true });
+    downloadFile(result.blob, `${project.value?.name ?? 'Tripo'}.3mf`); status.value = '3MF 已导出';
   });
   const selftest = () => operation(async () => { if (client) { const result = await client.request('selftest', { withConfig: true }); downloadFile(result.blob, 'four-color-selftest.3mf'); } });
   async function initialize() {
@@ -589,16 +705,23 @@ export const useWorkspace = defineStore('workspace', () => {
     const active = await readRecord<string>('active-project').catch(() => undefined);
     if (active && projects.value.some(item => item.id === active)) await openProject(active);
     else await demo();
-    // Preserve previous pine work as a local project before opening the new bundled default once.
-    const migrated = await readRecord<boolean>('chicken-default-v1').catch(() => false);
+    // Preserve edits to older defaults before opening the new print sample once.
+    const migrated = await readRecord<boolean>('role-default-v1').catch(() => false);
     if (!migrated) {
-      if (project.value && /^(stylized[ -])?pine[ -]tree$/i.test(project.value.name)) { if (await savePreparation()) await demo(); }
-      if (!failure.value) await writeRecord('chicken-default-v1', true);
+      const target = preparation.value.activeModule;
+      if (project.value && target !== 'segment' && (project.value.sourceSample === 'chicken' || /^(stylized[ -])?pine[ -]tree$/i.test(project.value.name))) {
+        if (!await savePreparation()) return;
+        await loadSample('role');
+        if (failure.value) return;
+        if (target === 'print') await navigatePreparation(target);
+        else await savePreparation();
+      }
+      if (!failure.value) await writeRecord('role-default-v1', true);
     }
   }
-  onScopeDispose(() => { clearTimeout(prepTimer); generation++; client?.dispose(); });
+  onScopeDispose(() => { fillHover.clear(); clearTimeout(prepTimer); generation++; client?.dispose(); });
   return { segmentation, loadSegmentResult, preparation, prepSaving, prepDirty, prepSaveError, prepNotice, printDimensions, printMeshCheck, currentColorResult, printColorState, printSizeReady, printCheckReady, printCompatibility, printTasks, printTaskDone, printTodo, navigatePreparation, changePrintMode, changePrintSlicer, setPrintDimension, confirmPrintSize, acknowledgePrintCheck, completePrintColors, downloadPreparedModel, savePreparation, refinement, selection, selectionScope, selectionMaterial, selectionIslandCount, prepareRefinement, selectRefinement, assignSelection, clearSelection, materials, allMaterials, validationMaterial, validationSurface, checked, content, display, regions, selectedRegion, selected, surfaces, draft, project, projects, busy, status, failure, progress, warnings, colorCount, precision, scheme, settings, undoCount, saved, modelInfo, durations,
-    loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, replaceMaterial, saveMaterial, deleteMaterial, importMaterials, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
+    planFilaments, highlightedFilamentId, planHighlight, selectPlanFilament, clearPlanHighlight, navigateModule, addPlanFilament, sampleSource, fillPreview, previewFill, loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, replaceMaterial, saveMaterial, addFilament, deleteMaterial, importMaterials, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
 });
 
 function validateRegion(region: RegionAssignment, index: number) {

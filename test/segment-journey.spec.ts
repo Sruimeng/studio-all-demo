@@ -4,11 +4,15 @@ import { BoxGeometry } from 'three';
 import type { PrintMeshInput } from '../app/@engine/multicolor';
 import { useSegmentation } from '../app/@feature/segmentation/use-segmentation';
 import { downloadFile } from '../app/@base/storage';
-import { geometryKey } from '../app/@feature/segmentation/geometry';
+import { faceColors, geometryKey, suggestReferenceGeometry } from '../app/@feature/segmentation/geometry';
 import { chickenReference, connectedPixels, legacyChickenReference, suggestedPrompt } from '../app/@feature/segmentation/reference';
 import { freshDraft, optionsKey, type SegmentDocument, type SegmentPlan } from '../app/@feature/segmentation/types';
 
 vi.mock('~/@base/storage', () => ({ downloadFile: vi.fn() }));
+vi.mock('../app/@feature/segmentation/geometry', async importOriginal => {
+  const actual = await importOriginal<typeof import('../app/@feature/segmentation/geometry')>();
+  return { ...actual, faceColors: vi.fn(actual.faceColors), suggestReferenceGeometry: vi.fn(actual.suggestReferenceGeometry) };
+});
 vi.mock('../app/@feature/segmentation/reference', async importOriginal => ({
   ...await importOriginal<typeof import('../app/@feature/segmentation/reference')>(),
   readReference: async () => ({ width: 2, height: 2, data: new Uint8ClampedArray([50,50,50,255,190,35,35,255,50,50,50,255,50,50,50,255]) }),
@@ -40,8 +44,66 @@ function mount(studio: ReturnType<typeof fixture>['studio']) {
   const scope = effectScope(); scopes.push(scope);
   return scope.run(() => useSegmentation(studio as unknown as Parameters<typeof useSegmentation>[0]))!;
 }
-beforeEach(() => vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callback(0); return 0; }));
+beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callback(0); return 0; }); });
 afterEach(() => { scopes.splice(0).forEach(scope => scope.stop()); vi.unstubAllGlobals(); });
+
+describe('segment viewport stays independent from settings', () => {
+  it.each([true, false])('retains sourceView=%s and the last mesh through prompt, preview and mode changes', async source => {
+    const { studio } = fixture(), seg = mount(studio);
+    const previous = clone(seg.displayPlan), pieces = clone(seg.displayPieces);
+    seg.setUi('sourceView', source);
+    seg.setOption('prompt', '鸡冠单独拆出，其余保持整体。');
+    expect(seg.sourceView).toBe(source); expect(seg.displayPlan).toEqual(previous);
+    expect(seg.displayPieces).toEqual(pieces); expect(seg.displayPending).toBe(true);
+    expect(seg.resultEditing).toBe(false); expect(seg.confirmed).toBe(false); expect(seg.pieces).toHaveLength(0);
+    seg.setPreview2d(true); expect(seg.sourceView).toBe(source);
+    seg.setMode('colors');
+    expect(seg.plan).toBeNull(); expect(seg.sourceView).toBe(source);
+    expect(seg.displayPlan).toEqual(previous); expect(seg.displayPieces).toEqual(pieces);
+    expect(seg.displayPending).toBe(true); expect(seg.resultEditing).toBe(false);
+    seg.setMode('parts'); expect(seg.sourceView).toBe(source); expect(seg.displayPlan).toEqual(previous);
+    seg.setPreview2d(false); await seg.split();
+    expect(seg.error).toBe(''); expect(seg.sourceView).toBe(false);
+    expect(seg.displayPlan).toEqual(seg.plan); expect(seg.displayPlan).not.toEqual(previous);
+    expect(seg.displayPending).toBe(false); expect(seg.resultEditing).toBe(true);
+  });
+
+  it.each([true, false])('keeps sourceView=%s when editing an existing 2D result or saving it', async source => {
+    const { studio } = fixture(), seg = mount(studio);
+    seg.setUi('sourceView', source);
+    seg.beginEdit(); expect(seg.sourceView).toBe(source);
+    seg.cancelEdit(); expect(seg.sourceView).toBe(source);
+    seg.beginEdit(); seg.rename(0, '身体整体'); await seg.applyEdit();
+    expect(seg.error).toBe(''); expect(seg.sourceView).toBe(source);
+    expect(seg.displayPlan?.groups[0]?.name).toBe('身体整体');
+    await seg.confirmResult(); expect(seg.confirmed).toBe(true); expect(seg.sourceView).toBe(source);
+  });
+
+  it('keeps the previous view on failed generation and canceled previews, then switches after confirmed generation', async () => {
+    const { studio } = fixture(), seg = mount(studio), previous = clone(seg.displayPlan);
+    seg.setUi('sourceView', true); seg.setOption('prompt', '自定义暂不支持的要求');
+    await seg.split(); expect(seg.error).toContain('接入算法');
+    expect(seg.sourceView).toBe(true); expect(seg.displayPlan).toEqual(previous);
+    seg.setOption('prompt', suggestedPrompt('parts')); seg.setPreview2d(true);
+    await seg.split(); expect(seg.editing).toBe(true); expect(seg.sourceView).toBe(true);
+    expect(seg.displayPlan).toEqual(previous); expect(seg.plan?.labels).toHaveLength(0);
+    seg.cancelEdit(); expect(seg.sourceView).toBe(true); expect(seg.displayPlan).toEqual(previous);
+    await seg.split(); await seg.applyEdit();
+    expect(seg.error).toBe(''); expect(seg.editing).toBe(false); expect(seg.sourceView).toBe(false);
+    expect(seg.displayPlan).toEqual(seg.plan); expect(seg.displayPieces.length).toBeGreaterThan(0);
+  });
+
+  it('clears a display snapshot on model change and never presents unmapped 2D edits as a valid mesh', async () => {
+    const { studio } = fixture(), seg = mount(studio);
+    expect(seg.displayPlan).not.toBeNull();
+    seg.beginEdit(); seg.pickPixels([0]); seg.setUi('targetGroup', 1); seg.assign(); await seg.applyEdit();
+    expect(seg.plan?.mappingDirty).toBe(true); expect(seg.displayPlan).toBeNull(); expect(seg.displayPieces).toHaveLength(0);
+    seg.undo(); expect(seg.displayPlan).not.toBeNull();
+    studio.segmentation.drafts.parts.plan = null; studio.segmentation.drafts.parts.result = null;
+    studio.content = { ...studio.content, id: 'model-b' }; await nextTick();
+    expect(seg.displayPlan).toBeNull(); expect(seg.displayPieces).toHaveLength(0); expect(seg.sourceView).toBe(true);
+  });
+});
 
 describe('segment split → preview → confirm journey', () => {
   it('requires an explicit re-split for the HD source, keeps manual history and exports old masks with the old reference', async () => {
@@ -55,8 +117,7 @@ describe('segment split → preview → confirm journey', () => {
     expect(seg.staleReason).toContain('高清版'); expect(seg.confirmed).toBe(false); expect(seg.pieces).toHaveLength(0);
     expect(studio.savePreparation).not.toHaveBeenCalled();
     seg.beginEdit(); expect(seg.editing).toBe(false);
-    await seg.split(); expect(seg.confirmRegenerate).toBe(true); expect(seg.plan).toEqual(previous);
-    await seg.split(true); expect(seg.stale).toBe(false); expect(seg.confirmed).toBe(false);
+    await seg.split(); expect(seg.stale).toBe(false); expect(seg.confirmed).toBe(false);
     expect(seg.plan?.mask?.referenceId).toBe(chickenReference.id);
     expect(studio.segmentation.drafts.parts.previousPlan).toEqual(previous);
     expect(mount(studio).stale).toBe(false);
@@ -200,7 +261,7 @@ describe('segment split → preview → confirm journey', () => {
     for (const seed of [0, 4]) {
       seg.pickRegion(seed);
       expect(seg.selectedPixels).toEqual([0, 1, 4, 5]);
-      expect(seg.selectedGroups).toEqual([1]); expect(seg.targetGroup).toBe(1);
+      expect(seg.selectedGroups).toEqual([1]); expect(seg.targetGroup).toBe(0);
     }
     seg.pickRegion(2, 'add');
     expect([...seg.selectedPixels].sort()).toEqual([0, 1, 2, 4, 5, 6]);
@@ -220,7 +281,7 @@ describe('segment split → preview → confirm journey', () => {
     const mask = seg.plan!.mask!;
     seg.pickPixels(connectedPixels(mask, 1));
     expect([...seg.selectedPixels].sort()).toEqual([1, 2, 4]);
-    expect(seg.selectedGroups).toEqual([1]); expect(seg.targetGroup).toBe(1);
+    expect(seg.selectedGroups).toEqual([1]); expect(seg.targetGroup).toBe(0);
     // Picking a destination must not highlight unrelated source pixels or
     // change their ownership until the user explicitly assigns them.
     seg.setUi('targetGroup', 0);
@@ -237,6 +298,183 @@ describe('segment split → preview → confirm journey', () => {
     expect(seg.selectedGroups).toEqual([]); expect(seg.selectedPixels).toEqual([]);
     await seg.applyEdit();
     expect(seg.confirmed).toBe(true); expect(seg.plan).toEqual(original);
+  });
+});
+
+describe('optional 2D proposal before 3D segmentation', () => {
+  it('generates only a mask before confirmation, then carries group merges and names into 3D', async () => {
+    const { studio } = fixture(); studio.segmentation.drafts.parts.plan = null; studio.segmentation.drafts.parts.result = null;
+    const seg = mount(studio); expect(seg.preview2d).toBe(false); seg.setPreview2d(true);
+    await seg.split();
+    expect(seg.editing).toBe(true); expect(seg.previewing2d).toBe(true); expect(seg.plan!.labels).toEqual([]);
+    expect(seg.plan!.mask).toBeDefined(); expect(seg.pieces).toHaveLength(0);
+    expect(faceColors).not.toHaveBeenCalled(); expect(suggestReferenceGeometry).not.toHaveBeenCalled();
+    expect(studio.segmentation.drafts.parts.plan).toBeNull(); expect(studio.segmentation.drafts.parts.result).toBeNull();
+    const ids = seg.plan!.groups.map(g => g.id); expect(ids.length).toBeGreaterThan(1);
+    ids.forEach((id, i) => seg.selectGroup(id, i > 0)); seg.merge(); seg.rename(ids[0]!, '合并后的整体');
+    const mask = clone(seg.plan!.mask);
+    await seg.applyEdit();
+    expect(seg.error).toBe(''); expect(seg.editing).toBe(false); expect(suggestReferenceGeometry).toHaveBeenCalledTimes(1);
+    expect(seg.plan!.mask).toEqual(mask); expect(seg.plan!.groups[0]!.name).toBe('合并后的整体');
+    expect(new Set(seg.plan!.labels)).toEqual(new Set([ids[0]])); expect(seg.resultEditing).toBe(true);
+    expect(seg.confirmed).toBe(false); expect(studio.savePreparation).toHaveBeenCalledTimes(1);
+    const reopened = mount(studio); expect(reopened.preview2d).toBe(true); expect(reopened.editing).toBe(false);
+  });
+
+  it('opens re-split preview directly for an edited result and cancels without replacing its confirmation', async () => {
+    const { studio } = fixture(), seg = mount(studio); seg.rename(0, '手工调整的身体'); await seg.confirmResult(); seg.setPreview2d(true);
+    const previous = clone(studio.segmentation.drafts.parts);
+    await seg.split(); expect(seg.editing).toBe(true); expect(seg.previewing2d).toBe(true);
+    expect(studio.segmentation.drafts.parts).toEqual(previous);
+    seg.setEditorPrompt('鸡冠单独拆出，其余保持整体。'); await seg.refreshPreview();
+    expect(seg.editorStale).toBe(false); expect(seg.editorPrompt).toContain('鸡冠单独');
+    expect(studio.segmentation.drafts.parts).toEqual(previous);
+    seg.cancelEdit();
+    expect(studio.segmentation.drafts.parts).toEqual(previous); expect(seg.confirmed).toBe(true); expect(seg.stage).toBe('result');
+    expect(suggestReferenceGeometry).not.toHaveBeenCalled(); expect(mount(studio).editing).toBe(false);
+  });
+
+  it('requires fresh preview after a prompt change and preserves unsupported input for correction', async () => {
+    const { studio } = fixture(), seg = mount(studio); seg.setPreview2d(true); await seg.split();
+    const original = clone(seg.plan), saved = clone(studio.segmentation.drafts.parts);
+    seg.setEditorPrompt('自定义尚未接入的语义要求'); expect(seg.editorStale).toBe(true);
+    await seg.applyEdit(); expect(seg.error).toContain('先更新'); expect(seg.editing).toBe(true);
+    await seg.refreshPreview(); expect(seg.error).toContain('接入算法'); expect(seg.plan).toEqual(original);
+    expect(studio.segmentation.drafts.parts).toEqual(saved);
+    seg.setEditorPrompt('鸡冠单独拆出，其余保持整体。'); await seg.refreshPreview();
+    expect(seg.editorStale).toBe(false); expect(seg.error).toBe(''); expect(seg.plan!.labels).toEqual([]);
+    await seg.applyEdit();
+    expect(seg.options.prompt).toBe('鸡冠单独拆出，其余保持整体。'); expect(seg.stale).toBe(false);
+    expect(suggestReferenceGeometry).toHaveBeenCalledTimes(1); expect(seg.confirmed).toBe(false);
+  });
+
+  it('retains local boundary edits in the dialog until mapping is possible, with undo recovery', async () => {
+    const { studio } = fixture(), seg = mount(studio); seg.setPreview2d(true); await seg.split();
+    const saved = clone(studio.segmentation.drafts.parts), source = seg.plan!.mask!.labels;
+    const pixel = source.indexOf(0); expect(source.filter(id => id === 0).length).toBeGreaterThan(1);
+    seg.pickPixels([pixel]); seg.setUi('targetGroup', 1); seg.assign();
+    await seg.applyEdit();
+    expect(seg.editing).toBe(true); expect(seg.error).toContain('映射到 3D'); expect(seg.plan!.mappingDirty).toBe(true);
+    expect(studio.segmentation.drafts.parts).toEqual(saved); expect(suggestReferenceGeometry).not.toHaveBeenCalled();
+    seg.undo(); await seg.applyEdit(); expect(seg.editing).toBe(false); expect(seg.error).toBe(''); expect(seg.pieces.length).toBeGreaterThan(0);
+  });
+
+  it('applies a complete pixel group reassignment, including a newly named part, to 3D', async () => {
+    const { studio } = fixture(), seg = mount(studio); seg.setPreview2d(true); await seg.split();
+    const pixels = seg.plan!.mask!.labels.flatMap((id, i) => id === 0 ? [i] : []);
+    seg.pickPixels(pixels); seg.setUi('newName', '身体整体'); seg.assign(true);
+    const group = seg.plan!.groups.find(g => g.name === '身体整体')!;
+    await seg.applyEdit(); expect(seg.error).toBe(''); expect(seg.editing).toBe(false);
+    expect(seg.plan!.labels).toContain(group.id); expect(seg.plan!.groups).toContainEqual(group); expect(seg.plan!.mappingDirty).toBeFalsy();
+  });
+
+  it('warns before replacing manual 2D edits and can change the prompt from an existing result', async () => {
+    const { studio } = fixture(), seg = mount(studio); await seg.confirmResult(); const saved = clone(seg.plan);
+    seg.beginEdit(); expect(seg.previewing2d).toBe(false); seg.rename(0, '手动改名');
+    seg.setEditorPrompt('鸡冠单独拆出，其余保持整体。'); await seg.refreshPreview();
+    expect(seg.confirmPreviewRefresh).toBe(true); expect(seg.plan!.groups[0]!.name).toBe('手动改名');
+    await seg.refreshPreview(true); expect(seg.previewing2d).toBe(true); expect(seg.plan!.labels).toHaveLength(0);
+    expect(suggestReferenceGeometry).not.toHaveBeenCalled(); seg.cancelEdit();
+    expect(seg.confirmed).toBe(true); expect(seg.plan).toEqual(saved);
+  });
+
+  it('reopens the edited proposal after generation failure and permits retry', async () => {
+    const { studio } = fixture(), seg = mount(studio); seg.setPreview2d(true); await seg.split(); seg.rename(0, '身体整体');
+    const draft = clone(studio.segmentation.drafts.parts), preview = clone(seg.plan);
+    vi.mocked(suggestReferenceGeometry).mockImplementationOnce(() => { throw new Error('示例生成失败'); });
+    await seg.applyEdit();
+    expect(seg.error).toBe('示例生成失败'); expect(seg.editing).toBe(true); expect(seg.plan).toEqual(preview); expect(seg.canUndo).toBe(true); expect(seg.hasEditorChanges()).toBe(true);
+    expect(studio.segmentation.drafts.parts).toEqual(draft);
+    await seg.applyEdit(); expect(seg.error).toBe(''); expect(seg.editing).toBe(false); expect(seg.plan!.groups[0]!.name).toBe('身体整体');
+  });
+
+  it('locks repeat submits after closing the dialog and retains a generated draft if saving fails', async () => {
+    const { studio } = fixture(), seg = mount(studio); seg.setPreview2d(true); await seg.split();
+    let finishSave!: (value: boolean) => void;
+    studio.savePreparation.mockReturnValueOnce(new Promise<boolean>(resolve => { finishSave = resolve; }));
+    const applying = seg.applyEdit(); expect(seg.editing).toBe(false); expect(seg.busy).toBe(true);
+    await seg.applyEdit(); await seg.split();
+    await vi.waitFor(() => expect(studio.savePreparation).toHaveBeenCalledTimes(1));
+    expect(suggestReferenceGeometry).toHaveBeenCalledTimes(1);
+    studio.prepSaveError = '磁盘空间不足'; finishSave(false); await applying;
+    expect(seg.error).toBe('磁盘空间不足'); expect(seg.message).toContain('保存失败'); expect(seg.confirmed).toBe(false);
+    expect(seg.pieces.length).toBeGreaterThan(0); studio.prepSaveError = ''; expect(await seg.persist()).toBe(true);
+  });
+
+  it('remembers the preference per model and mode without invalidating confirmation', async () => {
+    const { studio } = fixture(), seg = mount(studio); await seg.confirmResult(); seg.setPreview2d(true);
+    expect(seg.confirmed).toBe(true); seg.setMode('colors'); expect(seg.preview2d).toBe(false);
+    seg.setMode('parts'); expect(seg.preview2d).toBe(true); expect(seg.confirmed).toBe(true);
+    studio.segmentation = fixture().document; studio.content = { ...studio.content, id: 'model-b' }; await nextTick();
+    expect(seg.preview2d).toBe(false); expect(seg.editing).toBe(false);
+  });
+
+  it('waits for an overlapping workspace autosave before saving the newest segmentation', async () => {
+    const { studio } = fixture(), seg = mount(studio); studio.busy = true; studio.prepSaving = true;
+    const saving = seg.persist();
+    await nextTick(); expect(studio.savePreparation).not.toHaveBeenCalled();
+    studio.prepSaving = false; await nextTick(); expect(studio.savePreparation).not.toHaveBeenCalled();
+    studio.busy = false; expect(await saving).toBe(true); expect(studio.savePreparation).toHaveBeenCalledTimes(1); expect(seg.error).toBe('');
+  });
+});
+
+describe('2D selection and direct painting', () => {
+  function editor() {
+    const { studio } = fixture();
+    studio.segmentation.drafts.parts.plan!.mask = { referenceId: chickenReference.id, width: 4, height: 2, labels: [-1, 0, 1, 1, 0, 0, 1, -1] };
+    const seg = mount(studio); seg.beginEdit(); return { studio, seg };
+  }
+  it('keeps selection, target color and model data separate until explicit assignment', () => {
+    const { seg } = editor(), before = clone(seg.plan);
+    seg.chooseEditorTarget(1); seg.selectGroup(0);
+    expect(seg.selectedPixels).toEqual([1, 4, 5]); expect(seg.targetGroup).toBe(1); expect(seg.plan).toEqual(before);
+    seg.selectGroup(1, true); expect(seg.selectedGroups).toEqual([0, 1]);
+    seg.selectGroup(1, true); expect(seg.selectedPixels).toEqual([1, 4, 5]);
+    seg.assign(); expect(seg.targetGroup).toBe(1); expect(seg.selectedPixels).toEqual([]);
+    expect(seg.plan!.mask!.labels).toEqual([-1, 1, 1, 1, 1, 1, 1, -1]);
+    expect(seg.history).toHaveLength(1); expect(seg.hasEditorChanges()).toBe(true);
+    seg.undo(); expect(seg.plan).toEqual(before); expect(seg.hasEditorChanges()).toBe(false);
+  });
+  it('paints only selected foreground pixels in one undo step and retains the selection', () => {
+    const { seg, studio } = editor(), before = clone(seg.plan), saved = clone(studio.segmentation);
+    seg.pickPixels([1, 4]); seg.chooseEditorTarget(1); seg.paintPixels([0, 1, 2, 4, 5, 6, 7, 99]);
+    expect(seg.plan!.mask!.labels).toEqual([-1, 1, 1, 1, 1, 0, 1, -1]);
+    expect(seg.selectedPixels).toEqual([1, 4]); expect(seg.selectedGroups).toEqual([1]);
+    expect(seg.history).toHaveLength(1); expect(seg.plan!.mappingDirty).toBe(true); expect(studio.segmentation).toEqual(saved);
+    seg.undo(); expect(seg.plan).toEqual(before); expect(seg.selectedPixels).toEqual([1, 4]); expect(seg.targetGroup).toBe(1);
+    seg.redo(); expect(seg.plan!.mask!.labels[1]).toBe(1); expect(seg.history).toHaveLength(1);
+  });
+  it('ignores background, hidden groups, invalid indices and no-op paint strokes', () => {
+    const { seg } = editor(), before = clone(seg.plan);
+    seg.chooseEditorTarget(0); seg.paintPixels([-1, 0, 7, 99, 1, 4]); expect(seg.history).toHaveLength(0); expect(seg.plan).toEqual(before);
+    seg.toggleHidden(1); seg.paintPixels([2, 3, 6]); expect(seg.plan).toEqual(before);
+    seg.toggleHidden(1); seg.toggleSolo(0); seg.paintPixels([2]); expect(seg.plan).toEqual(before);
+    seg.toggleSolo(0); seg.paintPixels([2]); expect(seg.plan!.mask!.labels[2]).toBe(0); expect(seg.history).toHaveLength(1);
+  });
+  it('creates a named part only on the first effective assignment or stroke', () => {
+    const { seg } = editor(), before = clone(seg.plan);
+    seg.prepareEditorPart('  新背包  '); expect(seg.editorTarget?.name).toBe('新背包'); expect(seg.plan).toEqual(before);
+    seg.paintPixels([0, -1, 99]); expect(seg.plan).toEqual(before); expect(seg.editorNewPart).toBe('新背包');
+    seg.paintPixels([1]); const id = seg.targetGroup;
+    expect(seg.plan!.groups).toHaveLength(3); expect(seg.plan!.mask!.labels[1]).toBe(id); expect(seg.editorNewPart).toBeNull();
+    seg.paintPixels([4]); expect(seg.plan!.groups).toHaveLength(3); expect(seg.history).toHaveLength(2);
+    seg.undo(); seg.undo(); expect(seg.plan).toEqual(before); expect(seg.editorTarget).toBeDefined();
+    seg.redo(); expect(seg.plan!.groups.at(-1)?.name).toBe('新背包');
+    seg.pickPixels([5]); seg.prepareEditorPart('另一个部件'); seg.assign(); expect(seg.editorTarget?.name).toBe('另一个部件'); expect(seg.selectedPixels).toEqual([]);
+  });
+  it('retains the selection when sampling targets or switching tools, and resets redo after a new edit', () => {
+    const { seg } = editor(); seg.pickPixels([1]); seg.chooseEditorTarget(1); seg.setUi('selectTool', 'brush');
+    expect(seg.selectedPixels).toEqual([1]); expect(seg.history).toHaveLength(0);
+    seg.paintPixels([1]); seg.undo(); expect(seg.canRedo).toBe(true);
+    seg.rename(0, '身体整体'); expect(seg.canRedo).toBe(false); expect(seg.selectedPixels).toEqual([1]);
+  });
+  it('detects unapplied prompt and preview changes, but not selection or viewport changes', async () => {
+    const { seg } = editor(); expect(seg.hasEditorChanges()).toBe(false);
+    seg.selectGroup(1); seg.chooseEditorTarget(1); seg.setUi('overlay', 'overlay'); seg.toggleHidden(0); expect(seg.hasEditorChanges()).toBe(false);
+    const prompt = seg.editorPrompt; seg.setEditorPrompt('鸡冠单独拆出，其余保持整体。'); expect(seg.hasEditorChanges()).toBe(true);
+    seg.setEditorPrompt(prompt); expect(seg.hasEditorChanges()).toBe(false);
+    seg.setEditorPrompt('鸡冠单独拆出，其余保持整体。'); await seg.refreshPreview(); expect(seg.hasEditorChanges()).toBe(true);
+    seg.cancelEdit(); expect(seg.editing).toBe(false); expect(seg.options.prompt).toBe(prompt);
   });
 });
 

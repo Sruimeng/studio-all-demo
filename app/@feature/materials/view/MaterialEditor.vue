@@ -6,6 +6,9 @@ import { validateMaterial, rgb } from '../catalog';
 import { cloneMaterial, restoreSupplier, withOverrides, materialProblem } from '../supplier';
 import { OPENPBR_RULE, type MaterialRecord, type ColorMode } from '../types';
 import SupplierDetail from './SupplierDetail.vue';
+import { filamentName } from '../filaments';
+const locale = useLocale();
+const { tr } = locale;
 
 const props = defineProps<{ material: MaterialRecord; materials: MaterialRecord[]; busy: boolean; saveMaterial: (material: MaterialRecord) => Promise<boolean> }>();
 const emit = defineEmits<{ close: []; preview: [material: MaterialRecord | null] }>();
@@ -33,7 +36,7 @@ async function reference(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0]; input.value = '';
   if (!file) return;
-  if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) { validation.value = t('Choose an image under 5 MB', '请选择 5MB 内的图片'); return; }
+  if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) { validation.value = '请选择 5MB 内的图片'; return; }
   const reader = new FileReader(); reader.onload = () => { draft.value.referenceImage = String(reader.result); }; reader.readAsDataURL(file);
 }
 watch(draft, value => {
@@ -42,24 +45,24 @@ watch(draft, value => {
 }, { deep: true, immediate: true });
 </script>
 <template>
-  <div class="editor-title"><button class="text-button" @click="close">← {{ t('Library', '材质库') }}</button><span>{{ supplier ? t('Local adjustment', '本地调整') : t('Material editor', '材质编辑') }}</span></div>
+  <div class="editor-title"><button class="text-button" @click="close">← {{ t('Library', '材质库') }}</button><span>{{ tr(supplier ? t('Local adjustment', '本地调整') : t('Material editor', '材质编辑')) }}</span></div>
   <SupplierDetail v-if="supplier" :material="draft" />
   <div class="editor-fields">
-    <label>{{ t('Name', '名称') }}<input v-model="draft.name" data-testid="material-name" :readonly="supplier && draft.supplier?.origin !== 'local-usda'"></label>
+    <label>{{ t('Name', '名称') }}<input :value="supplier && locale.language === 'en' && draft.supplier?.origin !== 'local-usda' ? filamentName(draft, true) : draft.name" data-testid="material-name" :readonly="supplier && draft.supplier?.origin !== 'local-usda'" @input="draft.name = ($event.target as HTMLInputElement).value"></label>
     <label>{{ t('Material ID / SKU', '材质 ID / SKU') }}<input v-model="draft.materialId" data-testid="material-id" :readonly="supplier && draft.supplier?.origin !== 'local-usda'"></label>
     <ModuleTooltip v-if="draft.supplier?.source.file" :title="t('Color interpretation', '颜色解释方式')" :description="t('Experimental interpretations do not confirm the source color space. Local HEX overrides take priority.', '试验选项不代表源颜色空间已确认。本地 HEX 调整优先。')" side="left">
-      <label>{{ t('Color source', '颜色来源') }}<select v-model="colorMode" data-testid="color-mode"><option value="catalog">{{ draft.supplier?.origin === 'local-usda' ? t('Imported preview HEX', '导入时预览 HEX') : t('Catalog HEX', '表格 HEX（默认）') }}</option><option value="linear-srgb">{{ t('Assume linear sRGB (experimental)', '假设线性 sRGB（试验）') }}</option><option value="srgb">{{ t('Assume sRGB (experimental)', '假设 sRGB（试验）') }}</option></select></label>
+      <label>{{ t('Color source', '颜色来源') }}<select v-model="colorMode" data-testid="color-mode"><option value="catalog">{{ tr(draft.supplier?.origin === 'local-usda' ? t('Imported preview HEX', '导入时预览 HEX') : t('Catalog HEX', '表格 HEX（默认）')) }}</option><option value="linear-srgb">{{ t('Assume linear sRGB (experimental)', '假设线性 sRGB（试验）') }}</option><option value="srgb">{{ t('Assume sRGB (experimental)', '假设 sRGB（试验）') }}</option></select></label>
     </ModuleTooltip>
     <ModuleTooltip v-if="draft.supplier?.status !== 'unmatched'" :title="t('Local color', '本地颜色')" :description="t('Editing HEX overrides the source color. Restore supplier parameters to discard local adjustments.', '修改 HEX 会覆盖预览颜色。恢复供应商参数可清除本地调整。')" side="left">
       <label>{{ t('sRGB HEX', 'sRGB HEX') }}<div class="color-input"><input v-model="draft.hex" type="color" aria-label="Color"><input v-model="draft.hex" aria-label="HEX" maxlength="7"><span>sRGB</span></div></label>
     </ModuleTooltip>
-    <div v-if="draft.supplier?.status !== 'unmatched'" class="rgb-row"><span v-for="(value, index) in rgb(draft.hex)" :key="index">{{ ['R', 'G', 'B'][index] }} <b>{{ value }}</b></span></div>
-    <ModuleTooltip v-for="field in parameters" :key="field.key" :title="field.title" :description="field.description" side="left"><label class="parameter"><span>{{ field.title }}<input v-model.number="draft[field.key]" :aria-label="field.key" type="number" min="0" max="1" step="0.01"></span><input v-model.number="draft[field.key]" type="range" min="0" max="1" step="0.01" :aria-label="`${field.key} slider`"></label></ModuleTooltip>
+    <div v-if="draft.supplier?.status !== 'unmatched'" class="rgb-row"><span v-for="(value, index) in rgb(draft.hex)" :key="index">{{ tr(['R', 'G', 'B'][index]) }} <b>{{ tr(value) }}</b></span></div>
+    <ModuleTooltip v-for="field in parameters" :key="field.key" :title="tr(field.title)" :description="field.description" side="left"><label class="parameter"><span>{{ tr(field.title) }}<input v-model.number="draft[field.key]" :aria-label="tr(field.key)" type="number" min="0" max="1" step="0.01"></span><input v-model.number="draft[field.key]" type="range" min="0" max="1" step="0.01" :aria-label="tr(`${field.key} slider`)"></label></ModuleTooltip>
     <label v-if="openpbr" class="parameter"><span>{{ t('IOR', '折射率') }}<input v-model.number="draft.ior" type="number" min="1" max="3" step="0.01" aria-label="IOR"></span></label>
-    <p class="render-note">{{ openpbr ? t('Direct roughness', '直接使用粗糙度') : t('Studio effective roughness', 'Studio 渲染粗糙度') }} <b>{{ effectiveRoughness }}</b></p>
+    <p class="render-note">{{ tr(openpbr ? t('Direct roughness', '直接使用粗糙度') : t('Studio effective roughness', 'Studio 渲染粗糙度')) }} <b>{{ tr(effectiveRoughness) }}</b></p>
     <label class="reference-upload"><img v-if="draft.referenceImage" :src="draft.referenceImage" alt="Material reference">{{ t('＋ Reference image (optional)', '＋ 参考图（可选）') }}<input type="file" accept="image/*" @change="reference"></label>
     <button v-if="supplier" class="secondary" :disabled="busy" @click="restore">{{ t('Restore source parameters', '恢复源参数') }}</button>
-    <p v-if="validation" role="alert" class="error-message">{{ validation }}</p>
+    <p v-if="validation" role="alert" class="error-message">{{ tr(validation) }}</p>
     <div class="button-row"><button class="secondary" :disabled="busy" @click="close">{{ t('Cancel', '取消') }}</button><button class="primary" :disabled="busy || !!materialProblem(draft)" @click="save">{{ t('Save locally', '保存到本地') }}</button></div>
   </div>
 </template>
