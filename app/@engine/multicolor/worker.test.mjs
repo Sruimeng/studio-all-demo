@@ -308,6 +308,23 @@ test('real UV seams, connected parts and color components remain distinct withou
   assert.deepEqual(Array.from((await request('prepareRefinement', { scheme: 'high' })).labels), [1,0,0]);
   assert.deepEqual(Array.from((await pick(1, 'color')).faces), [1]);
 });
+test('bucket fills only the hovered connected color component, with one undo per effective click', async () => {
+  const { request } = createRuntime(); await request('init', uvModel()); await request('label', options);
+  await request('prepareRefinement', { scheme: 'high' });
+  const groups = [0, 1];
+  const preview = await request('selectRefinement', { face: 0, scope: 'color', materialGroups: groups });
+  assert.deepEqual(Array.from(preview.faces), [0, 1]);
+  const fill = face => request('fillRefinement', { face, label: 1, materialGroups: groups });
+  const first = await fill(0);
+  assert.deepEqual(Array.from(first.refinementLabels), [1, 1, 0]); assert.equal(first.left, 1);
+  assert.equal((await fill(0)).left, 1);
+  const second = await fill(2);
+  assert.deepEqual(Array.from(second.refinementLabels), [1, 1, 1]); assert.equal(second.left, 2);
+  assert.deepEqual(Array.from((await request('undo')).refinementLabels), [1, 1, 0]);
+  assert.deepEqual(Array.from((await request('undo')).refinementLabels), [0, 0, 0]);
+  const sameFilament = await request('fillRefinement', { face: 0, label: 1, materialGroups: [0, 0] });
+  assert.equal(sameFilament.left, 0); assert.deepEqual(Array.from(sameFilament.refinementLabels), [0, 0, 0]);
+});
 test('multi-island paint and brush share undo, snapshot and exported material labels', async () => {
   const { request } = createRuntime(); await request('init', uvModel()); await request('label', options);
   await request('prepareRefinement', { scheme: 'high' });
@@ -384,4 +401,68 @@ test('prepared low-color export preserves confirmed partition when dimensions ch
   const codes = async result => [...(await unzip(result.blob)).get('3D/3dmodel.model').matchAll(/paint_color="([0-9A-F]+)"/g)].map(match => match[1]);
   assert.deepEqual(await codes(original), await codes(scaled));
   assert.equal(JSON.stringify((await request('snapshot')).snapshot), JSON.stringify(before));
+});
+
+test('appending a paint slot preserves labels and history, survives restore and exports', async () => {
+  for (const scheme of ['high', 'low']) {
+    const { request } = await labeledRuntime();
+    if (scheme === 'low') await request('lowpoly', { ...options, target: 0 });
+    await request('prepareRefinement', { scheme });
+    await request('paintRefinement', { faces: new Uint32Array([0]), label: 1 });
+    const before = (await request('snapshot')).snapshot;
+    assert.equal((await request('appendSlot', { expectedCount: 2 })).slotCount, 3);
+    const added = (await request('snapshot')).snapshot;
+    assert.deepEqual(added.refinement.labels, before.refinement.labels);
+    assert.deepEqual(added.labels, before.labels);
+    assert.deepEqual(added.labelOptions.slotHex, before.labelOptions.slotHex);
+    assert.equal(added.labelOptions.slotCount, 3);
+    if (scheme === 'low') assert.equal(added.lowOptions.slotCount, 3);
+    const painted = await request('paintRefinement', { faces: new Uint32Array([0]), label: 2 });
+    assert.equal(painted.left, 2);
+    assert.equal(painted.refinementLabels[0], 2);
+    const paintedSnapshot = (await request('snapshot')).snapshot;
+    const undone = await request('undo');
+    assert.equal(undone.left, 1); assert.equal(undone.refinementLabels[0], 1);
+    assert.equal((await request('snapshot')).snapshot.slotCount, 3);
+    const restored = await request('restore', { snapshot: paintedSnapshot });
+    assert.equal(restored.type, 'restore'); assert.equal(restored.refinement.labels[0], 2);
+    const again = await request('paintRefinement', { faces: new Uint32Array([1]), label: 2 });
+    assert.equal(again.type, 'ack');
+    const exported = await request('export3mf', { scheme, scale: 80, name: 'added', filaments: ['#FF0000', '#0000FF', '#00FF00'].map(hex => ({ hex })) });
+    assert.equal(exported.type, 'export');
+    const files = await unzip(exported.blob);
+    assert.equal(JSON.parse(files.get('Metadata/materials.json')).slots.length, 3);
+    assert.equal((await request('appendSlot', { expectedCount: 2 })).type, 'error');
+    for (let count = 3; count < 12; count++) assert.equal((await request('appendSlot', { expectedCount: count })).slotCount, count + 1);
+    assert.equal((await request('appendSlot', { expectedCount: 12 })).type, 'error');
+  }
+});
+
+test('source sampling stays independent of paint, palette and undo', async () => {
+  const { request } = await labeledRuntime();
+  await request('paintHigh', { faces: new Uint32Array([0]), label: 1 });
+  const before = (await request('snapshot')).snapshot;
+  assert.equal((await request('sampleSource', { face: 0, barycentric: [0.2, 0.3, 0.5] })).hex, '#FF0000');
+  assert.equal((await request('sampleSource', { face: 1, barycentric: [1, 0, 0] })).hex, '#0000FF');
+  assert.deepEqual((await request('snapshot')).snapshot, before);
+  assert.equal((await request('sampleSource', { face: 99, barycentric: [1, 0, 0] })).type, 'error');
+  assert.equal((await request('sampleSource', { face: 0, barycentric: [1, 1, 1] })).type, 'error');
+  assert.equal((await request('undo')).left, 0);
+});
+
+test('source sampling interpolates linear vertex colors and applies texture/material/vertex factors', async () => {
+  const plain = createRuntime(); const input = model();
+  input.colors = new Float32Array([255,0,0, 0,255,0, 0,0,255, 255,255,255]);
+  await plain.request('init', input);
+  assert.equal((await plain.request('sampleSource', { face: 0, barycentric: [0.5, 0.5, 0] })).hex, '#BCBC00');
+  const pixels = new Uint8ClampedArray(8 * 8 * 4).fill(255);
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 4; x++) pixels[(y * 8 + x) * 4 + 2] = 0;
+  const textured = createRuntime(pixels);
+  input.uvs = new Float32Array([0.25,0.5, .75,.5, .25,.5, .75,.5]);
+  input.materials = [{ image: 0, factor: [.5,1,1], vertexColors: true }];
+  input.faceMat = new Uint16Array(2); input.images = [new Blob(['image'])];
+  input.vertexFactors = new Float32Array([1,.5,1, 1,.5,1, 1,.5,1, 1,.5,1]);
+  await textured.request('init', input);
+  assert.equal((await textured.request('sampleSource', { face: 0, barycentric: [1,0,0] })).hex, '#BCBC00');
+  assert.equal((await textured.request('sampleSource', { face: 0, barycentric: [0,1,0] })).hex, '#BCBCFF');
 });

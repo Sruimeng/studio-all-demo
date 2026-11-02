@@ -2,6 +2,7 @@
 import { ref, shallowRef } from 'vue';
 import { useLocale } from '~/@base/locale';
 import type { MaterialImportResult } from '../types';
+const { tr } = useLocale();
 defineProps<{ busy: boolean; importMaterials: (files: File[]) => Promise<MaterialImportResult> }>();
 const emit = defineEmits<{ imported: [] }>();
 const { t } = useLocale();
@@ -23,10 +24,10 @@ async function upload(event: Event, importMaterials: (files: File[]) => Promise<
 <template>
   <div class="material-import">
     <input ref="input" type="file" accept=".usda" multiple hidden aria-label="Upload USDA materials" @change="upload($event, importMaterials)">
-    <button class="secondary" type="button" :disabled="busy || importing" @click="input?.click()">{{ importing ? t('Importing…', '正在导入…') : t('↑ Import USDA', '↑ 导入 USDA 材质') }}</button>
+    <button class="secondary" type="button" :disabled="busy || importing" @click="input?.click()">{{ tr(importing ? t('Importing…', '正在导入…') : t('↑ Import USDA', '↑ 导入 USDA 材质')) }}</button>
     <p>{{ t('Select one or more USDA files. Materials are saved locally; select one to apply.', '可多选 USDA 文件，保存到本地库后点击材质应用。') }}</p>
     <p v-if="result?.imported" role="status">{{ t(`Imported ${result.imported} materials`, `已导入 ${result.imported} 个材质`) }}</p>
-    <ul v-if="result?.errors.length" role="alert"><li v-for="(error, index) in result.errors" :key="index">{{ error }}</li></ul>
+    <ul v-if="result?.errors.length" role="alert"><li v-for="(error, index) in result.errors" :key="index">{{ tr(error) }}</li></ul>
   </div>
 </template>
 <style scoped>

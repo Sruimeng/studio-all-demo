@@ -25,7 +25,7 @@ export interface PrintProject {
   viewerSettings?: ViewerSettings;
   validationMaterial?: MaterialRecord | null;
   preparation?: PreparationState;
-  sourceSample?: 'chicken' | 'turkey';
+  sourceSample?: 'chicken' | 'turkey' | 'role';
   segmentation?: SegmentDocument | null;
   segmentSourceId?: string;
   segmentOpenPieces?: number;

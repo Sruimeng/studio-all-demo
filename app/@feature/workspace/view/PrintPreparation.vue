@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { useLocale } from '~/@base/locale';
 import { computed } from 'vue';
 import { useWorkspace } from '~/@feature/workspace';
+import { filamentName } from '~/@feature/materials/filaments';
 import { materialHex } from '~/@feature/materials';
 import { slicers, type Slicer, type PrepTask } from '../print-preparation';
+const { t, tr } = useLocale();
 
 const props = defineProps<{ ownedIds: string[] }>();
 const studio = useWorkspace();
+const locale = useLocale();
+const useEnglish = computed(() => locale.language === 'en');
 const prep = computed(() => studio.preparation);
 const completed = computed(() => studio.printTasks.filter(studio.printTaskDone).length);
 const owned = computed(() => studio.currentColorResult.used.filter(m => props.ownedIds.includes(m.id)).length);
@@ -30,63 +35,63 @@ function changeSize(axis: 'width' | 'depth' | 'height', event: Event) {
 </script>
 
 <template>
-  <section id="print-preparation-panel" class="studio-left-panel prep-panel" aria-label="打印准备">
-    <h1 class="prep-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M7 12h10M12 7v10" /></svg>打印准备</h1>
+  <section id="print-preparation-panel" class="studio-left-panel prep-panel" :aria-label="tr('打印准备')">
+    <h1 class="prep-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M7 12h10M12 7v10" /></svg>{{ tr("打印准备") }}</h1>
     <div class="prep-scroll">
       <div class="prep-choice">
-        <label class="prep-label" for="prep-slicer">切片器</label>
-        <select id="prep-slicer" :value="prep.slicer" :disabled="pending" @change="studio.changePrintSlicer(($event.target as HTMLSelectElement).value as Slicer)"><option v-for="slicer in slicers" :key="slicer">{{ slicer }}</option></select>
-        <span class="prep-label mode-label">打印模式</span>
-        <div class="prep-modes"><button type="button" :disabled="pending" :class="{ active: prep.mode === 'single' }" :aria-pressed="prep.mode === 'single'" @click="studio.changePrintMode('single')">单色打印</button><button type="button" :disabled="pending" :class="{ active: prep.mode === 'multi' }" :aria-pressed="prep.mode === 'multi'" @click="studio.changePrintMode('multi')">多色打印</button></div>
-        <section class="prep-size-settings" aria-label="模型尺寸">
-          <p class="prep-size-label">尺寸 <span>mm</span></p>
-          <div class="prep-dimensions"><label v-for="axis in axes" :key="axis.key"><span>{{ axis.label }}</span><input :aria-label="`${axis.name}（mm）`" type="number" min="0.0001" step="any" :value="Number(studio.printDimensions[axis.key].toFixed(2))" :disabled="pending" @change="changeSize(axis.key, $event)"></label></div>
-          <div class="prep-size-confirm"><span>⌁ 等比例锁定</span><button type="button" :disabled="pending" :class="{ confirmed: studio.printSizeReady }" @click="studio.confirmPrintSize">{{ studio.printSizeReady ? '✓ 已确认' : '确认尺寸' }}</button></div>
-          <p class="prep-help muted">修改尺寸后需重新确认并复核可打印性。高度范围：10–320 mm。</p>
+        <label class="prep-label" for="prep-slicer">{{ tr("切片器") }}</label>
+        <select id="prep-slicer" :value="prep.slicer" :disabled="pending" @change="studio.changePrintSlicer(($event.target as HTMLSelectElement).value as Slicer)"><option v-for="slicer in slicers" :key="slicer">{{ tr(slicer) }}</option></select>
+        <span class="prep-label mode-label">{{ tr("打印模式") }}</span>
+        <div class="prep-modes"><button type="button" :disabled="pending" :class="{ active: prep.mode === 'single' }" :aria-pressed="prep.mode === 'single'" @click="studio.changePrintMode('single')">{{ tr("单色打印") }}</button><button type="button" :disabled="pending" :class="{ active: prep.mode === 'multi' }" :aria-pressed="prep.mode === 'multi'" @click="studio.changePrintMode('multi')">{{ t('Multicolor', '多色打印') }}</button></div>
+        <section class="prep-size-settings" :aria-label="tr('模型尺寸')">
+          <p class="prep-size-label">{{ tr("尺寸") }} <span>mm</span></p>
+          <div class="prep-dimensions"><label v-for="axis in axes" :key="axis.key"><span>{{ tr(axis.label) }}</span><input :aria-label="t(`${tr(axis.name)} (mm)`, `${axis.name}（mm）`)" type="number" min="0.0001" step="any" :value="Number(studio.printDimensions[axis.key].toFixed(2))" :disabled="pending" @change="changeSize(axis.key, $event)"></label></div>
+          <div class="prep-size-confirm"><span>{{ tr("⌁ 等比例锁定") }}</span><button type="button" :disabled="pending" :class="{ confirmed: studio.printSizeReady }" @click="studio.confirmPrintSize">{{ tr(studio.printSizeReady ? '✓ 已确认' : '确认尺寸') }}</button></div>
+          <p class="prep-help muted">{{ tr("修改尺寸后需重新确认并复核可打印性。高度范围：10–320 mm。") }}</p>
         </section>
       </div>
-      <div class="prep-check-title"><strong>打印清单</strong><span>{{ completed }}/{{ studio.printTasks.length }} 已完成</span></div>
-      <div class="prep-progress" role="progressbar" aria-label="打印清单完成进度" :aria-valuenow="completed" :aria-valuemax="studio.printTasks.length" :aria-valuemin="0"><i :style="{ width: `${completed / studio.printTasks.length * 100}%` }" /></div>
+      <div class="prep-check-title"><strong>{{ tr("打印清单") }}</strong><span>{{ tr(completed) }}/{{ tr(studio.printTasks.length) }} {{ tr("已完成") }}</span></div>
+      <div class="prep-progress" role="progressbar" :aria-label="tr('打印清单完成进度')" :aria-valuenow="completed" :aria-valuemax="studio.printTasks.length" :aria-valuemin="0"><i :style="{ width: `${completed / studio.printTasks.length * 100}%` }" /></div>
       <section v-for="task in studio.printTasks" :key="task" class="prep-task" :class="{ open: prep.expanded === task, done: studio.printTaskDone(task) }">
-        <button type="button" class="prep-task-head" :disabled="pending" :aria-expanded="prep.expanded === task" :aria-controls="`prep-${task}-body`" @click="toggleTask(task)"><i class="prep-dot">{{ studio.printTaskDone(task) ? '✓' : '' }}</i><strong>{{ titles[task] }}</strong><em>{{ task === 'color' ? colorNames[studio.printColorState] : !studio.printSizeReady ? '待确认尺寸' : studio.printCheckReady ? '已复核' : '待复核' }}</em><span>{{ prep.expanded === task ? '⌃' : '⌄' }}</span></button>
+        <button type="button" class="prep-task-head" :disabled="pending" :aria-expanded="prep.expanded === task" :aria-controls="`prep-${task}-body`" @click="toggleTask(task)"><i class="prep-dot">{{ tr(studio.printTaskDone(task) ? '✓' : '') }}</i><strong>{{ tr(titles[task]) }}</strong><em>{{ tr(task === 'color' ? colorNames[studio.printColorState] : !studio.printSizeReady ? '待确认尺寸' : studio.printCheckReady ? '已复核' : '待复核') }}</em><span>{{ tr(prep.expanded === task ? '⌃' : '⌄') }}</span></button>
         <div v-if="prep.expanded === task" :id="`prep-${task}-body`" class="prep-task-body">
           <template v-if="task === 'check'">
-            <p v-if="!studio.printSizeReady" class="prep-help warning">请先在上方确认尺寸，再复核当前尺寸下的检测结果。薄壁与自相交仍需在切片器中检查。</p>
+            <p v-if="!studio.printSizeReady" class="prep-help warning">{{ tr("请先在上方确认尺寸，再复核当前尺寸下的检测结果。薄壁与自相交仍需在切片器中检查。") }}</p>
             <template v-else>
               <div v-if="studio.printMeshCheck.available" class="prep-check-results">
-                <p><span>表面闭合</span><b :class="{ warning: studio.printMeshCheck.boundary > 0 }">{{ studio.printMeshCheck.boundary ? '存在开放边界' : '边界已闭合' }}</b></p>
-                <p><span>开放边</span><b :class="{ warning: studio.printMeshCheck.boundary > 0 }">{{ studio.printMeshCheck.boundary }}</b></p>
-                <p><span>非流形边</span><b :class="{ warning: studio.printMeshCheck.nonManifold > 0 }">{{ studio.printMeshCheck.nonManifold }}</b></p>
-                <p><span>退化 / 重复面</span><b :class="{ warning: studio.printMeshCheck.degenerate + studio.printMeshCheck.duplicates > 0 }">{{ studio.printMeshCheck.degenerate }} / {{ studio.printMeshCheck.duplicates }}</b></p>
-                <p><span>朝向不一致的边</span><b :class="{ warning: studio.printMeshCheck.winding > 0 }">{{ studio.printMeshCheck.winding }}</b></p>
-                <p><span>薄壁 / 自相交</span><b class="muted">未检测</b></p>
+                <p><span>{{ tr("表面闭合") }}</span><b :class="{ warning: studio.printMeshCheck.boundary > 0 }">{{ tr(studio.printMeshCheck.boundary ? '存在开放边界' : '边界已闭合') }}</b></p>
+                <p><span>{{ tr("开放边") }}</span><b :class="{ warning: studio.printMeshCheck.boundary > 0 }">{{ tr(studio.printMeshCheck.boundary) }}</b></p>
+                <p><span>{{ tr("非流形边") }}</span><b :class="{ warning: studio.printMeshCheck.nonManifold > 0 }">{{ tr(studio.printMeshCheck.nonManifold) }}</b></p>
+                <p><span>{{ tr("退化 / 重复面") }}</span><b :class="{ warning: studio.printMeshCheck.degenerate + studio.printMeshCheck.duplicates > 0 }">{{ tr(studio.printMeshCheck.degenerate) }} / {{ tr(studio.printMeshCheck.duplicates) }}</b></p>
+                <p><span>{{ tr("朝向不一致的边") }}</span><b :class="{ warning: studio.printMeshCheck.winding > 0 }">{{ tr(studio.printMeshCheck.winding) }}</b></p>
+                <p><span>{{ tr("薄壁 / 自相交") }}</span><b class="muted">{{ tr("未检测") }}</b></p>
               </div>
-              <p v-else class="prep-help warning">无法检测当前模型，请重新导入有效模型。</p>
-              <p class="prep-help">{{ hasIssues ? '检测到网格问题，请在切片器中修复后再打印。' : '基础网格检查已完成。' }}薄壁、自相交和设备适配仍需在切片器中检查。</p>
-              <p class="prep-help muted">自动修复暂未接入；当前操作仅确认已阅读检测结果。</p>
+              <p v-else class="prep-help warning">{{ tr("无法检测当前模型，请重新导入有效模型。") }}</p>
+              <p class="prep-help">{{ tr(hasIssues ? '检测到网格问题，请在切片器中修复后再打印。' : '基础网格检查已完成。') }}{{ tr("薄壁、自相交和设备适配仍需在切片器中检查。") }}</p>
+              <p class="prep-help muted">{{ tr("自动修复暂未接入；当前操作仅确认已阅读检测结果。") }}</p>
             </template>
-            <button type="button" class="prep-primary" :class="{ secondary: studio.printCheckReady }" :disabled="pending || !studio.printSizeReady || !studio.printMeshCheck.available" @click="studio.acknowledgePrintCheck">{{ !studio.printSizeReady ? '请先确认尺寸' : studio.printCheckReady ? '已复核检测结果' : hasIssues ? '知悉问题，继续准备' : '确认检测结果' }}</button>
+            <button type="button" class="prep-primary" :class="{ secondary: studio.printCheckReady }" :disabled="pending || !studio.printSizeReady || !studio.printMeshCheck.available" @click="studio.acknowledgePrintCheck">{{ tr(!studio.printSizeReady ? '请先确认尺寸' : studio.printCheckReady ? '已复核检测结果' : hasIssues ? '知悉问题，继续准备' : '确认检测结果') }}</button>
           </template>
           <template v-else>
             <div v-if="studio.currentColorResult.used.length && studio.printColorState !== 'not-started'" class="prep-color-summary">
-              <div class="prep-color-summary-title"><span>方案耗材</span><strong>{{ studio.currentColorResult.used.length }} 种使用中</strong></div>
-              <div class="prep-swatches" aria-label="实际使用耗材"><i v-for="material in studio.currentColorResult.used" :key="material.id" :style="{ background: materialHex(material) }" :title="`${material.name} · ${props.ownedIds.includes(material.id) ? '已拥有' : '未拥有'}`" /></div>
-              <div class="prep-owned">{{ owned }} 已拥有 <span>·</span><span :class="{ warning: owned < studio.currentColorResult.used.length }">{{ studio.currentColorResult.used.length - owned }} 未拥有</span></div>
+              <div class="prep-color-summary-title"><span>{{ tr("方案耗材") }}</span><strong>{{ tr(studio.currentColorResult.used.length) }} {{ tr("种使用中") }}</strong></div>
+              <div class="prep-swatches" :aria-label="tr('实际使用耗材')"><i v-for="material in studio.currentColorResult.used" :key="material.id" :style="{ background: materialHex(material) }" :title="`${useEnglish ? filamentName(material, true) : material.name} · ${tr(props.ownedIds.includes(material.id) ? '已拥有' : '未拥有')}`" /></div>
+              <div class="prep-owned">{{ tr(owned) }} {{ tr("已拥有") }} <span>·</span><span :class="{ warning: owned < studio.currentColorResult.used.length }">{{ tr(studio.currentColorResult.used.length - owned) }} {{ tr("未拥有") }}</span></div>
             </div>
-            <p class="prep-help" :class="{ warning: studio.printColorState === 'review' }">{{ colorHelp[studio.printColorState] }}</p>
-            <p v-if="studio.printColorState !== 'not-started'" class="prep-help muted">未拥有耗材仅作提醒，不影响完成与导出。</p>
-            <button type="button" class="prep-primary" :class="{ secondary: studio.printColorState === 'ready' }" :disabled="pending" @click="studio.navigatePreparation('multi-color', true)">{{ colorActions[studio.printColorState] }} ↗</button>
+            <p class="prep-help" :class="{ warning: studio.printColorState === 'review' }">{{ tr(colorHelp[studio.printColorState]) }}</p>
+            <p v-if="studio.printColorState !== 'not-started'" class="prep-help muted">{{ tr("未拥有耗材仅作提醒，不影响完成与导出。") }}</p>
+            <button type="button" class="prep-primary" :class="{ secondary: studio.printColorState === 'ready' }" :disabled="pending" @click="studio.navigatePreparation('multi-color', true)">{{ tr(colorActions[studio.printColorState]) }} ↗</button>
           </template>
         </div>
       </section>
     </div>
     <footer class="prep-footer">
-      <p v-if="studio.prepSaveError" class="prep-error" role="alert">本地保存失败：{{ studio.prepSaveError }}<button type="button" :disabled="pending" @click="studio.savePreparation">重试保存</button></p>
-      <small>最后一步 · {{ prep.slicer }}</small>
-      <div :title="studio.printTodo || undefined">
-        <button type="button" class="prep-primary prep-download" :disabled="!!studio.printTodo" :aria-description="studio.printTodo || undefined" @click="studio.downloadPreparedModel">{{ studio.busy ? '正在处理…' : '导出模型文件' }}</button>
+      <p v-if="studio.prepSaveError" class="prep-error" role="alert">{{ tr("本地保存失败：") }}{{ tr(studio.prepSaveError) }}<button type="button" :disabled="pending" @click="studio.savePreparation">{{ tr("重试保存") }}</button></p>
+      <small>{{ tr("最后一步 ·") }} {{ tr(prep.slicer) }}</small>
+      <div :title="tr(studio.printTodo || undefined)">
+        <button type="button" class="prep-primary prep-download" :disabled="!!studio.printTodo" :aria-description="tr(studio.printTodo || undefined)" @click="studio.downloadPreparedModel">{{ tr(studio.busy ? '正在处理…' : '导出模型文件') }}</button>
       </div>
-      <button type="button" class="prep-primary prep-download prep-slicer-import" disabled title="一键导入暂未接入">一键导入 {{ prep.slicer }}</button>
+      <button type="button" class="prep-primary prep-download prep-slicer-import" disabled :title="tr('一键导入暂未接入')">{{ tr("一键导入") }} {{ tr(prep.slicer) }}</button>
     </footer>
   </section>
 </template>
@@ -105,5 +110,6 @@ button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.48}button:focu
 .prep-size-settings{margin-top:14px;padding-top:13px;border-top:1px solid #ffffff12}.prep-size-settings>.prep-help{margin-bottom:0}.prep-size-label{font-size:11px;margin:0 0 8px}.prep-size-label span{color:#8f9095;margin-left:4px}.prep-dimensions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.prep-dimensions label{min-width:0;display:flex;gap:4px;align-items:center;background:#303135;border:1px solid #ffffff1a;border-radius:8px;padding:7px 5px}.prep-dimensions span{font-size:10px;color:#a5a6ac}.prep-dimensions input{min-width:0;width:100%;background:none;border:0;outline:none;color:#eeeeef;font-size:11px;appearance:textfield}.prep-dimensions input::-webkit-inner-spin-button{appearance:none}.prep-size-confirm{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:5px}.prep-size-confirm span{font-size:10px;color:#a5a6ac}.prep-size-confirm button{font-size:10px;padding:6px 9px;border:0;border-radius:6px;background:#ffd400;color:#24210d}.prep-size-confirm button.confirmed{background:#45da7d19;color:#8fdfa9}
 .prep-color-summary{padding:10px;background:#303135;border-radius:8px;margin-bottom:10px}.prep-color-summary-title{display:flex;justify-content:space-between;font-size:11px;color:#c4c5ca;gap:4px}.prep-color-summary-title strong{font-weight:500;color:#f0f0f1}.prep-swatches{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}.prep-swatches i{width:21px;height:21px;border-radius:50%;box-shadow:inset 0 0 0 1px #ffffff30}.prep-owned{display:flex;gap:6px;font-size:10px;color:#b6b7bc}
 .prep-footer{margin-top:12px;border-top:1px solid #ffffff14;padding-top:12px;flex:none}.prep-footer small{display:block;font-size:10px;color:#a7a8ae;margin:0 0 8px 2px}.prep-download{border-radius:9px;min-height:38px}.prep-slicer-import{margin-top:8px}.prep-slicer-import:disabled{background:transparent;border-color:#505154;color:#85868b}.prep-error{font-size:10px;line-height:1.6;padding:9px;border-radius:8px;color:#f3b6ac;background:#ed847c10}.prep-error button{display:block;color:#ffd400;border:0;background:none;padding:4px 0 0;font:inherit}
+.prep-panel:lang(en) .prep-task-head strong,.prep-panel:lang(en) .prep-task-head em{white-space:normal}.prep-panel:lang(en) .prep-task-head strong{min-width:0}.prep-panel:lang(en) .prep-task-head em{max-width:85px;text-align:right}
 @media(prefers-reduced-motion:reduce){.prep-progress i{transition:none}}
 </style>

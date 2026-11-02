@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useLocale } from '~/@base/locale';
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { Box3, BufferAttribute, BufferGeometry, Color, DirectionalLight, DoubleSide, Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshStandardMaterial, MOUSE, OrthographicCamera, PerspectiveCamera, Scene, ShaderMaterial, SRGBColorSpace, Vector3, WebGLRenderer, WebGLRenderTarget, type Camera } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -8,10 +9,11 @@ import type { ViewerContent } from '~/@engine/viewer';
 import type { SegmentationController } from '../use-segmentation';
 import SegmentEditorDialog from './SegmentEditorDialog.vue';
 import SegmentResultToolbar from './SegmentResultToolbar.vue';
+const { tr } = useLocale();
 const props = defineProps<{ seg: SegmentationController; content: ViewerContent | null }>();
 const host = useTemplateRef<HTMLDivElement>('host');
 const viewerError = ref('');
-const planAvailable = computed(() => !!props.seg.plan && !props.seg.stale && !props.seg.plan.mappingDirty);
+const planAvailable = computed(() => !!props.seg.displayPlan);
 const showingOriginal = computed(() => props.seg.sourceView || !planAvailable.value);
 const brushActive = computed(() => props.seg.resultEditing && !props.seg.locked && !showingOriginal.value && props.seg.meshTool === 'brush');
 const cursor = ref<{ x: number; y: number } | null>(null);
@@ -39,8 +41,12 @@ onMounted(() => {
     const orientationGizmo = new ViewportGizmo(perspective, renderer, { container: host.value, className: 'segment-orientation-gizmo', placement: 'top-right', size: 104, offset: { top: 10, right: 14 } });
     orientationGizmo.attachControls(controls);
     const gizmoElement = host.value.querySelector<HTMLElement>('.segment-orientation-gizmo')!;
-    gizmoElement.title = '拖动旋转模型 · 点击 X / Y / Z 切换视角';
-    gizmoElement.setAttribute('aria-label', '模型视角控制器');
+    const updateGizmoLabel = () => {
+      gizmoElement.title = tr('拖动旋转模型 · 点击 X / Y / Z 切换视角');
+      gizmoElement.setAttribute('aria-label', tr('模型视角控制器'));
+    };
+    updateGizmoLabel();
+    watch(() => useLocale().language, updateGizmoLabel);
     let gizmoMoving = false;
     const marker = new MeshStandardMaterial({ vertexColors: true, roughness: 0.72, side: DoubleSide, transparent: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     const white = new MeshStandardMaterial({ color: '#d9dce3', roughness: 0.65, side: DoubleSide });
@@ -75,10 +81,10 @@ onMounted(() => {
     updateGeometry = () => {
       cancelStroke();
       partMesh?.removeFromParent(); partMesh?.geometry.dispose(); idMesh?.removeFromParent(); idMesh?.geometry.dispose();
-      const p = props.content!.mesh.positions, plan = props.seg.plan;
+      const p = props.content!.mesh.positions, plan = props.seg.displayPlan;
       colors.clear(); for (const g of plan?.groups ?? []) colors.set(g.id, new Color(g.color));
       const pieceOfFace = new Int32Array(p.length / 9).fill(-1), offsets: Vector3[] = [];
-      for (const piece of props.seg.pieces) {
+      for (const piece of props.seg.displayPieces) {
         const midpoint = new Vector3();
         for (const f of piece.faces) { pieceOfFace[f] = piece.id; midpoint.x += p[f * 9]! + p[f * 9 + 3]! + p[f * 9 + 6]!; midpoint.y += p[f * 9 + 1]! + p[f * 9 + 4]! + p[f * 9 + 7]!; midpoint.z += p[f * 9 + 2]! + p[f * 9 + 5]! + p[f * 9 + 8]!; }
         midpoint.divideScalar(piece.faces.length * 3).sub(center);
@@ -156,7 +162,7 @@ onMounted(() => {
       attribute.needsUpdate = true;
     }
     function restorePreview() {
-      for (const face of painting) { const color = colors.get(props.seg.plan?.labels[face] ?? -1); if (color) previewFace(face, color); }
+      for (const face of painting) { const color = colors.get(props.seg.displayPlan?.labels[face] ?? -1); if (color) previewFace(face, color); }
     }
     function cancelStroke() {
       const pointer = down?.pointer; down = null;
@@ -224,7 +230,7 @@ onMounted(() => {
     };
   } catch (e) { viewerError.value = e instanceof Error ? e.message : String(e); }
 });
-watch(() => [props.seg.plan, props.seg.explosion, props.seg.hidden.join(','), props.seg.solo, props.seg.stage, props.seg.stale, props.seg.editing], () => { if (!props.seg.editing) updateGeometry(); });
+watch(() => [props.seg.displayPlan, props.seg.explosion, props.seg.hidden.join(','), props.seg.solo, props.seg.editing], () => { if (!props.seg.editing) updateGeometry(); });
 watch(() => [props.seg.sourceView, props.seg.editing, props.seg.locked, props.seg.meshTool], () => updateAppearance());
 watch(() => props.seg.selected, () => { if (!props.seg.editing) updateSelection(); });
 onBeforeUnmount(() => cleanup());
@@ -235,15 +241,15 @@ onBeforeUnmount(() => cleanup());
     <div ref="host" class="segment-canvas" :class="{ painting: brushActive, picking: seg.meshTool === 'picker' && !showingOriginal }" />
     <div v-if="brushActive && cursor" class="segment-brush-cursor" :style="{ left: `${cursor.x}px`, top: `${cursor.y}px`, width: `${seg.meshRadius}px`, height: `${seg.meshRadius}px`, borderColor: seg.brushColor }" />
     <SegmentEditorDialog v-if="seg.editing && seg.reference" :seg="seg" />
-    <div class="segment-view-heading"><div><span>SEGMENT / {{ seg.stage === 'result' ? '已确认拆分结果' : seg.plan ? '3D 结果预览' : '输入模型' }}</span><p>{{ seg.stale ? '方案待更新 · 请重新拆分' : seg.plan?.mappingDirty ? '2D 方案待算法映射 · 当前显示原始模型' : seg.plan ? '示例表面网格 · 切口平整化与封闭待算法支持' : '原模型保留 · 输入拆分要求后开始拆分' }}</p></div></div>
-    <div class="segment-view-options" role="group" aria-label="模型显示方式">
-      <button type="button" :disabled="seg.locked" :aria-pressed="showingOriginal" :class="{ active: showingOriginal }" @click="seg.setUi('sourceView', true)">原始模型</button>
-      <button type="button" :disabled="seg.locked || !planAvailable" :aria-pressed="!showingOriginal" :class="{ active: !showingOriginal }" :title="!seg.plan ? '请先生成分件方案' : seg.stale ? seg.staleReason : seg.plan.mappingDirty ? '2D 方案待算法映射到 3D' : undefined" @click="seg.setUi('sourceView', false)">分件方案</button>
+    <div class="segment-view-heading"><div><span>SEGMENT / {{ tr(seg.stage === 'result' ? '已确认拆分结果' : seg.displayPlan ? '3D 结果预览' : '输入模型') }}</span><p>{{ tr(seg.displayPending ? '保留上次分件方案 · 点击“开始拆分”更新' : seg.plan?.mappingDirty ? '2D 方案待算法映射 · 当前显示原始模型' : seg.displayPlan ? '示例表面网格 · 切口平整化与封闭待算法支持' : '原模型保留 · 输入拆分要求后开始拆分') }}</p></div></div>
+    <div class="segment-view-options" role="group" :aria-label="tr('模型显示方式')">
+      <button type="button" :disabled="seg.locked" :aria-pressed="showingOriginal" :class="{ active: showingOriginal }" @click="seg.setUi('sourceView', true)">{{ tr("原始模型") }}</button>
+      <button type="button" :disabled="seg.locked || !planAvailable" :aria-pressed="!showingOriginal" :class="{ active: !showingOriginal }" :title="tr(seg.plan?.mappingDirty ? '2D 方案待算法映射到 3D' : !planAvailable ? '请先生成分件方案' : seg.displayPending ? '查看上次生成的分件方案' : undefined)" @click="seg.setUi('sourceView', false)">{{ tr("分件方案") }}</button>
     </div>
-    <div v-if="viewerError" class="segment-view-error">{{ viewerError }}</div>
-    <div v-if="seg.busy" class="segment-processing" role="status" aria-live="polite"><span class="segment-spinner" /><strong>{{ seg.processingLabel }}</strong><small>{{ seg.message }}</small></div>
+    <div v-if="viewerError" class="segment-view-error">{{ tr(viewerError) }}</div>
+    <div v-if="seg.busy" class="segment-processing" role="status" aria-live="polite"><span class="segment-spinner" /><strong>{{ tr(seg.processingLabel) }}</strong><small>{{ tr(seg.message) }}</small></div>
     <SegmentResultToolbar v-if="seg.plan && !seg.editing" :seg="seg" />
-    <div v-else-if="!seg.editing" class="segment-toolbar"><span>◈ 模型拆分</span><i /><span>拖动旋转 · 滚轮缩放</span></div>
+    <div v-else-if="!seg.editing" class="segment-toolbar"><span>{{ tr("◈ 模型拆分") }}</span><i /><span>{{ tr("拖动旋转 · 滚轮缩放") }}</span></div>
   </div>
 </template>
 

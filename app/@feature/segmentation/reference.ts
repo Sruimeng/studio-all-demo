@@ -1,4 +1,5 @@
 import { markerColors, type SegmentGroup, type SegmentMask, type SegmentMode, type SegmentOptions, type SegmentPlan, type SegmentReference } from './types';
+import { englishText } from '~/@base/locale/translate';
 
 // This is a curated example adapter, not a vision service. IDs are semantic identifiers,
 // never texture colors, face indices or filament assignments.
@@ -13,6 +14,10 @@ export const promptExamples = {
 };
 export function suggestedPrompt(mode: SegmentMode) {
   return mode === 'parts' ? '将鸡冠、喙、身体、双脚、背包和右侧配件分别拆出；身体保持整体。' : '分成深灰色、红色、橙色、粉色、棕色和白色区域；合并同色区域的阴影与渐变。';
+}
+/** Keep known English presets compatible with the demo's saved prompt rules. */
+export function canonicalPrompt(mode: SegmentMode, value: string): string {
+  return [...promptExamples[mode], suggestedPrompt(mode)].find(prompt => englishText(prompt) === value.trim()) ?? value;
 }
 export function presetTarget(mode: SegmentMode, prompt: string): number | null {
   if (!prompt.trim() || prompt === suggestedPrompt(mode) || prompt === promptExamples[mode][0] || (mode === 'colors' && prompt === '合并相近颜色')) return null;
@@ -146,6 +151,33 @@ export function mergePlanGroups(plan: SegmentPlan, ids: number[]): SegmentPlan {
   if (next.mask) next.mask.labels = next.mask.labels.map(id => ids.includes(id) ? target : id);
   next.groups = next.groups.filter(g => !ids.includes(g.id) || g.id === target); next.edited = true;
   return next;
+}
+// The demo can carry whole semantic groups from a 2D proposal into its sample
+// geometry adapter. A pixel-level split needs a real image-to-mesh service.
+export function previewGroupMapping(original: SegmentMask, edited: SegmentPlan) {
+  const mask = edited.mask!;
+  validateMask(mask, edited.groups, original.referenceId);
+  if (mask.width !== original.width || mask.height !== original.height) throw new Error('参考图尺寸已变化，请更新分区方案。');
+  const mapping = new Map<number, number>();
+  for (let i = 0; i < original.labels.length; i++) {
+    const source = original.labels[i]!, target = mask.labels[i]!;
+    if ((source < 0) !== (target < 0)) throw new Error('不能将背景分配为部件或丢弃模型区域。');
+    if (source < 0) continue;
+    if (mapping.has(source) && mapping.get(source) !== target) throw new Error('局部 2D 边界修改需要算法映射到 3D，当前 demo 尚未接入。修改仍保留，可撤销局部修改后继续；整组分配、合并和改名可生成示例分件。');
+    mapping.set(source, target);
+  }
+  return mapping;
+}
+export function applyPreviewToGeometry(geometry: SegmentPlan, original: SegmentMask, edited: SegmentPlan): SegmentPlan {
+  const mapping = previewGroupMapping(original, edited), groups = edited.groups.map(group => ({ ...group }));
+  for (const group of geometry.groups) {
+    if (mapping.has(group.id)) continue;
+    // Unseen surfaces remain present. Avoid a collision with a newly created
+    // 2D group whose ID happens to equal an unseen geometry group's ID.
+    const id = groups.some(g => g.id === group.id) ? Math.max(...groups.map(g => g.id)) + 1 : group.id;
+    mapping.set(group.id, id); groups.push({ ...group, id });
+  }
+  return { ...geometry, labels: geometry.labels.map(id => mapping.get(id)!), groups, mask: edited.mask, edited: edited.edited };
 }
 export function connectedPixels(mask: SegmentMask, seed: number, allSimilar = false): number[] {
   if (!Number.isInteger(seed) || seed < 0 || seed >= mask.labels.length || mask.labels[seed]! < 0) return [];

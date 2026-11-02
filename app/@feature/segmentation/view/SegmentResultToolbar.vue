@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useLocale } from '~/@base/locale';
 import { computed, ref, watch } from 'vue';
 import type { SegmentationController } from '../use-segmentation';
+const { tr } = useLocale();
 const props = defineProps<{ seg: SegmentationController }>();
 const paletteOpen = ref(false), explosionOpen = ref(false);
 const painting = computed(() => props.seg.meshTool !== 'select');
@@ -24,40 +26,40 @@ const icons = {
 <template>
   <div class="segment-result-tools">
     <div v-if="explosionOpen" class="explosion-popover tool-surface">
-      <label>爆炸查看<input :value="seg.explosion" type="range" min="0" max="1" step="0.01" :disabled="!editable" @input="seg.setUi('explosion', Number(($event.target as HTMLInputElement).value))"></label>
-      <button type="button" :disabled="!editable" @click="seg.setUi('explosion', 0)">复位</button>
-      <button type="button" aria-label="关闭爆炸查看" @click="explosionOpen = false">×</button>
+      <label>{{ tr("爆炸查看") }}<input :value="seg.explosion" type="range" min="0" max="1" step="0.01" :disabled="!editable" @input="seg.setUi('explosion', Number(($event.target as HTMLInputElement).value))"></label>
+      <button type="button" :disabled="!editable" @click="seg.setUi('explosion', 0)">{{ tr("复位") }}</button>
+      <button type="button" :aria-label="tr('关闭爆炸查看')" @click="explosionOpen = false">×</button>
     </div>
-    <div v-if="painting && seg.resultEditing" class="segment-brush-tools tool-surface" role="toolbar" aria-label="笔刷精修工具栏">
-      <button type="button" class="icon-button add-part" :class="{ active: seg.newBrushPart }" :aria-pressed="seg.newBrushPart" :disabled="!editable" aria-label="新建笔刷部件" title="新建部件，涂抹后添加到部件清单" @click="seg.addBrushPart">+</button>
+    <div v-if="painting && seg.resultEditing" class="segment-brush-tools tool-surface" role="toolbar" :aria-label="tr('笔刷精修工具栏')">
+      <button type="button" class="icon-button add-part" :class="{ active: seg.newBrushPart }" :aria-pressed="seg.newBrushPart" :disabled="!editable" :aria-label="tr('新建笔刷部件')" :title="tr('新建部件，涂抹后添加到部件清单')" @click="seg.addBrushPart">+</button>
       <i class="divider" />
-      <button type="button" class="icon-button" :class="{ active: seg.meshTool === 'picker' }" :aria-pressed="seg.meshTool === 'picker'" :disabled="!editable" aria-label="取色器" title="点击模型取色，选择对应部件" @click="seg.setMeshTool(seg.meshTool === 'picker' ? 'brush' : 'picker')"><svg viewBox="0 0 24 24"><path :d="icons.picker" /></svg></button>
+      <button type="button" class="icon-button" :class="{ active: seg.meshTool === 'picker' }" :aria-pressed="seg.meshTool === 'picker'" :disabled="!editable" :aria-label="tr('取色器')" :title="tr('点击模型取色，选择对应部件')" @click="seg.setMeshTool(seg.meshTool === 'picker' ? 'brush' : 'picker')"><svg viewBox="0 0 24 24"><path :d="icons.picker" /></svg></button>
       <div class="palette-control">
-        <button type="button" class="swatch-button" :disabled="!editable" aria-label="选择笔刷部件颜色" :aria-expanded="paletteOpen" title="选择目标部件颜色" @click="paletteOpen = !paletteOpen"><span :style="{ background: seg.brushColor }" /><small>⌄</small></button>
-        <div v-if="paletteOpen" class="part-palette tool-surface" role="group" aria-label="部件颜色" @keydown.esc="paletteOpen = false">
-          <button v-for="group in seg.plan?.groups" :key="group.id" type="button" :aria-label="`使用${group.name}的颜色`" :title="group.name" :aria-pressed="!seg.newBrushPart && seg.brushGroup === group.id" :class="{ chosen: !seg.newBrushPart && seg.brushGroup === group.id }" :disabled="!editable" @click="seg.chooseBrushGroup(group.id); paletteOpen = false"><span :style="{ background: group.color }" /></button>
+        <button type="button" class="swatch-button" :disabled="!editable" :aria-label="tr('选择笔刷部件颜色')" :aria-expanded="paletteOpen" :title="tr('选择目标部件颜色')" @click="paletteOpen = !paletteOpen"><span :style="{ background: seg.brushColor }" /><small>⌄</small></button>
+        <div v-if="paletteOpen" class="part-palette tool-surface" role="group" :aria-label="tr('部件颜色')" @keydown.esc="paletteOpen = false">
+          <button v-for="group in seg.plan?.groups" :key="group.id" type="button" :aria-label="tr(`使用${group.name}的颜色`)" :title="tr(group.name)" :aria-pressed="!seg.newBrushPart && seg.brushGroup === group.id" :class="{ chosen: !seg.newBrushPart && seg.brushGroup === group.id }" :disabled="!editable" @click="seg.chooseBrushGroup(group.id); paletteOpen = false"><span :style="{ background: group.color }" /></button>
         </div>
       </div>
       <i class="divider" />
-      <label class="brush-size">Size<input :value="seg.meshRadius" aria-label="笔刷大小" type="range" min="1" max="100" :disabled="!editable" @input="seg.setMeshRadius(Number(($event.target as HTMLInputElement).value))"></label>
-      <input class="size-number" :value="seg.meshRadius" aria-label="笔刷大小数值" type="number" min="1" max="100" :disabled="!editable" @change="seg.setMeshRadius(Number(($event.target as HTMLInputElement).value))">
+      <label class="brush-size">Size<input :value="seg.meshRadius" :aria-label="tr('笔刷大小')" type="range" min="1" max="100" :disabled="!editable" @input="seg.setMeshRadius(Number(($event.target as HTMLInputElement).value))"></label>
+      <input class="size-number" :value="seg.meshRadius" :aria-label="tr('笔刷大小数值')" type="number" min="1" max="100" :disabled="!editable" @change="seg.setMeshRadius(Number(($event.target as HTMLInputElement).value))">
       <i class="divider" />
-      <button type="button" class="icon-button" aria-label="关闭笔刷精修" :disabled="seg.locked" @click="seg.setMeshTool('select')">×</button>
+      <button type="button" class="icon-button" :aria-label="tr('关闭笔刷精修')" :disabled="seg.locked" @click="seg.setMeshTool('select')">×</button>
     </div>
-    <div class="segment-edit-tools tool-surface" role="toolbar" aria-label="拆分结果编辑工具栏">
-      <button type="button" class="icon-button" aria-label="撤销拆分编辑" title="撤销（⌘ / Ctrl + Z）" :disabled="seg.locked || !seg.canUndo" @click="seg.undo"><svg viewBox="0 0 24 24"><path :d="icons.undo" /></svg></button>
-      <button type="button" class="icon-button" aria-label="重做拆分编辑" title="重做（⌘ / Ctrl + Shift + Z）" :disabled="seg.locked || !seg.canRedo" @click="seg.redo"><svg viewBox="0 0 24 24"><path :d="icons.redo" /></svg></button>
+    <div class="segment-edit-tools tool-surface" role="toolbar" :aria-label="tr('拆分结果编辑工具栏')">
+      <button type="button" class="icon-button" :aria-label="tr('撤销拆分编辑')" :title="tr('撤销（⌘ / Ctrl + Z）')" :disabled="seg.locked || !seg.canUndo" @click="seg.undo"><svg viewBox="0 0 24 24"><path :d="icons.undo" /></svg></button>
+      <button type="button" class="icon-button" :aria-label="tr('重做拆分编辑')" :title="tr('重做（⌘ / Ctrl + Shift + Z）')" :disabled="seg.locked || !seg.canRedo" @click="seg.redo"><svg viewBox="0 0 24 24"><path :d="icons.redo" /></svg></button>
       <i class="divider" />
-      <button type="button" class="icon-button" :class="{ active: painting }" :aria-pressed="painting" :disabled="!editable" aria-label="笔刷精修" title="笔刷精修" @click="seg.setMeshTool(painting ? 'select' : 'brush')"><svg viewBox="0 0 24 24"><path :d="icons.brush" /></svg></button>
-      <button type="button" :disabled="!editable || seg.selectedGroups.length < 2" :title="seg.selectedGroups.length < 2 ? '在模型上连续点击，选择至少两个部件' : `合并 ${seg.selectedGroups.length} 个部件`" @click="seg.merge"><svg viewBox="0 0 24 24"><path :d="icons.merge" /></svg>Merge</button>
-      <button type="button" class="icon-button" :class="{ active: explosionOpen }" :disabled="!editable" :aria-expanded="explosionOpen" aria-label="爆炸查看" title="爆炸查看" @click="explosionOpen = !explosionOpen"><svg viewBox="0 0 24 24"><path :d="icons.explode" /></svg></button>
+      <button type="button" class="icon-button" :class="{ active: painting }" :aria-pressed="painting" :disabled="!editable" :aria-label="tr('笔刷精修')" :title="tr('笔刷精修')" @click="seg.setMeshTool(painting ? 'select' : 'brush')"><svg viewBox="0 0 24 24"><path :d="icons.brush" /></svg></button>
+      <button type="button" :disabled="!editable || seg.selectedGroups.length < 2" :title="tr(seg.selectedGroups.length < 2 ? '在模型上连续点击，选择至少两个部件' : `合并 ${seg.selectedGroups.length} 个部件`)" @click="seg.merge"><svg viewBox="0 0 24 24"><path :d="icons.merge" /></svg>Merge</button>
+      <button type="button" class="icon-button" :class="{ active: explosionOpen }" :disabled="!editable" :aria-expanded="explosionOpen" :aria-label="tr('爆炸查看')" :title="tr('爆炸查看')" @click="explosionOpen = !explosionOpen"><svg viewBox="0 0 24 24"><path :d="icons.explode" /></svg></button>
       <i class="divider" />
-      <button type="button" class="primary-action" :disabled="seg.locked || !seg.resultEditing || seg.confirmed" :title="seg.confirmed ? '当前结果已保存确认' : '保存并确认当前拆分结果'" @click="seg.confirmResult"><svg viewBox="0 0 24 24"><path :d="icons.save" /></svg>{{ seg.confirmed ? 'Saved' : 'Save' }}</button>
-      <button type="button" :disabled="seg.locked || !seg.confirmed" :title="outputTitle" @click="seg.forward('print')"><svg viewBox="0 0 24 24"><path :d="icons.print" /></svg>3D Print</button>
-      <button type="button" disabled title="分享服务暂未接入"><svg viewBox="0 0 24 24"><path :d="icons.share" /></svg>Share</button>
-      <button type="button" class="primary-action" :disabled="seg.locked || !seg.confirmed" :title="outputTitle ?? '导出当前拆分结果 GLB'" @click="seg.exportResult"><svg viewBox="0 0 24 24"><path :d="icons.export" /></svg>Export</button>
+      <button type="button" class="primary-action" :disabled="seg.locked || !seg.resultEditing || seg.confirmed" :title="tr(seg.confirmed ? '当前结果已保存确认' : '保存并确认当前拆分结果')" @click="seg.confirmResult"><svg viewBox="0 0 24 24"><path :d="icons.save" /></svg>{{ tr(seg.confirmed ? 'Saved' : 'Save') }}</button>
+      <button type="button" :disabled="seg.locked || !seg.confirmed" :title="tr(outputTitle)" @click="seg.forward('print')"><svg viewBox="0 0 24 24"><path :d="icons.print" /></svg>3D Print</button>
+      <button type="button" disabled :title="tr('分享服务暂未接入')"><svg viewBox="0 0 24 24"><path :d="icons.share" /></svg>Share</button>
+      <button type="button" class="primary-action" :disabled="seg.locked || !seg.confirmed" :title="tr(outputTitle ?? '导出当前拆分结果 GLB')" @click="seg.exportResult"><svg viewBox="0 0 24 24"><path :d="icons.export" /></svg>Export</button>
     </div>
-    <span class="tool-hint">{{ painting ? seg.meshTool === 'picker' ? '点击模型吸取部件颜色' : '左键涂抹 · 右键旋转 · 滚轮缩放' : seg.selectedGroups.length ? `已选 ${seg.selectedGroups.length} 个部件 · 点击空白取消选择` : '点击部件多选 · 拖动旋转 · 滚轮缩放' }}</span>
+    <span class="tool-hint">{{ tr(painting ? seg.meshTool === 'picker' ? '点击模型吸取部件颜色' : '左键涂抹 · 右键旋转 · 滚轮缩放' : seg.selectedGroups.length ? `已选 ${seg.selectedGroups.length} 个部件 · 点击空白取消选择` : '点击部件多选 · 拖动旋转 · 滚轮缩放') }}</span>
   </div>
 </template>
 

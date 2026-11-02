@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { useLocale } from '~/@base/locale';
 import { effectScope, markRaw, onMounted, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vue';
-import { ACESFilmicToneMapping, Box3, BufferAttribute, BufferGeometry, DirectionalLight, EquirectangularReflectionMapping, GridHelper, Group, HemisphereLight, Mesh, PerspectiveCamera, Raycaster, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type Material } from 'three';
+import { ACESFilmicToneMapping, Box3, BufferAttribute, BufferGeometry, DirectionalLight, DoubleSide, EquirectangularReflectionMapping, GridHelper, Group, HemisphereLight, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, SRGBColorSpace, Triangle, Vector2, Vector3, WebGLRenderer, type Material } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -11,10 +12,12 @@ import { ModelAccess, ModelObjectParent, ModelResultKind, useModelController, us
 import { createViewerRuntime } from './runtime';
 import { applySurface, cloneStudioMaterial, createPrintMaterial } from './material';
 import { createSelectionOutline } from './selection-outline';
+import { bindRefinementInput, type RefinementHit } from './refinement-input';
 import type { ViewerContent, ViewerSettings, PrintDisplay, SurfaceValues, ViewerHit } from './types';
+const { tr } = useLocale();
 
-const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings; validationSurface?: SurfaceValues | null; selection?: Uint32Array; busy?: boolean }>();
-const emit = defineEmits<{ ready: []; error: [message: string]; stroke: [hits: ViewerHit[]]; fill: [hit: ViewerHit]; select: [face: number | null, additive: boolean] }>();
+const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings; validationSurface?: SurfaceValues | null; selection?: Uint32Array; fillPreview?: Uint32Array; planHighlight?: Uint32Array; busy?: boolean; picker?: boolean; sourcePicker?: boolean; editingBlocked?: boolean }>();
+const emit = defineEmits<{ ready: []; error: [message: string]; stroke: [hits: ViewerHit[]]; fill: [hit: ViewerHit]; select: [face: number | null, additive: boolean]; pick: [materialIndex: number]; hover: [face: number | null]; sample: [face: number, barycentric: [number, number, number]] }>();
 const host = useTemplateRef<HTMLDivElement>('host');
 const error = shallowRef('');
 let teardown = () => {};
@@ -35,22 +38,25 @@ onMounted(() => {
     const scene = markRaw(new Scene()); const mount = markRaw(new Group()); scene.add(mount);
     const camera = markRaw(new PerspectiveCamera(32, 1, 0.1, 10000));
     const controls = markRaw(new OrbitControls(camera, renderer.domElement)); controls.enableDamping = true;
+    let refinementInput: ReturnType<typeof bindRefinementInput> | undefined;
     const orientationGizmo = markRaw(new ViewportGizmo(camera, renderer));
     orientationGizmo.set({ container: host.value!, placement: 'top-right', size: 72, offset: { top: 2, right: 2 } });
-    orientationGizmo.addEventListener('start', () => { controls.enabled = false; });
-    orientationGizmo.addEventListener('end', () => { controls.enabled = (props.settings.tool === 'orbit' || props.settings.tool === 'select'); });
+    orientationGizmo.addEventListener('start', () => { refinementInput?.reset(); controls.enabled = false; });
+    orientationGizmo.addEventListener('end', () => { controls.enabled = true; });
     const composer = markRaw(new EffectComposer(renderer));
     const lights = [new HemisphereLight(0xffffff, 0x444854, 1.2), new DirectionalLight(0xffffff, 2)];
     lights[1]!.position.set(50, 100, 80); scene.add(...lights);
     const grid = new GridHelper(220, 22, 0x43464b, 0x2a2d31); grid.position.y = -0.15; scene.add(grid);
     grid.visible = props.settings.grid;
     const callbacks: Array<{ handler: RenderFunction; order: number }> = [];
-    const platform = useModelPlatform({ cameraEnabled: () => (props.settings.tool === 'orbit' || props.settings.tool === 'select'), controls: shallowRef(controls), renderer,
+    const platform = useModelPlatform({ cameraEnabled: () => !refinementInput?.editing, controls: shallowRef(controls), renderer,
       scene: () => mount, onRender: (handler, order) => { callbacks.push({ handler, order }); callbacks.sort((a, b) => a.order - b.order); } });
     const controller = useModelController(createViewerRuntime(mount, platform));
     engine.addSystem('model', () => ({ controller: markRaw(controller) }));
     let activeRoot: ViewerContent['root'] | null = null;
     let printMesh: Mesh | null = null;
+    let sourcePickMesh: Mesh<BufferGeometry, MeshBasicMaterial> | null = null;
+    function clearSourcePick() { sourcePickMesh?.removeFromParent(); sourcePickMesh?.geometry.dispose(); sourcePickMesh?.material.dispose(); sourcePickMesh = null; }
     const selectionOutline = createSelectionOutline();
     let validationRoot: ViewerContent['root'] | null = null;
     let validationMaterial: ReturnType<typeof createPrintMaterial> | null = null;
@@ -82,7 +88,8 @@ onMounted(() => {
       },
     };
     function updateSelection() {
-      selectionOutline.update(props.display?.positions, props.selection);
+      const toolSelection = props.settings.tool === 'fill' ? props.fillPreview : props.settings.tool === 'select' ? props.selection : undefined;
+      selectionOutline.update(props.display?.positions, toolSelection?.length ? toolSelection : props.planHighlight);
     }
     function clearPrint() {
       selectionOutline.update(undefined, undefined);
@@ -129,7 +136,7 @@ onMounted(() => {
       }
       if (printMesh) printMesh.material = printMaterials.map(entry => entry.material);
     }
-    watch(() => [props.selection, props.display], updateSelection);
+    watch(() => [props.selection, props.fillPreview, props.planHighlight, props.display, props.settings.tool], updateSelection);
     function updateHeight() {
       const height = sourceBounds.max.y - sourceBounds.min.y || 1;
       const scale = props.settings.height / height;
@@ -153,6 +160,13 @@ onMounted(() => {
     watch(() => props.content, async content => {
       if (!content || content.id === sourceKey) return;
       sourceKey = content.id;
+      clearSourcePick();
+      const sourceGeometry = new BufferGeometry();
+      sourceGeometry.setAttribute('position', new BufferAttribute(content.mesh.positions, 3));
+      sourceGeometry.setIndex(new BufferAttribute(content.mesh.indices, 1));
+      sourceGeometry.boundsTree = new MeshBVH(sourceGeometry, { indirect: true });
+      sourcePickMesh = markRaw(new Mesh(sourceGeometry, new MeshBasicMaterial({ side: DoubleSide })));
+      sourcePickMesh.raycast = acceleratedRaycast; sourcePickMesh.visible = false; mount.add(sourcePickMesh);
       sourceBounds = new Box3().setFromObject(content.root);
       updateHeight(); fit();
       const result = await controller.setDefault({ context, source: { key: { id: content.id, revision: 0 }, prepare: async () => ({ root: content.root, info: { id: content.id } }) }, presentation, params: {} });
@@ -162,7 +176,6 @@ onMounted(() => {
     watch(() => [props.display, props.surfaces, props.settings.layers, props.settings.workflow, props.validationSurface] as const, updatePrint, { deep: false });
     watch(() => props.settings.height, () => { updateHeight(); fit(); });
     watch(() => props.settings.mode, fit);
-    watch(() => props.settings.tool, tool => { controls.enabled = tool === 'orbit' || tool === 'select'; renderer.domElement.style.cursor = tool === 'orbit' ? 'grab' : 'crosshair'; });
     watch(() => props.settings.grid, visible => { grid.visible = visible; });
     const updateLighting = () => {
       const preview = props.settings.preview;
@@ -172,45 +185,56 @@ onMounted(() => {
       scene.environmentRotation.set(0, fixed ? 0 : (preview?.environmentRotation ?? 0) * Math.PI / 180, 0);
     };
     watch(() => props.settings.preview, updateLighting, { deep: true, immediate: true });
-    let stroke: ViewerHit[] = []; let drawing = false;
     const raycaster = new Raycaster(); raycaster.firstHitOnly = true; const mouse = new Vector2();
-    function hit(event: PointerEvent): ViewerHit | null {
-      if (!printMesh || props.settings.workflow === 'validation' || props.settings.mode === 'original' || !currentPrint) return null;
+    function hit(event: { clientX: number; clientY: number }): RefinementHit | null {
       const rect = renderer.domElement.getBoundingClientRect(); let x = event.clientX - rect.left; let width = rect.width;
+      const y = event.clientY - rect.top;
+      if (width <= 0 || rect.height <= 0 || x < 0 || x >= width || y < 0 || y >= rect.height) return null;
+      const sourceWidth = props.settings.mode === 'compare' ? rect.width * Math.min(0.8, Math.max(0.2, props.settings.compareSplit)) : rect.width;
+      const overSource = props.settings.mode !== 'print' && x < sourceWidth;
+      if ((props.sourcePicker || props.picker) && overSource) {
+        if (!sourcePickMesh) return null;
+        width = sourceWidth;
+        camera.aspect = width / rect.height; camera.updateProjectionMatrix();
+        mouse.set(x / width * 2 - 1, -y / rect.height * 2 + 1); raycaster.setFromCamera(mouse, camera);
+        sourcePickMesh.updateWorldMatrix(true, false);
+        const result = raycaster.intersectObject(sourcePickMesh)[0];
+        if (!result?.face || result.faceIndex == null) return null;
+        const point = mount.worldToLocal(result.point.clone()), position = sourcePickMesh.geometry.getAttribute('position');
+        const weights = Triangle.getBarycoord(point, new Vector3().fromBufferAttribute(position, result.face.a), new Vector3().fromBufferAttribute(position, result.face.b), new Vector3().fromBufferAttribute(position, result.face.c), new Vector3());
+        return weights ? { edit: { face: result.faceIndex, point: point.toArray(), radius: 0 }, materialIndex: -1, barycentric: weights.toArray() } : null;
+      }
+      if (props.sourcePicker || !printMesh || props.settings.workflow === 'validation' || props.settings.mode === 'original' || !currentPrint) return null;
       if (props.settings.mode === 'compare') {
         const split = Math.min(0.8, Math.max(0.2, props.settings.compareSplit));
         if (x < rect.width * split) return null;
         x -= rect.width * split; width = rect.width * (1 - split);
       }
       camera.aspect = width / rect.height; camera.updateProjectionMatrix();
-      mouse.set(x / width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1); raycaster.setFromCamera(mouse, camera);
+      mouse.set(x / width * 2 - 1, -y / rect.height * 2 + 1); raycaster.setFromCamera(mouse, camera);
       printMesh.updateWorldMatrix(true, false);
       const result = raycaster.intersectObject(printMesh)[0];
       if (!result || result.faceIndex == null) return null;
       const index = printMesh.geometry.index!.getX(result.faceIndex * 3);
       const leaf = Math.floor(index / 3); const face = currentPrint.faceMap?.[leaf] ?? leaf;
-      return { face, point: mount.worldToLocal(result.point.clone()).toArray(), radius: props.settings.radius / mount.scale.x };
+      const materialIndex = currentPrint.labels[leaf] ?? 0;
+      return { edit: { face, point: mount.worldToLocal(result.point.clone()).toArray(), radius: props.settings.radius / mount.scale.x }, materialIndex };
     }
-    let selectionDown: { x: number; y: number; moved: boolean } | null = null;
-    const down = (event: PointerEvent) => {
-      if (props.busy) return;
-      if (event.button === 0 && props.settings.tool === 'select') { selectionDown = { x: event.clientX, y: event.clientY, moved: false }; return; }
-      if (event.button !== 0 || (props.settings.tool === 'orbit' || props.settings.tool === 'select')) return;
-      const result = hit(event); if (!result) return;
-      event.preventDefault(); renderer.domElement.setPointerCapture(event.pointerId);
-      if (props.settings.tool === 'fill') { emit('fill', result); return; }
-      drawing = true; stroke = [result];
-    };
-    const move = (event: PointerEvent) => { if (selectionDown && Math.hypot(event.clientX - selectionDown.x, event.clientY - selectionDown.y) > 5) selectionDown.moved = true; if (!drawing) return; const result = hit(event); if (result && stroke.at(-1)?.face !== result.face) stroke.push(result); };
-    const up = (event: PointerEvent) => {
-      if (selectionDown && !selectionDown.moved && !props.busy && event.type !== 'pointercancel' && props.settings.tool === 'select') {
-        const rect = renderer.domElement.getBoundingClientRect();
-        if (props.settings.workflow !== 'validation' && props.settings.mode !== 'original' && (props.settings.mode !== 'compare' || event.clientX - rect.left >= rect.width * props.settings.compareSplit)) emit('select', hit(event)?.face ?? null, event.shiftKey);
-      }
-      selectionDown = null;
-      if (drawing && stroke.length) emit('stroke', stroke); drawing = false; stroke = []; };
-    renderer.domElement.addEventListener('pointerdown', down); renderer.domElement.addEventListener('pointermove', move);
-    renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('pointercancel', up);
+    refinementInput = bindRefinementInput(renderer.domElement, {
+      controls,
+      tool: () => props.sourcePicker ? 'source-picker' : props.picker ? 'picker' : props.settings.tool,
+      busy: () => !!props.busy || !!props.editingBlocked || props.settings.workflow === 'validation',
+      hit,
+      stroke: hits => emit('stroke', hits),
+      fill: hitResult => emit('fill', hitResult),
+      select: (face, additive) => emit('select', face, additive),
+      pick: materialIndex => emit('pick', materialIndex),
+      sample: (face, weights) => emit('sample', face, weights),
+      hover: face => emit('hover', face),
+    });
+    watch(() => [props.settings.tool, props.picker, props.sourcePicker, props.editingBlocked, props.settings.mode, props.settings.workflow, props.content, props.busy], () => refinementInput?.reset());
+    watch(() => props.display, () => refinementInput?.refreshCursor());
+    controls.addEventListener('change', () => refinementInput?.refreshCursor());
     const resize = new ResizeObserver(() => { if (!host.value) return; renderer.setSize(host.value.clientWidth, host.value.clientHeight); }); resize.observe(host.value!);
     const frameTimes: number[] = [];
     let frame = 0, previous = performance.now(); const start = previous;
@@ -228,7 +252,7 @@ onMounted(() => {
         if (validationRoot) validationRoot.visible = print && validation;
         camera.aspect = w / height; camera.updateProjectionMatrix(); renderer.setViewport(left, 0, w, height); renderer.setScissor(left, 0, w, height);
         renderer.render(scene, camera);
-        if (print && !validation && props.settings.tool === 'select') selectionOutline.render(renderer, camera, mount, w, height);
+        if (print && !validation && !props.picker && !props.sourcePicker && !props.editingBlocked) selectionOutline.render(renderer, camera, mount, w, height);
       };
       platform.runFrame(() => {
         renderer.setScissorTest(true);
@@ -246,9 +270,9 @@ onMounted(() => {
     new HDRLoader().load('/studio.hdr', texture => { if (closed) { texture.dispose(); return; } texture.mapping = EquirectangularReflectionMapping; scene.environment = texture; updateLighting(); }, undefined, () => {});
     teardown = () => {
       closed = true; cancelAnimationFrame(frame); resize.disconnect(); controls.dispose();
-      renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointercancel', up);
+      refinementInput?.dispose();
       void controller.close().finally(() => {
-        clearPrint(); selectionOutline.dispose(); platform.dispose(); engine.dispose(); scene.environment?.dispose(); grid.geometry.dispose();
+        clearPrint(); clearSourcePick(); selectionOutline.dispose(); platform.dispose(); engine.dispose(); scene.environment?.dispose(); grid.geometry.dispose();
         (Array.isArray(grid.material) ? grid.material : [grid.material]).forEach(material => material.dispose()); composer.dispose(); orientationGizmo.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); localScope.stop();
       });
     };
@@ -256,7 +280,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => teardown());
 </script>
-<template><div ref="host" class="model-viewport"><div v-if="error" class="viewport-error">{{ error }}</div></div></template>
+<template><div ref="host" class="model-viewport"><div v-if="error" class="viewport-error">{{ tr(error) }}</div></div></template>
 <style scoped>
 .model-viewport { width: 100%; height: 100%; position: relative; overflow: hidden; }
 .viewport-error { position: absolute; inset: 35% 15%; z-index: 2; color: #ffab9c; text-align: center; }
