@@ -35,6 +35,7 @@ export interface MaterialSeries {
   templateId?: FinishId;
   aliases?: string[];
   source: string;
+  sourceLabel?: string;
 }
 export type ColorMode = 'catalog' | 'linear-srgb' | 'srgb';
 export interface SupplierProfile {

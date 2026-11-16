@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { effectScope, markRaw, onMounted, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vue';
 import { ACESFilmicToneMapping, Box3, BufferAttribute, BufferGeometry, DirectionalLight, EquirectangularReflectionMapping, GridHelper, Group, HemisphereLight, Mesh, MeshBasicMaterial, PlaneGeometry, PerspectiveCamera, Raycaster, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, type Material } from 'three';
+import type { RegionEditTool } from '../multicolor';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
+import { acceleratedRaycast } from 'three-mesh-bvh';
 import { ViewportGizmo } from 'three-viewport-gizmo';
 import { createEngine, type RenderFunction } from '@tripo3d/engine';
 import { ModelAccess, ModelObjectParent, ModelResultKind, useModelController, useModelPlatform, type ModelPresentation } from '../model';
 import { createViewerRuntime } from './runtime';
 import { applySurface, cloneStudioMaterial, createPrintMaterial } from './material';
+import { regionGeometry, regionPickingGeometry } from './region-geometry';
 import type { ViewerContent, ViewerSettings, PrintDisplay, SurfaceValues, ViewerHit } from './types';
 
-const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings; validationSurface?: SurfaceValues | null; referenceSurface?: SurfaceValues | null }>();
-const emit = defineEmits<{ ready: []; error: [message: string]; stroke: [hits: ViewerHit[]]; fill: [hit: ViewerHit] }>();
+const props = defineProps<{ content: ViewerContent | null; display: PrintDisplay | null; surfaces: SurfaceValues[]; settings: ViewerSettings; validationSurface?: SurfaceValues | null; referenceSurface?: SurfaceValues | null; editTool?: RegionEditTool; overlay?: Uint8Array | null }>();
+const emit = defineEmits<{ ready: []; error: [message: string]; stroke: [hits: ViewerHit[]]; fill: [hit: ViewerHit]; pick: [hit: ViewerHit] }>();
+const activeTool = () => props.editTool ?? props.settings.tool;
 const host = useTemplateRef<HTMLDivElement>('host');
 const error = shallowRef('');
 let teardown = () => {};
@@ -37,7 +40,7 @@ onMounted(() => {
     const orientationGizmo = markRaw(new ViewportGizmo(camera, renderer));
     orientationGizmo.set({ container: host.value!, placement: 'top-right', size: 72, offset: { top: 2, right: 2 } });
     orientationGizmo.addEventListener('start', () => { controls.enabled = false; });
-    orientationGizmo.addEventListener('end', () => { controls.enabled = props.settings.tool === 'orbit'; });
+    orientationGizmo.addEventListener('end', () => { controls.enabled = activeTool() === 'orbit'; });
     const composer = markRaw(new EffectComposer(renderer));
     const lights = [new HemisphereLight(0xffffff, 0x444854, 1.2), new DirectionalLight(0xffffff, 2)];
     lights[1]!.position.set(50, 100, 80); scene.add(...lights);
@@ -54,12 +57,29 @@ onMounted(() => {
     opticalBackdrop.visible = false; scene.add(opticalBackdrop);
     const backdropDirection = new Vector3();
     const callbacks: Array<{ handler: RenderFunction; order: number }> = [];
-    const platform = useModelPlatform({ cameraEnabled: () => props.settings.tool === 'orbit', controls: shallowRef(controls), renderer,
+    const platform = useModelPlatform({ cameraEnabled: () => activeTool() === 'orbit', controls: shallowRef(controls), renderer,
       scene: () => mount, onRender: (handler, order) => { callbacks.push({ handler, order }); callbacks.sort((a, b) => a.order - b.order); } });
     const controller = useModelController(createViewerRuntime(mount, platform));
     engine.addSystem('model', () => ({ controller: markRaw(controller) }));
     let activeRoot: ViewerContent['root'] | null = null;
     let printMesh: Mesh | null = null;
+    let pickMesh: Mesh | null = null;
+    const overlayMaterials = [1, 2].map(code => new MeshBasicMaterial({ color: code === 1 ? '#00E5FF' : '#FFC857', transparent: true, opacity: 0.65, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, toneMapped: false }));
+    const overlayMeshes = overlayMaterials.map(material => { const mesh = markRaw(new Mesh(new BufferGeometry(), material)); mesh.renderOrder = 2; mount.add(mesh); return mesh; });
+    function updateOverlay() {
+      overlayMeshes.forEach((mesh, index) => {
+        const old = mesh.geometry, selected: number[] = [];
+        const reusable = !!props.display && old.getAttribute('position')?.array === props.display.positions;
+        const geometry = reusable ? old : new BufferGeometry();
+        if (props.display) {
+          if (!reusable) geometry.setAttribute('position', new BufferAttribute(props.display.positions, 3));
+          if (props.overlay?.length === props.display.labels.length) props.overlay.forEach((code, face) => { if (code === index + 1) selected.push(face * 3, face * 3 + 1, face * 3 + 2); });
+        }
+        geometry.setIndex(new BufferAttribute(new Uint32Array(selected), 1));
+        mesh.geometry = geometry;
+        if (!reusable) old.dispose();
+      });
+    }
     let validationRoot: ViewerContent['root'] | null = null;
     let validationMaterial: ReturnType<typeof createPrintMaterial> | null = null;
     let referenceMaterial: ReturnType<typeof createPrintMaterial> | null = null;
@@ -93,6 +113,7 @@ onMounted(() => {
     };
     function clearPrint() {
       if (printMesh) { printMesh.removeFromParent(); printMesh.geometry.dispose(); printMesh = null; }
+      pickMesh?.geometry.dispose(); pickMesh = null;
       printMaterials.forEach(entry => entry.material.dispose()); printMaterials = []; currentPrint = null;
       validationRoot?.removeFromParent(); validationRoot = null;
       validationMaterial?.material.dispose(); validationMaterial = null;
@@ -127,19 +148,22 @@ onMounted(() => {
         entry.uniforms.printLayers.value = props.settings.layers ? 1 : 0;
       });
       if (props.display !== currentPrint) {
-        if (printMesh) { printMesh.removeFromParent(); printMesh.geometry.dispose(); }
         const data = props.display;
-        const geometry = new BufferGeometry(); geometry.setAttribute('position', new BufferAttribute(data.positions, 3));
-        const buckets = Array.from({ length: renderSurface.length }, () => [] as number[]);
-        for (let i = 0; i < data.labels.length; i++) buckets[data.labels[i] ?? 0]?.push(i * 3, i * 3 + 1, i * 3 + 2);
-        const sorted = new Uint32Array(data.positions.length / 3); let start = 0;
-        buckets.forEach((bucket, materialIndex) => { sorted.set(bucket, start); geometry.addGroup(start, bucket.length, materialIndex); start += bucket.length; });
-        geometry.setIndex(new BufferAttribute(sorted, 1)); geometry.computeVertexNormals();
-        geometry.boundsTree = new MeshBVH(geometry, { indirect: true });
-        printMesh = markRaw(new Mesh(geometry, printMaterials.map(entry => entry.material))); printMesh.raycast = acceleratedRaycast;
-        mount.add(printMesh); currentPrint = data;
+        const geometry = regionGeometry(data, renderSurface.length, printMesh?.geometry);
+        const picking = regionPickingGeometry(data, pickMesh?.geometry);
+        if (pickMesh) { if (pickMesh.geometry !== picking) pickMesh.geometry.dispose(); pickMesh.geometry = picking; }
+        else { pickMesh = markRaw(new Mesh(picking, printMaterials[0]!.material)); pickMesh.raycast = acceleratedRaycast; }
+        if (printMesh) {
+          if (printMesh.geometry !== geometry) printMesh.geometry.dispose();
+          printMesh.geometry = geometry;
+        } else {
+          printMesh = markRaw(new Mesh(geometry, printMaterials.map(entry => entry.material))); printMesh.raycast = acceleratedRaycast;
+          mount.add(printMesh);
+        }
+        currentPrint = data;
       }
       if (printMesh) printMesh.material = printMaterials.map(entry => entry.material);
+      if (pickMesh) pickMesh.material = printMaterials[0]!.material;
     }
     function updateHeight() {
       const height = sourceBounds.max.y - sourceBounds.min.y || 1;
@@ -173,7 +197,8 @@ onMounted(() => {
     watch(() => [props.display, props.surfaces, props.settings.layers, props.settings.workflow, props.validationSurface, props.referenceSurface] as const, updatePrint, { deep: false });
     watch(() => props.settings.height, () => { updateHeight(); fit(); });
     watch(() => props.settings.mode, fit);
-    watch(() => props.settings.tool, tool => { controls.enabled = tool === 'orbit'; renderer.domElement.style.cursor = tool === 'orbit' ? 'grab' : 'crosshair'; });
+    watch(activeTool, tool => { controls.enabled = tool === 'orbit'; renderer.domElement.style.cursor = tool === 'orbit' ? 'grab' : 'crosshair'; }, { immediate: true });
+    watch(() => [props.overlay, props.display] as const, updateOverlay, { immediate: true });
     watch(() => props.settings.grid, visible => { grid.visible = visible; });
     const updateLighting = () => {
       const preview = props.settings.preview;
@@ -186,7 +211,7 @@ onMounted(() => {
     let stroke: ViewerHit[] = []; let drawing = false;
     const raycaster = new Raycaster(); raycaster.firstHitOnly = true; const mouse = new Vector2();
     function hit(event: PointerEvent): ViewerHit | null {
-      if (!printMesh || props.settings.workflow === 'validation' || props.settings.mode === 'original' || !currentPrint) return null;
+      if (!printMesh || !pickMesh || props.settings.workflow === 'validation' || props.settings.mode === 'original' || !currentPrint) return null;
       const rect = renderer.domElement.getBoundingClientRect(); let x = event.clientX - rect.left; let width = rect.width;
       if (props.settings.mode === 'compare') {
         const split = Math.min(0.8, Math.max(0.2, props.settings.compareSplit));
@@ -196,17 +221,19 @@ onMounted(() => {
       camera.aspect = width / rect.height; camera.updateProjectionMatrix();
       mouse.set(x / width * 2 - 1, -(event.clientY - rect.top) / rect.height * 2 + 1); raycaster.setFromCamera(mouse, camera);
       printMesh.updateWorldMatrix(true, false);
-      const result = raycaster.intersectObject(printMesh)[0];
+      pickMesh.matrixWorld.copy(printMesh.matrixWorld);
+      const result = raycaster.intersectObject(pickMesh)[0];
       if (!result || result.faceIndex == null) return null;
-      const index = printMesh.geometry.index!.getX(result.faceIndex * 3);
+      const index = pickMesh.geometry.index!.getX(result.faceIndex * 3);
       const leaf = Math.floor(index / 3); const face = currentPrint.faceMap?.[leaf] ?? leaf;
       return { face, point: mount.worldToLocal(result.point.clone()).toArray(), radius: props.settings.radius / mount.scale.x };
     }
     const down = (event: PointerEvent) => {
-      if (event.button !== 0 || props.settings.tool === 'orbit') return;
+      if (event.button !== 0 || activeTool() === 'orbit') return;
       const result = hit(event); if (!result) return;
       event.preventDefault(); renderer.domElement.setPointerCapture(event.pointerId);
-      if (props.settings.tool === 'fill') { emit('fill', result); return; }
+      if (['select', 'exclude', 'protect', 'unprotect'].includes(activeTool())) { emit('pick', result); return; }
+      if (activeTool() === 'fill') { emit('fill', result); return; }
       drawing = true; stroke = [result];
     };
     const move = (event: PointerEvent) => { if (!drawing) return; const result = hit(event); if (result && stroke.at(-1)?.face !== result.face) stroke.push(result); };
@@ -235,6 +262,7 @@ onMounted(() => {
         }
         if (activeRoot) activeRoot.visible = !reference && (!print || !(validation ? validationRoot : printMesh));
         if (printMesh) printMesh.visible = print && !validation;
+        overlayMeshes.forEach(mesh => { mesh.visible = print && !validation && !!props.overlay; });
         if (validationRoot) validationRoot.visible = (print || reference) && validation;
         if (validation && validationMaterial) validationMeshes.forEach(mesh => { mesh.material = reference ? referenceMaterial!.material : validationMaterial!.material; });
         camera.aspect = w / height; camera.updateProjectionMatrix(); renderer.setViewport(left, 0, w, height); renderer.setScissor(left, 0, w, height);
@@ -251,14 +279,14 @@ onMounted(() => {
         orientationGizmo.update(); orientationGizmo.render();
       });
     }
-    inspect = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, triangles: renderer.info.render.triangles, workflow: props.settings.workflow, exposure: renderer.toneMappingExposure, environmentIntensity: scene.environmentIntensity, validationRoughness: validationMaterial?.material.roughness, transmission: validationMaterial?.material.transmission, sheen: validationMaterial?.material.sheen, clearcoat: validationMaterial?.material.clearcoat, referenceRoughness: referenceMaterial?.material.roughness, opticalBackdrop: opticalBackdrop.visible, studioRoughness: validationMaterial?.uniforms.studioRoughness.value, frameMS: frameTimes.length ? frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length : 0 });
+    inspect = () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, triangles: renderer.info.render.triangles, editTool: activeTool(), displayFaces: currentPrint?.labels.length, faceMapLength: currentPrint?.faceMap?.length, overlaySelected: (overlayMeshes[0]?.geometry.index?.count ?? 0) / 3, overlayProtected: (overlayMeshes[1]?.geometry.index?.count ?? 0) / 3, workflow: props.settings.workflow, exposure: renderer.toneMappingExposure, environmentIntensity: scene.environmentIntensity, validationRoughness: validationMaterial?.material.roughness, transmission: validationMaterial?.material.transmission, sheen: validationMaterial?.material.sheen, clearcoat: validationMaterial?.material.clearcoat, referenceRoughness: referenceMaterial?.material.roughness, opticalBackdrop: opticalBackdrop.visible, studioRoughness: validationMaterial?.uniforms.studioRoughness.value, frameMS: frameTimes.length ? frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length : 0 });
     fit(); render();
     new HDRLoader().load('/studio.hdr', texture => { if (closed) { texture.dispose(); return; } texture.mapping = EquirectangularReflectionMapping; scene.environment = texture; updateLighting(); }, undefined, () => {});
     teardown = () => {
       closed = true; cancelAnimationFrame(frame); resize.disconnect(); controls.dispose();
       renderer.domElement.removeEventListener('pointerdown', down); renderer.domElement.removeEventListener('pointermove', move); renderer.domElement.removeEventListener('pointerup', up); renderer.domElement.removeEventListener('pointercancel', up);
       void controller.close().finally(() => {
-        clearPrint(); backdropGeometry.dispose(); backdropMaterials.forEach(material => material.dispose()); platform.dispose(); engine.dispose(); scene.environment?.dispose(); grid.geometry.dispose();
+        clearPrint(); overlayMeshes.forEach(mesh => { mesh.removeFromParent(); mesh.geometry.dispose(); }); overlayMaterials.forEach(material => material.dispose()); backdropGeometry.dispose(); backdropMaterials.forEach(material => material.dispose()); platform.dispose(); engine.dispose(); scene.environment?.dispose(); grid.geometry.dispose();
         (Array.isArray(grid.material) ? grid.material : [grid.material]).forEach(material => material.dispose()); composer.dispose(); orientationGizmo.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); localScope.stop();
       });
     };
@@ -266,7 +294,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => teardown());
 </script>
-<template><div ref="host" class="model-viewport"><div v-if="error" class="viewport-error">{{ error }}</div></div></template>
+<template><div ref="host" class="model-viewport" data-testid="model-viewport" :data-edit-tool="editTool ?? settings.tool"><div v-if="error" class="viewport-error">{{ error }}</div></div></template>
 <style scoped>
 .model-viewport { width: 100%; height: 100%; position: relative; overflow: hidden; }
 .viewport-error { position: absolute; inset: 35% 15%; z-index: 2; color: #ffab9c; text-align: center; }

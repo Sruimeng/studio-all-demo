@@ -112,6 +112,7 @@
     let leaves = new Float32Array(Math.max(1024, nlf * 9 * 2));
     let leafLab = new Uint8Array(Math.max(128, nlf * 2));
     let leafFace = new Uint32Array(Math.max(128, nlf * 2));
+    let leafBary = opts.captureBary ? new Uint16Array(leafLab.length * 6) : null;
     let nl = 0;
     const counts = new Float64Array(n);
     const minEdge2 = (minEdge / scale) * (minEdge / scale);
@@ -126,11 +127,13 @@
       if (nl + 1 > leafLab.length) {
         const a = new Uint8Array(leafLab.length * 2); a.set(leafLab); leafLab = a;
         const c = new Uint32Array(leafFace.length * 2); c.set(leafFace); leafFace = c;
+        if (leafBary) { const b = new Uint16Array(leafBary.length * 2); b.set(leafBary); leafBary = b; }
       }
       const i0 = lidx[f * 3] * 3, i1 = lidx[f * 3 + 1] * 3, i2 = lidx[f * 3 + 2] * 3;
       const bs = [b0, b1, b2];
       for (let k = 0; k < 3; k += 1) {
         const b = bs[k];
+        if (leafBary) { leafBary[nl * 6 + k * 2] = Math.round(b[1] * (2 ** maxDepth)); leafBary[nl * 6 + k * 2 + 1] = Math.round(b[2] * (2 ** maxDepth)); }
         for (let d = 0; d < 3; d += 1) leaves[nl * 9 + k * 3 + d] = b[0] * lpos[i0 + d] + b[1] * lpos[i1 + d] + b[2] * lpos[i2 + d];
       }
       leafLab[nl] = label; leafFace[nl] = f; nl += 1;
@@ -169,15 +172,29 @@
                   if (w0 < -1e-9 || w1 < -1e-9 || w0 + w1 > 1 + 1e-9) continue;
                   let xi = x % W; if (xi < 0) xi += W;
                   let yi = y % H; if (yi < 0) yi += H;
-                  counts[m.lab[yi * W + xi]] += 1; total += 1;
+                  if (opts.clampUv) { xi = Math.min(W - 1, Math.max(0, x)); yi = Math.min(H - 1, Math.max(0, y)); }
+                  const label = m.lab[yi * W + xi];
+                  if (label < n) { counts[label] += 1; total += 1; }
                 }
               }
             }
           }
           if (total === 0) { // 太小：取质心最近像素
+            if (opts.uncoveredLabel) {
+              const label = opts.uncoveredLabel(f, b0, b1, b2);
+              if (!Number.isInteger(label) || label < 0 || label >= n) throw new Error('Invalid supplemental surface label.');
+              counts[label] += 1;
+              return;
+            }
             let x = Math.round((P[0][0] + P[1][0] + P[2][0]) / 3), y = Math.round((P[0][1] + P[1][1] + P[2][1]) / 3);
             x %= W; if (x < 0) x += W; y %= H; if (y < 0) y += H;
-            counts[m.lab[y * W + x]] += 1;
+            if (opts.clampUv) {
+              x = Math.min(W - 1, Math.max(0, Math.round((P[0][0] + P[1][0] + P[2][0]) / 3)));
+              y = Math.min(H - 1, Math.max(0, Math.round((P[0][1] + P[1][1] + P[2][1]) / 3)));
+            }
+            const label = m.lab[y * W + x];
+            if (opts.clampUv && label >= n) throw new Error(`Missing supplemental sampler for face ${f}.`);
+            counts[label] += 1;
           }
           return;
         }
@@ -227,7 +244,7 @@
       if (progress && (f & 8191) === 0) progress(f / nlf, `细分：${f.toLocaleString()}/${nlf.toLocaleString()}`);
     }
     off[nlf] = nn;
-    return { nib: nib.slice(0, nn), off, leaves: leaves.slice(0, nl * 9), leafLab: leafLab.slice(0, nl), leafFace: leafFace.slice(0, nl), nl };
+    return { nib: nib.slice(0, nn), off, leaves: leaves.slice(0, nl * 9), leafLab: leafLab.slice(0, nl), leafFace: leafFace.slice(0, nl), leafBary: leafBary ? leafBary.slice(0, nl * 6) : null, nl };
   }
 
   // 一个面的编码串（字符逆序）

@@ -1,13 +1,13 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { initialMaterials } from './fixtures/materials';
 import { Group } from 'three';
 import { unzipSync, strFromU8, zipSync, strToU8 } from 'fflate';
 
-const mocks = vi.hoisted(() => ({ records: new Map<string, unknown>(), write: vi.fn(), download: vi.fn(), load: vi.fn(), request: vi.fn(), clients: [] as Array<{ disposed: boolean }> }));
-vi.mock('~/@base/storage', () => ({ readRecord: async (key: string) => mocks.records.get(key), writeRecord: mocks.write, downloadFile: mocks.download }));
+const mocks = vi.hoisted(() => ({ previewWait: null as Promise<void> | null, sourceColors: null as Array<{ hex: string; w: number }> | null, records: new Map<string, unknown>(), write: vi.fn(), download: vi.fn(), load: vi.fn(), request: vi.fn(), clients: [] as Array<{ disposed: boolean }> }));
+vi.mock('~/@base/storage', () => ({ readRecord: async (key: string) => mocks.records.get(key), writeRecords: async (records: Record<string, unknown>) => { for (const [key, value] of Object.entries(records)) mocks.records.set(key, structuredClone(value)); }, writeRecord: mocks.write, downloadFile: mocks.download }));
 vi.mock('~/@base/locale', () => ({ useLocale: () => ({ t: (en: string) => en }) }));
-vi.mock('~/@feature/materials', async () => ({ ...await import('../app/@feature/materials/catalog'), ...await import('../app/@feature/materials/types'), ...await import('../app/@feature/materials/supplier'), ...await import('../app/@feature/materials/usda'), ...await import('../app/@feature/materials/filaments') }));
+vi.mock('~/@feature/materials', async () => ({ ...await import('../app/@feature/materials/catalog'), ...await import('../app/@feature/materials/types'), ...await import('../app/@feature/materials/supplier'), ...await import('../app/@feature/materials/usda'), ...await import('../app/@feature/materials/filaments'), ...await import('../app/@feature/materials/use-material-sync'), ...await import('../app/@feature/materials/sync-contract') }));
 vi.mock('~/@engine/import', () => ({ loadLocalModel: mocks.load }));
 vi.mock('~/@engine/model', () => ({ collectModelResources: () => ({}), disposeModelResources: vi.fn() }));
 vi.mock('~/@engine/print-mesh', () => ({ toPrintMesh: async () => ({ positions: new Float32Array(9) }), uvHit: vi.fn() }));
@@ -20,10 +20,19 @@ vi.mock('~/@engine/multicolor', () => ({ MulticolorClient: class {
     mocks.request(type, payload);
     structuredClone(payload);
     if (this.disposed) throw new Error('disposed');
-    if (type === 'init') return { bbox: { minY: 0, maxY: 1 }, warnings: [], nf: 1 };
+    if (type === 'init') return { bbox: { minY: 0, maxY: 1 }, warnings: [], nf: 1, sourceColors: mocks.sourceColors };
     if (type === 'palette') {
       const candidates = (payload as { cands?: Array<{ id: string; hex: string }> }).cands ?? [];
       return { slots: candidates.slice(0, 2).map((candidate, index) => ({ hex: candidate.hex, sourceHex: index ? '#0000FF' : '#FF0000', filamentId: candidate.id, w: 0.5, de: index + 0.25 })) };
+    }
+    if (type === 'preview') {
+      await mocks.previewWait;
+      const options = payload as { N: number; cands: Array<{ id: string; hex: string }> };
+      return { label: new Uint8Array([0]), slots: options.cands.slice(0, Math.min(2, options.N)).map((c, i) => ({ ...c, sourceHex: i ? '#0000FF' : '#FF0000', filamentId: c.id, w: 0.5, de: i + 0.25 })) };
+    }
+    if (type === 'preserve') {
+      const candidate = (payload as { cands: Array<{ id: string; hex: string }> }).cands[0]!;
+      return { label: Uint8Array.from(mocks.sourceColors!.map((_, i) => i)), slots: mocks.sourceColors!.map(source => ({ ...source, sourceHex: source.hex, hex: candidate.hex, filamentId: candidate.id, de: 1 })) };
     }
     if (type === 'label' || type === 'restore') return { label: new Uint8Array([0]) };
     if (type === 'export3mf') return { blob: new Blob(['3mf']) };
@@ -38,7 +47,8 @@ const workspaceWithMaterials = () => {
 };
 
 beforeEach(() => {
-  setActivePinia(createPinia()); mocks.records.clear(); mocks.clients.length = 0;
+  mocks.previewWait = null;
+  setActivePinia(createPinia()); mocks.sourceColors = null; mocks.records.clear(); mocks.clients.length = 0;
   mocks.request.mockClear(); mocks.download.mockClear();
   mocks.write.mockReset().mockImplementation(async (key: string, value: unknown) => { mocks.records.set(key, structuredClone(value)); });
   mocks.load.mockReset().mockImplementation(async () => ({ root: new Group(), warnings: [] }));
@@ -58,8 +68,8 @@ it('failed replacement keeps the active model and worker usable', async () => {
 });
 it('loads and regenerates regions with supplier SKU matches and keeps source colors for labels', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files());
-  const palette = mocks.request.mock.calls.find(([type]) => type === 'palette');
-  expect(palette?.[1]).toMatchObject({ mode: 'owned', N: 4, protect: true });
+  const palette = mocks.request.mock.calls.find(([type]) => type === 'preview');
+  expect(palette?.[1]).toMatchObject({ N: 4, detail: 4, scale: 80 });
   const candidates = (palette?.[1] as { cands: Array<{ id: string; hex: string }> }).cands;
   expect(candidates).toHaveLength(59);
   expect(candidates.filter(candidate => candidate.id.startsWith('polymaker:'))).toHaveLength(26);
@@ -72,9 +82,9 @@ it('loads and regenerates regions with supplier SKU matches and keeps source col
   expect(store.regions.map(region => region.sourceHex)).toEqual(['#FF0000', '#0000FF']);
   expect(store.regions[0]!.match).toEqual({ basis: 'catalog-hex-d65-deltae00', materialId: candidates[0]!.id, hex: candidates[0]!.hex, meanDeltaE: 0.25, areaShare: 0.5 });
   store.apply(store.materials[0]!); expect(store.regions[0]!.match).toBeUndefined();
-  const before = mocks.request.mock.calls.filter(([type]) => type === 'palette').length;
+  const before = mocks.request.mock.calls.filter(([type]) => type === 'preview').length;
   await store.segment();
-  expect(mocks.request.mock.calls.filter(([type]) => type === 'palette').length).toBe(before + 1);
+  expect(mocks.request.mock.calls.filter(([type]) => type === 'preview').length).toBe(before + 1);
   expect(store.regions.every(region => region.material.supplier?.vendor === 'Polymaker')).toBe(true);
   expect(store.regions[0]!.match).toBeDefined();
 });
@@ -85,7 +95,7 @@ it('canonical candidates ignore local colors, supplier copies and preview overri
   material.hex = '#123456'; material.roughness = 0.2;
   expect(await store.saveMaterial(material)).toBe(true);
   mocks.request.mockClear(); await store.segment();
-  const candidates = mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands;
+  const candidates = mocks.request.mock.calls.find(([type]) => type === 'preview')![1].cands;
   expect(candidates).toHaveLength(59);
   expect(candidates.find((candidate: { id: string }) => candidate.id === material.id).hex).toBe(hex);
   expect(store.regions[0]!.material.hex).toBe('#123456');
@@ -278,7 +288,7 @@ it('applies, saves and exports SUNLU colors while keeping their catalog identity
   expect(await store.saveMaterial(material)).toBe(true);
   await store.save(); await store.openProject(store.project!.id);
   expect(store.selected!.roughness).toBe(0.2);
-  expect(store.selected!.supplier).toMatchObject({ vendor: 'SUNLU', sku: '', catalogId: 'PLA-MAGENTA', catalogHex: '#D9027D', source: { row: 13, rawHex: 'd9027d' } });
+  expect(store.selected!.supplier).toMatchObject({ vendor: 'SUNLU', catalogId: 'PLA-MAGENTA', catalogHex: '#D9027D', source: { row: 13, rawHex: 'd9027d' } });
   await store.export3mf();
   const payload = mocks.request.mock.calls.find(([type]) => type === 'export3mf')![1];
   expect(payload.filaments[0]).toMatchObject({ id: 'SUNLU-PLA-MAGENTA', hex: '#D9027D', type: 'PLA', vendor: 'SUNLU' });
@@ -303,7 +313,7 @@ it('imports a mixed batch locally, avoids duplicate IDs and leaves assignments a
   expect(JSON.stringify(store.regions)).toBe(regions); expect(store.display!.labels).toBe(labels);
   expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.records.has('supplier-overrides')).toBe(false);
   await store.segment();
-  expect(mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands).toHaveLength(59);
+  expect(mocks.request.mock.calls.find(([type]) => type === 'preview')![1].cands).toHaveLength(59);
 });
 it('keeps the library and assignments intact if importing cannot be persisted', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); const before = JSON.stringify(store.materials);
@@ -354,7 +364,7 @@ it('a failed deletion preserves the local library, selection and validation appe
 
 it('starts with an empty local library and keeps supplier SKU matching available', async () => {
   const store = useWorkspace();
-  expect(store.materials).toEqual([]); expect(store.allMaterials).toHaveLength(61);
+  expect(store.materials).toEqual([]); expect(store.allMaterials).toHaveLength(731);
   await store.loadFiles(files()); await store.save(); await store.initialize();
   expect(store.failure).toBe(''); expect(store.materials).toEqual([]);
   expect(store.regions.every(region => region.material.supplier?.vendor === 'Polymaker')).toBe(true);
@@ -383,7 +393,7 @@ it('restores old backups without repopulating the local library with samples', a
 it('roundtrips custom series colors, optical overrides and pinned A/B snapshots through projects, ZIP and 3MF metadata', async () => {
   const { filamentPreview, createFilamentColor } = await import('../app/@feature/materials/filaments');
   const store = workspaceWithMaterials(); await store.loadFiles(files()); store.setWorkflow('validation');
-  const color = createFilamentColor(filamentPreview('CAILAB', 'PLA', 'cailab-matte', 'matte', '#CF809F'), { name: 'Custom rose', hex: '#CF809F', colorCode: 'MY01', sku: '', source: 'User chart' }, 'custom-color');
+  const color = createFilamentColor(filamentPreview('CAILAB', 'PLA', 'cailab-matte', 'matte', '#CF809F'), { name: 'Custom rose', hex: '#CF809F', colorCode: 'MY01', source: 'User chart' }, 'custom-color');
   expect(await store.saveMaterial(color)).toBe(true);
   store.compareMaterial(color); color.roughness = 0.01;
   expect(store.validationReference!.roughness).toBe(0.85);
@@ -403,4 +413,78 @@ it('roundtrips custom series colors, optical overrides and pinned A/B snapshots 
   const payload = mocks.request.mock.calls.findLast(([type]) => type === 'export3mf')![1];
   expect(payload.filaments[0]).toMatchObject({ vendor: 'CAILAB', type: 'PLA', id: 'LOCAL-custom-color' });
   expect(payload.materialData.project.regions[0].material.appearance).toMatchObject({ seriesId: 'cailab-matte', colorCode: 'MY01', origin: 'user' });
+});
+
+
+it('imports source regions without reclustering, keeps bindings separate and saves their origin', async () => {
+  mocks.sourceColors = Array.from({ length: 13 }, (_, i) => ({ hex: `#${(0x101010 + i * 0x10101).toString(16)}`, w: 1 / 13 }));
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  expect(store.failure).toBe(''); expect(store.regionSource).toBe('imported');
+  expect(store.regions).toHaveLength(13);
+  expect(new Set(store.regions.map(region => region.material.id)).size).toBe(1);
+  expect(mocks.request.mock.calls.some(([type]) => type === 'palette' || type === 'label')).toBe(false);
+  const display = store.display;
+  mocks.request.mockClear();
+  await store.changeScheme('high');
+  expect(mocks.request).not.toHaveBeenCalled();
+  store.settings.mode = 'print'; store.settings.appearance = 'ideal';
+  expect(store.surfaces[0]!.hex).toBe(store.regions[0]!.sourceHex);
+  store.apply(store.materials[0]!);
+  expect(store.settings.appearance).toBe('material');
+  expect(store.surfaces[0]!.hex).toBe(store.materials[0]!.hex);
+  expect(store.display).toBe(display); expect(mocks.request).not.toHaveBeenCalled();
+  await store.backup();
+  const blob = mocks.download.mock.calls.at(-1)![0] as Blob;
+  await store.restoreBackup(new File([blob], 'preserved.zip'));
+  expect(store.failure).toBe(''); expect(store.regionSource).toBe('imported'); expect(store.regions).toHaveLength(13);
+  await store.segment(); expect(store.regionSource).toBe('automatic');
+  await store.preserveRegions(); expect(store.regionSource).toBe('imported'); expect(store.regions).toHaveLength(13);
+});
+
+
+afterEach(() => vi.useRealTimers());
+it('updates sliders without a generate action and retains manual bindings through color-count changes', async () => {
+  vi.useFakeTimers();
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.selectedRegion = 1; store.apply(store.materials[0]!);
+  mocks.request.mockClear();
+  store.updateSegmentation({ colorCount: 1, precision: 2 });
+  store.updateSegmentation({ colorCount: 2, precision: 3 });
+  expect(store.previewing).toBe(true); expect(store.busy).toBe(false);
+  await vi.advanceTimersByTimeAsync(60);
+  expect(store.previewing).toBe(false); expect(store.failure).toBe('');
+  expect(mocks.request.mock.calls.map(([type]) => type)).toEqual(['preview']);
+  expect(mocks.request.mock.calls[0]![1]).toMatchObject({ N: 2, detail: 3 });
+  expect(store.regions[1]!.material.id).toBe(store.materials[0]!.id); expect(store.regions[1]!.match).toBeUndefined();
+  store.updateSegmentation({ colorCount: 1, precision: 6 }); await vi.advanceTimersByTimeAsync(60);
+  expect(store.regions).toHaveLength(1);
+  store.updateSegmentation({ colorCount: 2, precision: 6 }); await store.save();
+  expect(store.previewing).toBe(false); expect(store.regions[1]!.material.id).toBe(store.materials[0]!.id);
+  const saved = mocks.records.get(`project:${store.project!.id}`) as { colorCount: number; precision: number };
+  expect(saved.colorCount).toBe(2); expect(saved.precision).toBe(6);
+});
+it('cancels pending previews when importing a replacement model', async () => {
+  vi.useFakeTimers(); const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.updateSegmentation({ colorCount: 2, precision: 2 });
+  mocks.request.mockClear(); await store.loadFiles(files()); await vi.advanceTimersByTimeAsync(100);
+  expect(mocks.request.mock.calls.map(([type]) => type)).toEqual(['init', 'preview']);
+  expect(mocks.request.mock.calls[1]![1]).toMatchObject({ N: 4, detail: 4 });
+  expect(store.previewing).toBe(false); expect(store.failure).toBe('');
+});
+
+it('keeps region selection and material edits made during an in-flight preview', async () => {
+  vi.useFakeTimers(); const store = workspaceWithMaterials(); await store.loadFiles(files());
+  let release!: () => void;
+  mocks.previewWait = new Promise<void>(resolve => { release = resolve; });
+  store.updateSegmentation({ colorCount: 2, precision: 2 });
+  await vi.advanceTimersByTimeAsync(60);
+  expect(store.previewing).toBe(true); expect(store.busy).toBe(false);
+  store.selectedRegion = 1; store.apply(store.materials[0]!);
+  const applied = store.regions[1]!.material.id;
+  release(); await vi.advanceTimersByTimeAsync(0);
+  expect(applied).toBe(store.materials[0]!.id);
+  expect(store.selectedRegion).toBe(1);
+  expect(store.regions[1]!.material.id).toBe(store.materials[0]!.id);
+  expect(store.regions[1]!.match).toBeUndefined();
+  expect(store.previewing).toBe(false); expect(store.failure).toBe('');
 });

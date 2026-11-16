@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const projects = { SUNLU: 'tripo-material-sunlu', Polymaker: 'tripo-material-polymaker' };
+const projects = { SUNLU: 'tripo-material-sunlu', Polymaker: 'tripo-material-polymaker', eSUN: 'tripo-material-esun' };
 const [vendor, option] = process.argv.slice(2);
-if (!Object.hasOwn(projects, vendor) || (option && option !== '--build-only')) throw new Error('Usage: node scripts/deploy-vendor.mjs SUNLU|Polymaker [--build-only]');
+if (!Object.hasOwn(projects, vendor) || (option && option !== '--build-only')) throw new Error('Usage: node scripts/deploy-vendor.mjs SUNLU|Polymaker|eSUN [--build-only]');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const env = { ...process.env, VITE_MATERIAL_VENDOR: vendor };
 function run(command, args, cwd = root) {
@@ -20,6 +20,10 @@ const artifact = join(root, 'artifacts/vendor-sites', vendor.toLowerCase());
 rmSync(artifact, { recursive: true, force: true });
 mkdirSync(artifact, { recursive: true });
 cpSync(join(root, '.output/public'), artifact, { recursive: true });
+const functionDir = join(root, 'artifacts/vendor-functions', vendor.toLowerCase());
+mkdirSync(functionDir, { recursive: true });
+run('pnpm', ['exec', 'esbuild', 'api/materials.ts', '--bundle', '--platform=node', '--target=node24', '--format=esm', `--alias:~=${join(root, 'app')}`, `--define:import.meta.env.VITE_MATERIAL_VENDOR=${JSON.stringify(vendor)}`, `--outfile=${join(functionDir, 'index.mjs')}`]);
+writeFileSync(join(functionDir, '.vc-config.json'), JSON.stringify({ runtime: 'nodejs24.x', handler: 'index.mjs', launcherType: 'Nodejs' }));
 console.log(`Built ${vendor}: ${artifact}`);
 
 if (option !== '--build-only') {
@@ -30,7 +34,8 @@ if (option !== '--build-only') {
     const output = join(stage, '.vercel/output');
     mkdirSync(output, { recursive: true });
     cpSync(artifact, join(output, 'static'), { recursive: true });
-    writeFileSync(join(output, 'config.json'), JSON.stringify({ version: 3, routes: [{ handle: 'filesystem' }, { src: '/.*', dest: '/index.html' }] }));
+    cpSync(functionDir, join(output, 'functions/api/materials.func'), { recursive: true });
+    writeFileSync(join(output, 'config.json'), JSON.stringify({ version: 3, routes: [{ handle: 'filesystem' }, { src: '/api/.*', status: 404 }, { src: '/.*', dest: '/index.html' }] }));
     run('vercel', ['deploy', '--prebuilt', '--prod', '--yes', '--meta', `siteVendor=${vendor}`], stage);
   } finally {
     rmSync(stage, { recursive: true, force: true });

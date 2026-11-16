@@ -6,7 +6,7 @@ import { applySurface, createPrintMaterial } from '../app/@engine/viewer/materia
 import { appearanceTemplates, bindAppearance, detachAppearance, inheritAppearance, isAppearanceSource } from '../app/@feature/materials/binding';
 import { importUSDAMaterials } from '../app/@feature/materials/usda';
 
-const input = { name: '自定义玫瑰', hex: '#cf809f', colorCode: 'MY-01', sku: 'TEST-175-1KG', source: 'User color chart' };
+const input = { name: '自定义玫瑰', hex: '#cf809f', colorCode: 'MY-01', source: 'User color chart' };
 describe('library appearance bindings', () => {
   it('binds all five shared appearances to the same SKU and resets optics when switching', () => {
     const color = cloneMaterial(supplierMaterials.find(item => item.materialId === 'CA19001')!);
@@ -92,16 +92,19 @@ describe('filament templates, series and colors', () => {
   });
   it('separates optional official identifiers from local IDs and preserves the complete relationship in JSON and CSV', () => {
     const preview = filamentPreview('CAILAB', 'PLA', 'cailab-matte', 'matte', '#808080');
+    preview.appearance!.sku = 'LEGACY-SALES-CODE';
     const color = createFilamentColor(preview, input, 'color-1');
     expect(color.hex).toBe('#CF809F'); expect(color.materialId).toBe('LOCAL-color-1');
-    expect(color.appearance).toMatchObject({ seriesId: 'cailab-matte', vendor: 'CAILAB', baseMaterial: 'PLA', templateId: 'matte', colorCode: 'MY-01', sku: 'TEST-175-1KG', origin: 'user' });
+    expect(color.appearance).toMatchObject({ seriesId: 'cailab-matte', vendor: 'CAILAB', baseMaterial: 'PLA', templateId: 'matte', colorCode: 'MY-01', origin: 'user' });
     expect(color.supplier).toBeUndefined(); expect(validateMaterial(color, [])).toBeNull();
     expect(cloneMaterial(color)).toEqual(color);
     expect(filamentIdentity(color)).toEqual({ vendor: 'CAILAB', type: 'PLA' });
-    expect(materialsCSV([color])).toContain('"cailab-matte","matte","MY-01","TEST-175-1KG","User color chart","user"');
-    const noSku = createFilamentColor(preview, { ...input, sku: '', colorCode: '' }, 'color-2');
+    expect(color.appearance!.sku).toBeUndefined();
+    expect(materialsCSV([color])).toContain('"cailab-matte","matte","MY-01","","User color chart","user"');
+    const noSku = createFilamentColor(preview, { ...input, colorCode: '' }, 'color-2');
     expect(noSku.appearance!.sku).toBeUndefined(); expect(noSku.appearance!.colorCode).toBeUndefined();
     expect(preview.hex).toBe('#808080');
+    expect(cloneMaterial(preview).appearance!.sku).toBe('LEGACY-SALES-CODE');
   });
   it('rejects cross-vendor relationships and invalid optical payloads before save or restore', () => {
     const color = createFilamentColor(filamentPreview('CAILAB', 'PLA', 'cailab-matte', 'matte', '#808080'), input, 'color');

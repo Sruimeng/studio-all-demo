@@ -5,4 +5,5 @@ export type {
   PaletteResult, LabelOptions, LowOptions, PrintStats, LabelResult, LowResult,
   LowDab, PrintSnapshot, EditResult, ExportOptions, ExportResult, RestoreResult,
   RequestIdentity, PrintProgress, PrintCommands,
+  RegionPreviewOptions, RegionPreviewResult, QuantizationInfo, SurfacePreview, SurfaceEditResult, RegionEditTool,
 } from './types';

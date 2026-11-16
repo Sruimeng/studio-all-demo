@@ -1,5 +1,6 @@
 import { FILAMENT_RULE, type FinishId, type MaterialRecord, type MaterialSeries, type MaterialTemplate, type SupplierProfile } from './types';
 import { includesVendor } from '~/@base/site';
+import esunColors from './data/esun-colors.json';
 
 export const materialTemplates: MaterialTemplate[] = [
   { id: 'basic', name: 'Basic', nameCN: '常规', roughness: 0.38, metalness: 0, optics: {} },
@@ -15,6 +16,10 @@ const esun = 'https://esun3dstore.com/';
 const kex = 'https://kexcelled3d.com/collections/aesthetic';
 const cai = 'https://www.cailab3d.com/';
 const series = (vendor: string, baseMaterial: string, id: string, name: string, source: string, templateId?: FinishId, aliases?: string[]): MaterialSeries => ({ id, vendor, baseMaterial, name, source, templateId, aliases });
+const esunColorSeries = [...new Map(esunColors.records.map(record => [record.product, record])).values()].map(record => ({
+  ...series('eSUN', record.materialType, `esun-color-${record.catalogId.split('-')[1]}`, record.product, ''),
+  sourceLabel: '用户提供色表 · 未经实物校准',
+}));
 const allSeries: MaterialSeries[] = [
   series('SUNLU', 'PLA', 'sunlu-pla-catalog', 'PLA 色卡 · 质感待确认', sunlu),
   series('Polymaker', 'PLA', 'polymaker-panchroma-catalog', 'Panchroma™ PLA 色卡 · 质感待确认', polymaker),
@@ -38,16 +43,17 @@ const allSeries: MaterialSeries[] = [
     ['Kexcelled', ['PETG', 'ABS', 'ASA', 'TPU', 'PA', 'PC'], 'https://kexcelled3d.com/'],
     ['CAILAB', ['PETG', 'ABS'], cai],
   ] as const).flatMap(([vendor, bases, source]) => bases.map(base => series(vendor, base, `${vendor.toLowerCase()}-${base.toLowerCase()}`, `${base} · 通用外观参考`, source))),
+  ...esunColorSeries,
 ];
 export const materialSeries = allSeries.filter(item => includesVendor(item.vendor));
 export const filamentVendors = ['SUNLU', 'Polymaker', 'eSUN', 'Kexcelled', 'CAILAB'].filter(includesVendor);
-export const baseMaterials = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PA', 'PC'].filter(base => materialSeries.some(item => item.baseMaterial === base));
+export const baseMaterials = [...new Set(materialSeries.map(item => item.baseMaterial))];
 
 export function catalogAppearance(profile: SupplierProfile): MaterialRecord['appearance'] {
   if (profile.origin || !profile.catalogHex) return undefined;
-  const seriesId = profile.vendor === 'SUNLU' ? 'sunlu-pla-catalog' : profile.vendor === 'Polymaker' ? 'polymaker-panchroma-catalog' : undefined;
+  const seriesId = profile.vendor === 'SUNLU' ? 'sunlu-pla-catalog' : profile.vendor === 'Polymaker' ? 'polymaker-panchroma-catalog' : profile.vendor === 'eSUN' ? esunColorSeries.find(item => item.name === profile.product)?.id : undefined;
   if (!seriesId) return undefined;
-  return { vendor: profile.vendor, baseMaterial: profile.materialType, seriesId, colorCode: profile.sku || undefined, sku: profile.sku || undefined, origin: 'catalog' };
+  return { vendor: profile.vendor, baseMaterial: profile.materialType, seriesId, colorCode: profile.sku || undefined, sku: profile.sku || undefined, origin: 'catalog', ...(profile.vendor === 'eSUN' ? { source: '用户提供色表 · 未经实物校准' } : {}) };
 }
 export function filamentPreview(vendor: string, baseMaterial: string, seriesId: string | undefined, finish: FinishId, hex: string): MaterialRecord {
   const template = materialTemplates.find(item => item.id === finish)!;
@@ -59,13 +65,13 @@ export function filamentPreview(vendor: string, baseMaterial: string, seriesId: 
     appearance: { vendor, baseMaterial, seriesId, templateId: finish, origin: 'template', source: product?.source },
   };
 }
-export interface FilamentColorInput { name: string; hex: string; colorCode: string; sku: string; source: string }
+export interface FilamentColorInput { name: string; hex: string; colorCode: string; source: string }
 export function createFilamentColor(preview: MaterialRecord, input: FilamentColorInput, id: string): MaterialRecord {
   const surface: MaterialRecord = JSON.parse(JSON.stringify(preview));
   delete surface.supplier; delete surface.overrides; delete surface.referenceImage;
   return {
     ...surface, id, materialId: `LOCAL-${id}`, name: input.name.trim(), hex: input.hex.toUpperCase(),
-    appearance: { ...preview.appearance!, colorCode: input.colorCode.trim() || undefined, sku: input.sku.trim() || undefined, source: input.source.trim() || undefined, origin: 'user' },
+    appearance: { ...preview.appearance!, colorCode: input.colorCode.trim() || undefined, sku: undefined, source: input.source.trim() || undefined, origin: 'user' },
   };
 }
 export const filamentIdentity = (material: MaterialRecord) => ({

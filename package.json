@@ -11,7 +11,7 @@
     "build": "nuxt generate",
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
-    "lint": "eslint app scripts nuxt.config.ts uno.config.ts vitest.config.ts",
+    "lint": "eslint app api scripts nuxt.config.ts uno.config.ts vitest.config.ts",
     "test": "vitest run",
     "postinstall": "nuxt prepare"
   },
@@ -36,6 +36,7 @@
     "@types/three": "^0.183.1",
     "@unocss/nuxt": "^66.7.0",
     "@vitejs/plugin-vue": "^6.0.8",
+    "esbuild": "0.28.0",
     "eslint": "^9.39.4",
     "eslint-plugin-vue": "^10.9.2",
     "typescript": "^6.0.3",

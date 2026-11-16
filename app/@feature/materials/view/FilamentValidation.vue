@@ -57,7 +57,7 @@ function selectColor(color: MaterialRecord) {
 function editCurrent() {
   if (!props.selected) return;
   const current = cloneMaterial(props.selected);
-  editing.value = current.id.startsWith('preview:') ? createFilamentColor(current, { name: current.name, hex: current.hex, colorCode: current.appearance?.colorCode ?? '', sku: current.appearance?.sku ?? '', source: current.appearance?.source ?? '' }, crypto.randomUUID()) : current;
+  editing.value = current.id.startsWith('preview:') ? createFilamentColor(current, { name: current.name, hex: current.hex, colorCode: current.appearance?.colorCode ?? '', source: current.appearance?.source ?? '' }, crypto.randomUUID()) : current;
 }
 function closeEditor() { editing.value = null; emit('preview', null); }
 </script>
@@ -69,10 +69,10 @@ function closeEditor() { editing.value = null; emit('preview', null); }
       <FilamentSelector :vendor="vendor" :base-material="baseMaterial" :series-id="seriesId" :busy="busy" @vendor="selectFamily($event, baseMaterial)" @base="selectFamily(vendor, $event)" @series="selectSeries" />
       <label class="lock-option"><input v-model="keepColor" type="checkbox">{{ t('Keep color when switching series', '切换系列时保持颜色') }}</label>
       <AppearanceBinding v-if="selected" :material="selected" :materials="materials" :busy="busy" @update="emit('apply', $event)" />
-      <button v-if="selected && !selected.id.startsWith('preview:')" class="text-button add-color" :disabled="busy" @click="saveMaterial(selected)">{{ t('Save current color and binding locally', '保存当前颜色与绑定到本地') }}</button>
+      <button v-if="selected && !selected.id.startsWith('preview:')" class="text-button add-color" :disabled="busy" @click="saveMaterial(selected)">{{ site.vendor ? t('Save current color and binding', '保存当前颜色与绑定') : t('Save current color and binding locally', '保存当前颜色与绑定到本地') }}</button>
       <section class="finish-section">
         <p v-if="series && !series.templateId" class="preset-note">{{ t('This catalog does not specify a finish. The binding is a local appearance choice.', '该目录未注明具体质感，外观绑定为本地选择。') }}</p>
-        <template v-if="series"><a :href="series.source" target="_blank" rel="noopener noreferrer" class="source-link">{{ t('Official series reference', '官方系列资料') }} ↗</a><small v-if="series.aliases?.length" class="alias-note">{{ t('Also known as', '旧称') }} {{ series.aliases.join(' · ') }}</small></template>
+        <template v-if="series"><a v-if="series.source" :href="series.source" target="_blank" rel="noopener noreferrer" class="source-link">{{ t('Official series reference', '官方系列资料') }} ↗</a><p v-else-if="series.sourceLabel" class="preset-note">{{ series.sourceLabel }}</p><small v-if="series.aliases?.length" class="alias-note">{{ t('Also known as', '旧称') }} {{ series.aliases.join(' · ') }}</small></template>
         <p v-else class="preset-note">{{ t('Generic experiment. No verified product association.', '通用材质试验，未关联已核实的厂商产品。') }}</p>
       </section>
       <div v-if="selected" class="current-surface">

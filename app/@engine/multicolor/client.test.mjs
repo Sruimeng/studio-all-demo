@@ -39,6 +39,24 @@ test('dispose rejects every pending request and future commands', async () => {
   expect(worker.terminate).toHaveBeenCalledOnce();
 });
 
+test('default browser construction uses the bundled module worker and sends the local public base', () => {
+  const created = [];
+  vi.stubGlobal('Worker', class {
+    constructor(url, options) { created.push({ url, options, worker: this }); }
+    postMessage = vi.fn();
+    terminate = vi.fn();
+  });
+  try {
+    const client = new MulticolorClient('browser', { baseUrl: '/demo/' });
+    expect(created).toHaveLength(1);
+    expect(created[0].options).toEqual({ type: 'module' });
+    expect(created[0].url.pathname).toMatch(/worker-entry\.js$/);
+    const pending = client.request('snapshot', {}).catch(() => undefined);
+    expect(created[0].worker.postMessage.mock.calls[0][0]).toMatchObject({ workerBase: '/demo/', projectId: 'browser' });
+    client.dispose(); void pending;
+  } finally { vi.unstubAllGlobals(); }
+});
+
 test('worker crashes close the client instead of leaving later requests pending', async () => {
   const { client, worker } = fixture();
   const pending = client.request('snapshot', {}).catch(error => error);

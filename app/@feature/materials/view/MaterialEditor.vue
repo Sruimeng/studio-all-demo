@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { site } from '~/@base/site';
 import { useLocale } from '~/@base/locale';
 import ModuleTooltip from '~/@base/ui/ModuleTooltip.vue';
 import { validateMaterial, rgb } from '../catalog';
@@ -8,11 +9,31 @@ import { FILAMENT_RULE, OPENPBR_RULE, type MaterialRecord, type ColorMode } from
 import SupplierDetail from './SupplierDetail.vue';
 import AppearanceBinding from './AppearanceBinding.vue';
 
-const props = defineProps<{ material: MaterialRecord; materials: MaterialRecord[]; busy: boolean; saveMaterial: (material: MaterialRecord) => Promise<boolean> }>();
+const props = defineProps<{ material: MaterialRecord; materials: MaterialRecord[]; busy: boolean; saveMaterial: (material: MaterialRecord, activate?: boolean) => Promise<boolean> }>();
 const emit = defineEmits<{ close: []; preview: [material: MaterialRecord | null] }>();
 const { t } = useLocale();
 const draft = ref(cloneMaterial(props.material));
 const validation = shallowRef('');
+const autosave = !!site.vendor && props.materials.some(item => item.id === props.material.id);
+let timer: ReturnType<typeof setTimeout> | undefined;
+let pending: MaterialRecord | undefined;
+let writing: Promise<boolean> | undefined;
+let lastSaved = '';
+async function flushDraft(): Promise<boolean> {
+  clearTimeout(timer);
+  if (writing) { await writing; return flushDraft(); }
+  if (!pending) return true;
+  if (props.busy) {
+    await new Promise<void>(resolve => { const stop = watch(() => props.busy, busy => { if (!busy) { stop(); resolve(); } }); });
+    return flushDraft();
+  }
+  const value = pending; pending = undefined;
+  writing = props.saveMaterial(value, false);
+  const success = await writing.catch(() => false); writing = undefined;
+  if (success) lastSaved = JSON.stringify(value);
+  else { pending ??= value; validation.value = t('Automatic save failed. Retry with Save.', '自动保存失败，请点击保存重试。'); }
+  return success;
+}
 const supplier = computed(() => !!draft.value.supplier);
 const supplierVendor = computed(() => draft.value.supplier?.vendor ?? '');
 const filament = computed(() => draft.value.renderRule === FILAMENT_RULE);
@@ -25,6 +46,7 @@ const opticalFields = [
   { key: 'clearcoat' as const, name: 'Clearcoat / 清漆权重', min: 0, max: 1, step: 0.01 },
 ];
 if (filament.value) draft.value.optics = { transmission: 0, thickness: 1.2, attenuationDistance: 8, sheen: 0, clearcoat: 0, ...draft.value.optics };
+lastSaved = JSON.stringify(withOverrides(draft.value));
 const effectiveRoughness = computed(() => Number.isFinite(draft.value.roughness) ? (directRoughness.value ? draft.value.roughness : 0.5 + draft.value.roughness * 0.5).toFixed(3) : '—');
 const colorMode = computed({ get: () => draft.value.overrides?.colorMode ?? (draft.value.supplier?.origin === 'local-usda' ? 'linear-srgb' : 'catalog'), set: (value: ColorMode) => { draft.value.overrides = { ...draft.value.overrides, colorMode: value }; } });
 const parameters = computed(() => [
@@ -34,11 +56,12 @@ const parameters = computed(() => [
 ]);
 function restore() { draft.value = restoreSupplier(draft.value); validation.value = ''; }
 function markAppearanceOverride() { if (draft.value.appearanceBinding) draft.value.appearanceBinding.overridden = true; }
-function close() { emit('preview', null); emit('close'); }
+async function close() { if (autosave && !await flushDraft()) return; emit('preview', null); emit('close'); }
 async function save() {
   const value = withOverrides({ ...draft.value, name: draft.value.name.trim(), materialId: draft.value.materialId.trim(), hex: draft.value.hex.toUpperCase() });
   const error = validateMaterial(value, props.materials);
   if (error) { validation.value = error; return; }
+  if (autosave) { pending = value; if (await flushDraft()) await close(); return; }
   if (await props.saveMaterial(value)) close();
 }
 async function reference(event: Event) {
@@ -50,20 +73,28 @@ async function reference(event: Event) {
 }
 watch(draft, value => {
   const material = withOverrides(value);
-  emit('preview', validateMaterial(material, []) || materialProblem(material) ? null : material);
+  const error = validateMaterial(material, props.materials) || materialProblem(material);
+  emit('preview', error ? null : material);
+  if (!autosave) return;
+  clearTimeout(timer);
+  pending = !error && (writing || JSON.stringify(material) !== lastSaved) ? cloneMaterial(material) : undefined;
+  if (pending) timer = setTimeout(() => { void flushDraft(); }, 650);
 }, { deep: true, immediate: true });
+function warnUnsaved(event: BeforeUnloadEvent) { if (pending || writing) { event.preventDefault(); event.returnValue = ''; } }
+if (autosave) window.addEventListener('beforeunload', warnUnsaved);
+onBeforeUnmount(() => { window.removeEventListener('beforeunload', warnUnsaved); clearTimeout(timer); if (pending) void flushDraft(); });
 </script>
 <template>
   <div class="editor-title"><button class="text-button" @click="close">← {{ t('Library', '材质库') }}</button><span>{{ supplier ? t(`Adjust ${supplierVendor} material`, `调整 ${supplierVendor} 供应商材质`) : t('Material editor', '材质编辑') }}</span></div>
   <SupplierDetail v-if="supplier" :material="draft" />
-  <p v-if="supplier" class="supplier-save-note">{{ t(`Changes are saved under ${supplierVendor}.`, `修改将保存到 ${supplierVendor} 供应商材质。`) }}</p>
+  <p v-if="autosave" class="supplier-save-note">{{ t('Valid changes are saved automatically. Closing keeps saved edits.', '有效修改会自动保存，关闭编辑器会保留已保存的修改。') }}</p>
+  <p v-else-if="supplier" class="supplier-save-note">{{ t(`Changes are saved under ${supplierVendor}.`, `修改将保存到 ${supplierVendor} 供应商材质。`) }}</p>
   <div class="editor-fields">
     <label>{{ t('Name', '名称') }}<input v-model="draft.name" data-testid="material-name" :readonly="supplier && draft.supplier?.origin !== 'local-usda'"></label>
     <label>{{ t('Material ID / SKU', '材质 ID / SKU') }}<input v-model="draft.materialId" data-testid="material-id" :readonly="supplier && draft.supplier?.origin !== 'local-usda'"></label>
     <template v-if="draft.appearance && !supplier">
       <p class="render-note">{{ draft.appearance.vendor }} · {{ draft.appearance.baseMaterial }} · {{ draft.appearance.templateId || t('Unconfirmed finish', '质感待确认') }} · {{ t('Custom color', '自定义颜色') }}</p>
       <label>{{ t('Color code', '颜色号') }}<input v-model="draft.appearance.colorCode" aria-label="Edit color code"></label>
-      <label>{{ t('Sales SKU', '销售 SKU') }}<input v-model="draft.appearance.sku" aria-label="Edit sales SKU"></label>
       <label>{{ t('Color source', '颜色资料来源') }}<input v-model="draft.appearance.source" aria-label="Edit color source"></label>
     </template>
     <ModuleTooltip v-if="draft.supplier?.source.file" :title="t('Color interpretation', '颜色解释方式')" :description="t('Experimental interpretations do not confirm the source color space. Local HEX overrides take priority.', '试验选项不代表源颜色空间已确认。本地 HEX 调整优先。')" side="left">
@@ -86,7 +117,7 @@ watch(draft, value => {
     <label class="reference-upload"><img v-if="draft.referenceImage" :src="draft.referenceImage" alt="Material reference">{{ t('＋ Reference image (optional)', '＋ 参考图（可选）') }}<input type="file" accept="image/*" @change="reference"></label>
     <button v-if="supplier" class="secondary" :disabled="busy" @click="restore">{{ t('Restore source parameters', '恢复源参数') }}</button>
     <p v-if="validation" role="alert" class="error-message">{{ validation }}</p>
-    <div class="button-row"><button class="secondary" :disabled="busy" @click="close">{{ t('Cancel', '取消') }}</button><button class="primary" :disabled="busy || !!materialProblem(draft)" @click="save">{{ supplier ? t('Save supplier material', '保存供应商材质') : t('Save locally', '保存到本地') }}</button></div>
+    <div class="button-row"><button class="secondary" :disabled="busy" @click="close">{{ autosave ? t('Done', '完成') : t('Cancel', '取消') }}</button><button class="primary" :disabled="busy || !!materialProblem(draft)" @click="save">{{ supplier ? t('Save supplier material', '保存供应商材质') : site.vendor ? t('Save material', '保存材质') : t('Save locally', '保存到本地') }}</button></div>
   </div>
 </template>
 <style scoped>

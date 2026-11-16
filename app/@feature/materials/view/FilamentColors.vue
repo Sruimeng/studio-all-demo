@@ -12,7 +12,7 @@ const swatchHex = (material: MaterialRecord) => supplierCatalogHex(material) ?? 
     <p v-if="!colors.length" class="empty-colors">{{ t('No color values for this series yet. Preview a template or add your own color.', '该系列尚无色值。可先验证通用外观，或添加自己的颜色。') }}</p>
     <button v-for="color in colors" :key="color.id" class="series-color" :class="{ active: selected?.id === color.id }" :disabled="busy" @click="emit('select', color)">
       <i class="color-chip" :style="{ background: swatchHex(color) }" />
-      <span class="color-copy"><strong>{{ color.name }}</strong><small>{{ color.appearance?.colorCode || color.appearance?.sku || color.supplier?.catalogId || color.materialId }} · {{ swatchHex(color) }}</small><small v-if="color.appearance?.sku && color.appearance.colorCode && color.appearance.sku !== color.appearance.colorCode">SKU {{ color.appearance.sku }}</small></span>
+      <span class="color-copy"><strong>{{ color.name }}</strong><small>{{ color.appearance?.colorCode || color.supplier?.catalogId || color.materialId }} · {{ swatchHex(color) }}</small></span>
       <small class="color-origin">{{ color.appearance?.origin === 'user' ? t('Custom', '自定义') : t('Catalog', '色卡') }}</small>
     </button>
   </div>

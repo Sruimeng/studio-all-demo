@@ -43,7 +43,13 @@ for (const { name, geometry, color } of pieces) {
   nodes.push({ name, mesh: meshes.length }); meshes.push({ primitives: [{ attributes: attrs, indices: ix, material }] });
 }
 const json = { asset: { version: '2.0', generator: 'Tripo Material Studio sample' }, scene: 0, scenes: [{ nodes: nodes.map((_, i) => i) }], nodes, meshes, materials, accessors, bufferViews: views, buffers: [{ byteLength: offset }], textures: [{ source: 0 }], images: [{ bufferView: imageView, mimeType: 'image/png' }] };
-const text = Buffer.from(JSON.stringify(json)); const jsonBytes = Buffer.alloc(Math.ceil(text.length / 4) * 4, 32); text.copy(jsonBytes);
-const bin = Buffer.concat(parts); const header = Buffer.alloc(20); header.writeUInt32LE(0x46546c67, 0); header.writeUInt32LE(2, 4); header.writeUInt32LE(28 + jsonBytes.length + bin.length, 8); header.writeUInt32LE(jsonBytes.length, 12); header.writeUInt32LE(0x4e4f534a, 16);
-const binHeader = Buffer.alloc(8); binHeader.writeUInt32LE(bin.length, 0); binHeader.writeUInt32LE(0x004e4942, 4);
-mkdirSync('public/samples', { recursive: true }); writeFileSync('public/samples/atelier.glb', Buffer.concat([header, jsonBytes, binHeader, bin]));
+function encodeGLB(document) {
+  const text = Buffer.from(JSON.stringify(document)); const jsonBytes = Buffer.alloc(Math.ceil(text.length / 4) * 4, 32); text.copy(jsonBytes);
+  const bin = Buffer.concat(parts); const header = Buffer.alloc(20); header.writeUInt32LE(0x46546c67, 0); header.writeUInt32LE(2, 4); header.writeUInt32LE(28 + jsonBytes.length + bin.length, 8); header.writeUInt32LE(jsonBytes.length, 12); header.writeUInt32LE(0x4e4f534a, 16);
+  const binHeader = Buffer.alloc(8); binHeader.writeUInt32LE(bin.length, 0); binHeader.writeUInt32LE(0x004e4942, 4);
+  return Buffer.concat([header, jsonBytes, binHeader, bin]);
+}
+mkdirSync('public/samples', { recursive: true }); writeFileSync('public/samples/atelier.glb', encodeGLB(json));
+const preserved = structuredClone(json);
+for (const material of preserved.materials) delete material.pbrMetallicRoughness.baseColorTexture;
+writeFileSync('public/samples/atelier-preserved.glb', encodeGLB(preserved));

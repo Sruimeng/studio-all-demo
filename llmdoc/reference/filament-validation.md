@@ -10,7 +10,7 @@ type: reference
 
 - `MaterialTemplate`：Basic、Matte、Silk、Metallic、Translucent，跨厂商复用的演示外观。
 - `MaterialSeries`：稳定 ID、厂商、基材、可选模板、官方资料与旧称。目录引用不代表每个系列都有颜色或全部外观。
-- `MaterialRecord.appearance`：厂商、基材、可选 seriesId / templateId、颜色号、销售 SKU、颜色资料来源与 origin。origin 区分 catalog / template / user；内部 ID 和 materialId 不冒充官方 SKU。
+- `MaterialRecord.appearance`：厂商、基材、可选 seriesId / templateId、颜色号、颜色资料来源与 origin。origin 区分 catalog / template / user；内部 ID 和 materialId 不冒充官方 SKU。
 
 `MaterialRecord.optics` 保存 transmission、等效光学厚度、衰减距离、sheen、clearcoat。颜色继承当前外观，可在本地单独调整；不改写模板、其他颜色或原始供应商资料。
 
@@ -44,7 +44,7 @@ Viewer 仅接收 `SurfaceValues`，不依赖厂商或 SKU。透射时，两侧�
 
 新颜色保存到现有 IndexedDB 本地库，成功后才更新预览与绑定。系列颜色按关系过滤；完整材质库保留 USDA 导入、删除、CSV / JSON 导出入口。本地新颜色不加入自动分色候选。
 
-项目 v2、ZIP 和 JSON 保留 appearance、optics、validationMaterial 与独立 validationReference。旧记录均为可选字段，旧项目仍能读取。CSV 增加系列、模板、颜色号、销售 SKU、来源及光学参数。
+项目 v2、ZIP 和 JSON 保留 appearance、optics、validationMaterial 与独立 validationReference。旧记录均为可选字段，旧项目仍能读取。新增颜色和编辑器不提供销售 SKU 字段，颜色列表不展示历史销售编码；旧记录中的 appearance.sku 及原始供应商 SKU 仍可读取、导出。新建颜色不继承旧销售编码。CSV 保留历史字段以兼容旧资料。
 
 区域 3MF 的厂商/基材从供应商档案或本地 appearance 解析，完整关系另存附加元数据。切片器不因此获得光学着色支持；验证模式仍禁用 3MF。
 

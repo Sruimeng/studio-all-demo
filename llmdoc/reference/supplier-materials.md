@@ -54,7 +54,7 @@ type: reference
 
 ## 保存与导出
 
-IndexedDB 的 `materials` 保存本地材质，`supplier-overrides` 保存供应商调整。取消清草稿；恢复参数后仍需显式保存。
+IndexedDB 的 `materials` 保存本地材质，`supplier-overrides` 保存供应商调整。综合站取消清草稿，恢复参数后仍需显式保存；专属站已有材质自动保存并同步 GitHub，见 [厂商专属站点](../guides/vendor-sites.md)。源色卡不随预览调整改变。
 
 本地库默认空。初始化与 ZIP 恢复移除旧六个内置样例，仅匹配原内部 ID 与 PLA-001–006；用户创建与 USDA 导入记录保留，区域和项目中的材质快照不改写。
 

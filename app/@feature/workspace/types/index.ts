@@ -18,6 +18,7 @@ export interface PrintProject {
   version: 1 | 2; id: string; name: string; updatedAt: string;
   files: Array<{ name: string; path: string; type: string; data: Blob }>;
   regions: RegionAssignment[];
+  regionSource?: 'imported' | 'automatic';
   height: number; colorCount: number; precision: number; scheme: 'high' | 'low';
   snapshot: PrintSnapshot | null;
   viewerSettings?: ViewerSettings;

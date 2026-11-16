@@ -19,10 +19,13 @@ export async function readRecord<T>(key: string): Promise<T | undefined> {
   });
 }
 export async function writeRecord(key: string, value: unknown): Promise<void> {
+  return writeRecords({ [key]: value });
+}
+export async function writeRecords(records: Record<string, unknown>): Promise<void> {
   const db = await open();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('records', 'readwrite');
-    transaction.objectStore('records').put(value, key);
+    for (const [key, value] of Object.entries(records)) transaction.objectStore('records').put(value, key);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error ?? new Error('Storage transaction aborted'));

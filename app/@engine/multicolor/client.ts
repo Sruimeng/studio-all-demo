@@ -22,11 +22,13 @@ export class MulticolorClient {
   private nextId = 0;
   private revision = 0;
   private disposed = false;
+  private readonly workerBase: string;
 
   constructor(readonly projectId: string, options: PrintClientOptions = {}) {
     const base = options.baseUrl ?? '/';
+    this.workerBase = base;
     const url = `${base.replace(/\/$/, '')}/print-worker/worker.js`;
-    this.worker = options.workerFactory?.(url) ?? new Worker(url);
+    this.worker = options.workerFactory?.(url) ?? new Worker(new URL('./worker-entry.js', import.meta.url), { type: 'module' });
     this.worker.onmessage = ({ data }) => {
       const pending = this.pending.get(data.requestId);
       if (!pending || data.projectId !== projectId || data.editRevision !== pending.identity.editRevision) return;
@@ -60,7 +62,7 @@ export class MulticolorClient {
     const identity = { projectId: this.projectId, requestId: ++this.nextId, editRevision: this.revision };
     return new Promise((resolve, reject) => {
       this.pending.set(identity.requestId, { identity, resolve: resolve as (value: unknown) => void, reject });
-      try { this.worker.postMessage({ ...payload, ...identity, type }); }
+      try { this.worker.postMessage({ ...payload, ...identity, type, workerBase: this.workerBase }); }
       catch (error) {
         this.pending.delete(identity.requestId);
         reject(error);

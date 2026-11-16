@@ -2,8 +2,8 @@
  * worker.js — 分色计算 Worker
  * 消息：init / palette / label / lowpoly / paintHigh / paintLow / export3mf / exportGLB / selftest
  * ============================================================ */
-/* global MC, MCMesh, MCDecimate, MCLow, MCExport */
-importScripts("./color.js", "./palette.js", "./mesh.js", "./decimate.js", "./lowpoly.js", "./export3mf.js");
+/* global MC, MCMesh, MCDecimate, MCLow, MCExport, MCRegions, MCQuantization, MCSurfaceEdit */
+if (typeof importScripts === 'function' && !self.MC) importScripts("./color.js", "./palette.js", "./mesh.js", "./decimate.js", "./lowpoly.js", "./export3mf.js", "./regions.js", "./quantization.js", "./surface-edit.js");
 
 const S = {}; // 全部状态
 
@@ -34,6 +34,7 @@ const COLOR_LIGHTNESS_WEIGHT = 0.25;
 
 async function decodeImage(blob, max) {
   const bmp = await createImageBitmap(blob);
+  const originalWidth = bmp.width, originalHeight = bmp.height;
   const sc = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const w = Math.max(1, Math.round(bmp.width * sc)), h = Math.max(1, Math.round(bmp.height * sc));
   const cv = new OffscreenCanvas(w, h);
@@ -41,7 +42,7 @@ async function decodeImage(blob, max) {
   cx.drawImage(bmp, 0, 0, w, h);
   const data = cx.getImageData(0, 0, w, h).data;
   bmp.close && bmp.close();
-  return { w, h, data };
+  return { w, h, data, originalWidth, originalHeight };
 }
 function texKeys(tex, factor) {
   const N = tex.w * tex.h;
@@ -60,6 +61,7 @@ function texKeys(tex, factor) {
 
 // ---------------- init ----------------
 async function init(m, reqId) {
+  S.ready = false;
   validateMesh(m);
   const pr = progress(reqId);
   Object.keys(S).forEach((k) => delete S[k]);
@@ -73,7 +75,7 @@ async function init(m, reqId) {
     occupied.add(mt.image);
   }
   const nv = positions.length / 3, nf = indices.length / 3;
-  Object.assign(S, { positions, indices, uvs, colors, faceMat, materials, nv, nf, warnings: [], geometryKey: geometryKey(positions, indices) });
+  Object.assign(S, { positions, indices, uvs, colors, faceMat, materials, nv, nf, sourceNormals: m.normals, warnings: [], geometryKey: geometryKey(positions, indices) });
   pr(0.02, "焊接顶点");
   let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   for (let i = 0; i < nv; i += 1) {
@@ -97,7 +99,7 @@ async function init(m, reqId) {
   for (let i = 0; i < images.length; i += 1) {
     if (!images[i]) { S.tex.push(null); continue; }
     try {
-      const t = await decodeImage(images[i], 4096);
+      const t = await decodeImage(images[i], MCQuantization.domain(m) ? 4096 : 2048);
       S.tex.push(t);
     } catch (e) { S.tex.push(null); S.warnings.push(`Texture ${i} could not be decoded.`); }
   }
@@ -184,6 +186,10 @@ async function init(m, reqId) {
   let totalArea = 0;
   for (let f = 0; f < nf; f += 1) totalArea += area[f];
   S.totalArea = totalArea;
+  S.sourceRegions = sourceRegions(m, area, totalArea);
+  pr(0.66, '分析上游颜色层级');
+  S.quantizationInfo = MCQuantization.analyze(S, m, (p, text) => pr(0.66 + p * 0.08, text));
+  if (S.quantizationInfo.reason) S.warnings.push(S.quantizationInfo.reason);
   // 零件
   S.facePart = null;
   if (partOfVertex) {
@@ -195,7 +201,7 @@ async function init(m, reqId) {
   }
   pr(0.68, "提取基础色");
   S.cache = {};
-  getBase(0.5);
+  if (!S.sourceRegions && !S.quantization) getBase(0.5);
   pr(0.75, "构建拾取加速结构");
   const bvh = MCMesh.buildBVH(S.wpos, S.widx, nf);
   S.bvh = bvh;
@@ -211,19 +217,109 @@ async function init(m, reqId) {
     vol += (p[a] * (p[b + 1] * p[c + 2] - p[b + 2] * p[c + 1]) - p[a + 1] * (p[b] * p[c + 2] - p[b + 2] * p[c]) + p[a + 2] * (p[b] * p[c + 1] - p[b + 1] * p[c])) / 6;
   }
   S.volume = Math.abs(vol);
+  S.ready = true;
   const bvhOut = { bounds: bvh.bounds.slice(), info: bvh.info.slice(), order: bvh.order.slice() };
   post("init", {
     reqId, nf, nv, nw: S.nw, open, bbox: S.bbox, hasUv: !!uvs, hasColors: !!colors,
     textured: S.matImage.some((x) => x >= 0), nParts: S.nParts || 0,
-    warnings: S.warnings, base: getBase(0.5).base.map((b) => ({ hex: b.hex, w: b.w })),
+    warnings: S.warnings, sourceColors: S.sourceRegions?.colors || null, quantization: S.quantizationInfo,
+    base: S.sourceRegions ? S.sourceRegions.colors : S.quantization ? [] : getBase(0.5).base.map((b) => ({ hex: b.hex, w: b.w })),
     wpos: S.wpos.slice(), widx: S.widx.slice(), bvh: bvhOut, volume: S.volume, totalArea, faceOk: faceOk.slice(),
   }, [bvhOut.bounds.buffer, bvhOut.info.buffer, bvhOut.order.buffer]);
+}
+
+function sourceRegions(m, area, totalArea) {
+  if (m.materials.some(mt => mt.image >= 0)) return null;
+  const colors = [], byColor = new Map(), labels = new Uint8Array(area.length);
+  const materialRGB = m.materials.map(mt => mt.factor.map(value => MC.linearToSrgb(value) * 255));
+  const component = (vertex, channel, mt) => m.colors
+    ? m.colors[vertex * 3 + channel]
+    : materialRGB[mt][channel];
+  for (let f = 0; f < area.length; f++) {
+    const mt = m.faceMat[f];
+    let key = 0;
+    for (let channel = 0; channel < 3; channel++) {
+      const value = component(m.indices[f * 3], channel, mt);
+      if (!Number.isFinite(value) || value < 0 || value > 255.001) return null;
+      const byte = Math.round(value);
+      for (let corner = 1; corner < 3; corner++) {
+        if (Math.round(component(m.indices[f * 3 + corner], channel, mt)) !== byte) return null;
+      }
+      key = (key << 8) | byte;
+    }
+    let slot = byColor.get(key);
+    if (slot === undefined) {
+      // The current 3MF paint encoder supports 16 slots.
+      if (colors.length === 16) return null;
+      const hex = `#${key.toString(16).padStart(6, "0")}`.toUpperCase();
+      slot = colors.length; byColor.set(key, slot); colors.push({ hex, w: 0 });
+    }
+    labels[f] = slot; colors[slot].w += area[f] / Math.max(totalArea, 1e-12);
+  }
+  return { colors, labels };
+}
+
+function preserve(m, reqId) {
+  if (!S.sourceRegions) throw new Error("No flat source colors to preserve (maximum 16).");
+  if (!Number.isFinite(m.scale) || m.scale <= 0 || !Array.isArray(m.cands) || m.cands.some(c => typeof c.id !== "string" || !/^#[a-f0-9]{6}$/i.test(c.hex))) throw new Error("Choose valid materials and print scale.");
+  const candidates = m.cands.map(c => ({ ...c, lab: MC.hexToLab(c.hex) }));
+  const slots = S.sourceRegions.colors.map(source => {
+    const lab = MC.hexToLab(source.hex);
+    let best = null, de = Infinity;
+    for (const candidate of candidates) {
+      const distance = MC.deltaE00(...lab, ...candidate.lab);
+      if (distance < de) { best = candidate; de = distance; }
+    }
+    return { hex: best?.hex ?? source.hex, sourceHex: source.hex, w: source.w, de: best ? de : 0, ok: MC.hexToOklab(source.hex), filamentId: best?.id ?? null };
+  });
+  clearPaint();
+  S.regionLabel = S.sourceRegions.labels.slice();
+  S.autoLabel = S.sourceRegions.labels.slice(); S.label = S.autoLabel.slice();
+  S.nSlots = slots.length;
+  S.lastLabel = { slotHex: slots.map(s => s.sourceHex), precision: 6, scale: m.scale };
+  S.lastLow = null;
+  MCSurfaceEdit.create(S, null); S.editScheme = 'high';
+  const out = S.label.slice();
+  post("preserve", { reqId, slots, label: out, stats: statsHigh(m.scale, S.nSlots) }, [out.buffer]);
 }
 
 function getBase(wL) {
   const k = String(wL);
   if (!S.cache[k]) S.cache[k] = { base: MC.baseClusters(S.hist, 24, wL), levels: {} };
   return S.cache[k];
+}
+
+function previewRegions(m, reqId) {
+  if (S.editScheme === 'low' && S.low?.override.some(map => map?.some(x => x >= 0))) throw new Error('请先撤销或重置旧 UV 编辑，再重新分色。');
+  if (!Number.isInteger(m.N) || m.N < 1 || m.N > 16 || !Number.isInteger(m.detail) || m.detail < 1 || m.detail > 6 || !Number.isFinite(m.scale) || m.scale <= 0 || !Array.isArray(m.cands) || m.cands.some(c => typeof c.id !== "string" || !/^#[a-f0-9]{6}$/i.test(c.hex))) throw new Error("Invalid region preview options.");
+  if (S.surfaceEdit && (S.surfaceEdit.pending || S.surfaceEdit.overrides.some(x => x >= 0) || S.surfaceEdit.protected.some(Boolean)) || S.highPaint.some(x => x >= 0) || S.low?.override.some(map => map?.some(x => x >= 0))) throw new Error('请先取消候选、清除保护，并撤销或重置局部编辑，再重新分色；已应用编辑不会被静默丢弃。');
+  if (S.quantization) {
+    if (m.N > S.quantizationInfo.maxColorCount) throw new Error(`上游可用颜色数为 1–${S.quantizationInfo.maxColorCount}，请求了 ${m.N}；未静默截断。`);
+    const cacheHit = !!S.quantization.previewed;
+    const result = MCQuantization.preview(S, m);
+    clearPaint(); S.lastLow = null;
+    S.label = result.label; S.autoLabel = S.label.slice(); S.regionLabel = S.label.slice(); S.nSlots = result.slots.length;
+    S.lastLabel = { slotHex: result.slots.map(slot => slot.sourceHex), precision: m.detail, scale: m.scale };
+    S.labelSlots = S.lastLabel.slotHex.join();
+    MCSurfaceEdit.create(S, result.surface, { N: m.N, detail: m.detail, scale: m.scale });
+    S.quantization.previewed = true; S.editScheme = 'high';
+    post('preview', { reqId, ...result, quantization: S.quantizationInfo, actualColorCount: result.slots.length, cacheHit, regionCount: result.surface.labels.length });
+    return;
+  }
+  const cacheHit = !!S.interactive;
+  if (!S.interactive) {
+    progress(reqId)(0.1, "缓存颜色区域");
+    const base = S.sourceRegions ? S.sourceRegions.colors.map(c => ({ ...c, ok: MC.hexToOklab(c.hex), lab: MC.hexToLab(c.hex) })) : getBase(COLOR_LIGHTNESS_WEIGHT).base;
+    S.interactive = MCRegions.build(S, base, S.sourceRegions?.labels);
+  }
+  const result = MCRegions.preview(S.interactive, m, S.area, S.totalArea);
+  clearPaint(); S.lastLow = null;
+  S.label = result.label; S.autoLabel = S.label.slice(); S.regionLabel = S.label.slice(); S.nSlots = result.slots.length;
+  S.lastLabel = { slotHex: result.slots.map(slot => slot.sourceHex), precision: m.detail, scale: m.scale };
+  S.labelSlots = S.lastLabel.slotHex.join();
+  MCSurfaceEdit.create(S, null); S.editScheme = 'high';
+  const label = S.label.slice();
+  post("preview", { reqId, ...result, label, cacheHit, regionCount: S.interactive.count }, [label.buffer]);
 }
 function getLevels(wL, protect) {
   const c = getBase(wL);
@@ -665,6 +761,7 @@ function fillHigh(m) {
   return new Uint32Array(faces);
 }
 function clearPaint() {
+  S.surfaceEdit = null;
   if (S.highPaint) S.highPaint.fill(-1);
   if (S.low) S.low.override.forEach((o) => o && o.fill(-1));
   S.undo = [];
@@ -744,7 +841,15 @@ function undo() {
   if (!op) return false;
   const operations = op.type === "batch" ? op.operations : [op];
   for (const op of operations) {
-  if (op.type === "high") for (let i = 0; i < op.faces.length; i += 1) S.highPaint[op.faces[i]] = op.prev[i];
+  if (op.type === 'surface') {
+    const edit = MCSurfaceEdit.ensure(S);
+    for (let i = 0; i < op.faces.length; i++) {
+      edit.overrides[op.faces[i]] = op.prev[i];
+      if (!edit.surface) S.highPaint[op.faces[i]] = op.prev[i];
+    }
+    MCSurfaceEdit.cancel(S); MCSurfaceEdit.sync(S);
+  }
+  else if (op.type === "high") for (let i = 0; i < op.faces.length; i += 1) S.highPaint[op.faces[i]] = op.prev[i];
   else { const o = S.low.override[op.img]; for (let i = 0; i < op.idx.length; i += 1) o[op.idx[i]] = op.prev[i]; }
   }
   return true;
@@ -856,17 +961,18 @@ function validateMesh(m) {
   if (!m.materials?.length || m.faceMat?.length !== nf || !Array.isArray(m.images)) throw new Error("Mesh material table is incomplete.");
   if (m.uvs && m.uvs.length !== nv * 2 || m.colors && m.colors.length !== nv * 3) throw new Error("Vertex attribute lengths do not match.");
   for (const value of m.positions) if (!Number.isFinite(value)) throw new Error("Mesh has non-finite positions.");
+  if (m.normals && (m.normals.length !== m.positions.length || m.normals.some(x => !Number.isFinite(x)))) throw new Error('Invalid source normals.');
   for (const value of m.indices) if (!Number.isInteger(value) || value < 0 || value >= nv) throw new Error("Mesh index is outside the vertex table.");
   for (const value of m.faceMat) if (!Number.isInteger(value) || value < 0 || value >= m.materials.length) throw new Error("Mesh references an unknown material.");
   for (const mt of m.materials) if (!Array.isArray(mt.factor) || mt.factor.length !== 3 || mt.factor.some(x => !Number.isFinite(x) || x < 0)) throw new Error("Invalid material color factor.");
 }
 
 function validateLabel(m) {
-  if (!m.slotHex?.length || m.slotHex.length > 12 || m.slotHex.some(h => !/^#[a-f0-9]{6}$/i.test(h))) throw new Error("Choose 1–12 valid colors.");
+  if (!m.slotHex?.length || m.slotHex.length > 16 || m.slotHex.some(h => !/^#[a-f0-9]{6}$/i.test(h))) throw new Error("Choose 1–16 valid colors.");
   if (!Number.isFinite(m.scale) || m.scale <= 0) throw new Error("Print scale must be positive.");
   if (!Number.isInteger(m.precision) || m.precision < 1 || m.precision > 6) throw new Error("Precision must be 1–6.");
   const slots = m.slotCount || m.slotHex.length;
-  if (slots < 1 || slots > 12 || !Number.isInteger(slots)) throw new Error("Choose 1–12 material slots.");
+  if (slots < 1 || slots > 16 || !Number.isInteger(slots)) throw new Error("Choose 1–16 material slots.");
   if (m.regionMap && (m.regionMap.length !== m.slotHex.length || m.regionMap.some(v => !Number.isInteger(v) || v < 0 || v >= slots))) throw new Error("Invalid region mapping.");
 }
 
@@ -875,6 +981,7 @@ function requireLabel(label) {
 }
 
 function refreshHigh() {
+  if (S.surfaceEdit) { MCSurfaceEdit.sync(S); return; }
   if (!S.autoLabel) return;
   S.label = S.autoLabel.slice();
   for (let f = 0; f < S.nf; f++) if (S.highPaint[f] >= 0 && S.highPaint[f] < S.nSlots) S.label[f] = S.highPaint[f];
@@ -893,13 +1000,14 @@ function snapshot() {
     slotCount: S.nSlots || 0, labelOptions: S.lastLabel || null,
     lowOptions: S.lastLow || null,
     lowOverrides: S.low ? S.low.override.map(o => o ? Array.from(o) : null) : [],
+    ...(S.surfaceEdit ? { surfaceEdit: { quantization: S.surfaceEdit.options, ...(S.surfaceEdit.surface ? { inputFingerprint: S.quantization.analysis.inputFingerprint, surfaceKey: geometryKey(S.surfaceEdit.surface.positions, S.surfaceEdit.surface.faceMap) } : {}), overrides: Array.from(S.surfaceEdit.overrides), protected: Array.from(S.surfaceEdit.protected) } } : {}),
   };
 }
 
 function restore(m, reqId) {
   const snap = m.snapshot;
   if (!snap || snap.version !== 1 || snap.faceCount !== S.nf || snap.geometryKey !== S.geometryKey || snap.highPaint?.length !== S.nf) throw new Error("Snapshot does not match this mesh.");
-  if (!Number.isInteger(snap.slotCount) || snap.slotCount < 0 || snap.slotCount > 12) throw new Error("Invalid snapshot slots.");
+  if (!Number.isInteger(snap.slotCount) || snap.slotCount < 0 || snap.slotCount > 16) throw new Error("Invalid snapshot slots.");
   const validLabels = (a, min, length) => a === null || Array.isArray(a) && a.length === length && a.every(x => Number.isInteger(x) && x >= min && x < snap.slotCount);
   if (!validLabels(snap.highPaint, -1, S.nf) || !validLabels(snap.labels, 0, S.nf) || !validLabels(snap.autoLabels, 0, S.nf) || !validLabels(snap.regionLabels, 0, S.nf)) throw new Error("Invalid snapshot labels.");
   if (snap.lowOptions) validateLabel(snap.lowOptions);
@@ -926,7 +1034,21 @@ function restore(m, reqId) {
     try { lowpoly(snap.lowOptions, reqId); } finally { captured = null; }
     result = responses.find(r => r.type === "lowpoly") || null;
   }
-  post("restore", { reqId, label: S.label ? S.label.slice() : null, low: result });
+  S.surfaceEdit = null;
+  if (snap.surfaceEdit) {
+    const options = snap.surfaceEdit.quantization;
+    if (options) {
+      if (!S.quantization || !Number.isInteger(options.N) || options.N < 1 || options.N > S.quantizationInfo.maxColorCount || !Number.isInteger(options.detail) || options.detail < 1 || options.detail > 6 || !Number.isFinite(options.scale) || options.scale <= 0 || options.N !== S.nSlots) throw new Error('Invalid upstream snapshot options.');
+      if (snap.surfaceEdit.inputFingerprint !== S.quantization.analysis.inputFingerprint) throw new Error('Surface snapshot belongs to different texture, UVs, geometry or flipY.');
+      const preview = MCQuantization.preview(S, { ...options, cands: [] });
+      if (snap.surfaceEdit.surfaceKey !== geometryKey(preview.surface.positions, preview.surface.faceMap)) throw new Error('Surface snapshot adapter geometry does not match.');
+      MCSurfaceEdit.create(S, preview.surface, options);
+    } else MCSurfaceEdit.create(S, null);
+    MCSurfaceEdit.restore(S, snap.surfaceEdit);
+  }
+  S.editScheme = m.scheme ?? (snap.lowOptions && !S.surfaceEdit?.surface ? 'low' : 'high');
+  const editing = S.surfaceEdit ? MCSurfaceEdit.result(S, true) : undefined;
+  post("restore", { reqId, label: S.label ? S.label.slice() : null, low: result, surface: editing?.surface, editing });
 }
 
 async function dispatch(m) {
@@ -937,15 +1059,37 @@ async function dispatch(m) {
     if (m.editRevision < editRevision) throw new Error("Stale edit revision.");
     projectId = m.projectId; editRevision = m.editRevision;
     const reqId = m.requestId;
-    if (m.type !== "init" && m.type !== "selftest" && !S.positions) throw new Error("Load a model first.");
+    if (m.type !== "init" && m.type !== "selftest" && !S.ready) throw new Error("Load and analyze a model successfully first.");
+    if (m.type.startsWith('edit') && S.editScheme === 'low' && !S.surfaceEdit?.surface) throw new Error('局部几何编辑需要表面模式；旧 UV 编辑尚未迁移，已阻止有损转换。');
+    if (S.surfaceEdit?.surface && ['palette', 'label', 'lowpoly', 'paintHigh', 'brushHigh', 'fillHigh', 'paintLow', 'fillLow', 'reset'].includes(m.type)) throw new Error('上游标签预览请使用区域编辑；旧标签生成会丢失精细标签，已阻止。');
+    if (S.surfaceEdit?.surface && m.type === 'export3mf') throw new Error('上游精细标签的网格提交 / 3MF 导出尚未验收；请先保存项目或 ZIP。未用旧分色替换已应用编辑。');
+    if (['paintHigh', 'brushHigh', 'fillHigh', 'label', 'lowpoly'].includes(m.type) && S.surfaceEdit && !S.surfaceEdit.surface) {
+      if (S.surfaceEdit.pending) throw new Error('Apply or cancel the pending region edit first.');
+      S.surfaceEdit = null;
+    }
     switch (m.type) {
       case "init": await init(m, reqId); break;
+      case "preserve": preserve(m, reqId); break;
+      case "preview": previewRegions(m, reqId); break;
+      case 'editDetect': MCSurfaceEdit.detect(S, m); post('edit', { reqId, ...MCSurfaceEdit.result(S) }); break;
+      case 'editPick': MCSurfaceEdit.pick(S, m); post('edit', { reqId, ...MCSurfaceEdit.result(S) }); break;
+      case 'editApply': MCSurfaceEdit.apply(S, m.label, pushUndo); post('edit', { reqId, ...MCSurfaceEdit.result(S) }); break;
+      case 'editCancel': MCSurfaceEdit.cancel(S); post('edit', { reqId, ...MCSurfaceEdit.result(S) }); break;
+      case 'editClearProtection': {
+        const edit = MCSurfaceEdit.ensure(S); edit.protected.fill(0); MCSurfaceEdit.cancel(S);
+        post('edit', { reqId, ...MCSurfaceEdit.result(S) }); break;
+      }
+      case 'editUndo': undo(); refreshHigh(); MCSurfaceEdit.cancel(S); post('edit', { reqId, ...MCSurfaceEdit.result(S) }); break;
+      case 'editReset': {
+        const edit = MCSurfaceEdit.ensure(S); edit.overrides.fill(-1); S.highPaint.fill(-1); S.undo = [];
+        MCSurfaceEdit.cancel(S); MCSurfaceEdit.sync(S); post('edit', { reqId, ...MCSurfaceEdit.result(S) }); break;
+      }
       case "palette":
         if (!Number.isInteger(m.N) || m.N < 1 || m.N > 12) throw new Error("Choose 1–12 colors.");
         if (m.mode !== "free" && (!m.cands?.length || m.cands.some(c => !/^#[a-f0-9]{6}$/i.test(c.hex)))) throw new Error("Choose valid materials.");
         palette(m, reqId); break;
-      case "label": validateLabel(m); S.lastLabel = m; labelHigh(m, reqId); S.labelSlots = m.slotHex.join(); break;
-      case "lowpoly": validateLabel(m); S.lastLow = m; lowpoly(m, reqId); break;
+      case "label": validateLabel(m); S.lastLabel = m; labelHigh(m, reqId); S.labelSlots = m.slotHex.join(); MCSurfaceEdit.create(S, null); S.editScheme = 'high'; break;
+      case "lowpoly": validateLabel(m); S.lastLow = m; lowpoly(m, reqId); S.editScheme = 'low'; break;
       case "brushHigh": {
         requireLabel(m.label);
         const selected = new Set();
@@ -978,7 +1122,7 @@ async function dispatch(m) {
       case "snapshot": post("snapshot", { reqId, snapshot: snapshot() }); break;
       case "restore": restore(m, reqId); break;
       case "export3mf":
-        if (!Number.isFinite(m.scale) || m.scale <= 0 || !m.filaments?.length || m.filaments.length > 12 || m.filaments.some(f => !/^#[a-f0-9]{6}$/i.test(f.hex))) throw new Error("Invalid export scale or material slots.");
+        if (!Number.isFinite(m.scale) || m.scale <= 0 || !m.filaments?.length || m.filaments.length > 16 || m.filaments.some(f => !/^#[a-f0-9]{6}$/i.test(f.hex))) throw new Error("Invalid export scale or material slots.");
         if (m.scheme === "low" ? !S.low?.sub : !S.label) throw new Error("Create color labels before exporting.");
         if (m.filaments.length < S.nSlots) throw new Error("Export is missing material slots.");
         if (m.scheme === "low" && S.lastLow) {
@@ -990,7 +1134,7 @@ async function dispatch(m) {
       default: throw new Error(`Unknown print command: ${m.type}`);
     }
   } catch (err) {
-    post("error", { reqId: m.requestId, message: err instanceof Error ? err.message : String(err) });
+    post("error", { reqId: m.requestId, message: `${err?.code ? `${err.code}: ` : ''}${err instanceof Error ? err.message : String(err)}` });
   } finally { active = null; }
 }
 

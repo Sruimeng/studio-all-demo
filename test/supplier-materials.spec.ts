@@ -13,9 +13,9 @@ describe('supplier material adaptation', () => {
     expect(records.filter(record => record.colorFamily === '常规色系')).toHaveLength(20);
     expect(records.filter(record => record.colorFamily?.startsWith('华彩系列'))).toHaveLength(5);
     expect(records.filter(record => record.colorFamily?.startsWith('粉彩系列'))).toHaveLength(8);
-    expect(supplierMaterials).toHaveLength(61);
-    expect(new Set(supplierMaterials.map(material => material.id)).size).toBe(61);
-    expect(new Set(supplierMaterials.map(material => material.materialId)).size).toBe(61);
+    expect(supplierMaterials).toHaveLength(731);
+    expect(new Set(supplierMaterials.map(material => material.id)).size).toBe(731);
+    expect(new Set(supplierMaterials.map(material => material.materialId)).size).toBe(731);
     for (const record of records) {
       expect(record.sku).toBe('');
       expect(record.catalogId).toMatch(/^PLA-[A-Z-]+$/);
