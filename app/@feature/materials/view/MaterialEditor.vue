@@ -121,7 +121,14 @@ onBeforeUnmount(() => { window.removeEventListener('beforeunload', warnUnsaved);
   </div>
 </template>
 <style scoped>
-.editor-fields select { width: 100%; padding: 8px; border: 1px solid #46484a; border-radius: 6px; background: #27292c; }
+.editor-title { flex-shrink: 0; flex-wrap: wrap; gap: 8px; overflow-wrap: anywhere; }
+.editor-fields { min-width: 0; flex-shrink: 0; overflow-wrap: anywhere; }
+.editor-fields select { width: 100%; min-width: 0; max-width: 100%; padding: 8px; border: 1px solid #46484a; border-radius: 6px; background: #27292c; }
+.editor-fields .parameter > span { align-items: center; gap: 8px; }
+.editor-fields .parameter input[type=number] { flex-shrink: 0; width: 64px; }
+.editor-fields .parameter input[type=range] { width: 100%; min-width: 0; }
+.button-row { flex-wrap: wrap; padding-bottom: 4px; }
+.button-row > button { flex: 1 1 100px; padding: 8px; }
 .editor-fields input[readonly] { color: #999; }
 .appearance-adjustments { display: grid; gap: 12px; }
 .appearance-adjustments summary { cursor: pointer; color: #b1b9ac; font-size: 11px; padding: 8px 0; }

@@ -39,15 +39,26 @@ function change(key: keyof WheelFilters, event: Event) {
 </template>
 
 <style scoped>
-.wheel-filters { min-width: 0; overflow-y: auto; padding: 22px 18px; background: #222528; scrollbar-width: thin; }
+.wheel-filters { min-width: 0; min-height: 0; overflow-y: auto; padding: 22px 18px; background: #222528; scrollbar-width: thin; }
 .filter-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; color: #8d969c; font: 10px monospace; letter-spacing: 1px; }
 .filter-heading button { color: #c2ef78; font: 11px sans-serif; }
 .filter-label { display: grid; gap: 9px; margin-bottom: 18px; font-size: 11px; color: #aeb5ba; }
 .filter-label input, .filter-label select { width: 100%; min-width: 0; padding: 10px 8px; border: 1px solid #41464b; border-radius: 6px; background: #1b1e20; color: #e4e7e8; font-size: 11px; }
 .hue-heading { color: #8d969c; font: 10px monospace; margin: 25px 0 12px; letter-spacing: 1px; }
 .hue-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.hue-filters button { display: flex; align-items: center; gap: 7px; padding: 8px; border: 1px solid #3a3f43; border-radius: 5px; color: #adb6bc; text-align: left; font-size: 10px; }
+.hue-filters button { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px; border: 1px solid #3a3f43; border-radius: 5px; color: #adb6bc; text-align: left; font-size: 10px; overflow-wrap: anywhere; }
 .hue-filters button.active { border-color: #9dbf70; color: #cee7af; background: #343e2c; }
 .hue-filters i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .filter-note { color: #828b91; font-size: 10px; line-height: 1.8; margin-top: 22px; }
+@media (max-width: 1100px) { .wheel-filters { overflow: visible; } }
+@media (max-width: 700px) {
+  .wheel-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 16px 12px; }
+  .filter-heading, .filter-label:first-of-type, .filter-label:last-of-type, .hue-heading, .hue-filters, .filter-note { grid-column: 1 / -1; }
+  .filter-heading, .filter-label { min-width: 0; margin-bottom: 0; }
+  .filter-heading { margin-bottom: 4px; }
+  .hue-heading { margin: 4px 0 0; }
+  .hue-filters { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .hue-filters button { padding: 8px 5px; gap: 5px; }
+  .filter-note { margin-top: 0; }
+}
 </style>

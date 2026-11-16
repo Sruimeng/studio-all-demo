@@ -91,7 +91,7 @@ function closeEditor() { editing.value = null; emit('preview', null); }
   </aside>
 </template>
 <style scoped>
-.filament-validation { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #46484a transparent; padding: 18px 15px; color: #eee; }
+.filament-validation { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #46484a transparent; padding: 18px 15px; color: #eee; overflow-wrap: anywhere; }
 .validation-title { margin-bottom: 20px; }
 .validation-title h2 { font-size: 18px; font-weight: 500; margin: 7px 0; letter-spacing: -.4px; }
 .validation-title p { color: #8e959b; font-size: 11px; margin: 0; }
@@ -115,4 +115,7 @@ function closeEditor() { editing.value = null; emit('preview', null); }
 .reference-card { display: flex; gap: 5px; align-items: center; padding: 10px 0 0; color: #b9cba8; font-size: 10px; line-height: 1.5; }
 .reference-card span { flex: 1; overflow-wrap: anywhere; }
 .add-color { color: #bdda9d; font-size: 10px; }
+.section-caption { flex-wrap: wrap; gap: 8px; }
+.current-heading small { overflow-wrap: anywhere; }
+@media (max-width: 700px) { .filament-validation { flex: none; overflow: visible; } }
 </style>

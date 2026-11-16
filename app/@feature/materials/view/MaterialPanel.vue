@@ -63,10 +63,15 @@ watch(() => props.selected?.id, close);
   </aside>
 </template>
 <style scoped>
-.panel-heading, .search-field, .library-tabs, .vendor-filter, .selection-detail, .library-footer { flex-shrink: 0; }
+.material-panel > * { flex-shrink: 0; }
+.panel-heading { gap: 8px; }
+.panel-heading > div { min-width: 0; }
+.panel-heading h2, .selection-detail summary, .delete-confirm p { overflow-wrap: anywhere; }
+.search-field input { min-width: 0; }
+.selection-detail summary { flex-wrap: wrap; gap: 8px; }
 .vendor-filter { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 10px; color: #999; }
 .vendor-filter select { min-width: 0; flex: 1; padding: 6px; border: 1px solid #444; border-radius: 5px; background: #252525; color: #eee; font: inherit; }
-.material-list { flex: 1; min-height: 120px; overflow-y: auto; scrollbar-width: thin; }
+.material-list { flex: 1 1 auto; min-height: 120px; overflow-y: auto; scrollbar-width: thin; }
 .selection-detail summary { cursor: pointer; font-size: 9px; }
 .material-swatch { width: 26px; height: 26px; border: 1px solid #666; border-radius: 5px; }
 .material-status { display: block; margin-top: 5px; color: #e9c17b; font-size: 8px; }
@@ -74,4 +79,9 @@ watch(() => props.selected?.id, close);
 .delete-material { flex-shrink: 0; color: #e9a58c; }
 .delete-confirm { flex-shrink: 0; margin-top: 10px; padding: 10px; border: 1px solid #735345; border-radius: 6px; font-size: 10px; line-height: 1.6; }
 .delete-confirm .button-row { margin-top: 8px; }
+@media (max-width: 700px) {
+  .material-panel { overflow: visible; }
+  .material-list { flex: none; max-height: 360px; }
+  .material-check { opacity: 1; }
+}
 </style>

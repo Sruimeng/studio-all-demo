@@ -34,12 +34,12 @@ const { language } = storeToRefs(locale);
   </section>
 </template>
 <style scoped>
-.supplier-detail { padding: 12px 0; font-size: 10px; line-height: 1.6; }
+.supplier-detail { min-width: 0; padding: 12px 0; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
 .supplier-detail > p { margin-top: 6px; color: #999; }
 .supplier-detail dl { margin-top: 10px; }
 .supplier-detail dl > div { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
 .supplier-detail dt { flex-shrink: 0; color: #999; }
-.supplier-detail dd { overflow-wrap: anywhere; text-align: right; }
+.supplier-detail dd { min-width: 0; overflow-wrap: anywhere; text-align: right; }
 .supplier-issues { padding-left: 16px; margin: 10px 0; color: #e9c17b; }
 .local-edit-note { color: #beb2ff !important; }
 </style>

@@ -45,7 +45,8 @@ function change(key: keyof WheelCreationContext, event: Event) {
 <style scoped>
 h2 { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
 .creation-note { color: #9ba9b2; font-size: 10px; line-height: 1.8; margin-bottom: 16px; overflow-wrap: anywhere; }
-.creation-context { display: grid; gap: 12px; }
-label { display: grid; gap: 8px; color: #aeb5ba; font-size: 11px; }
+.wheel-add-color { min-width: 0; }
+.creation-context { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; }
+label { min-width: 0; display: grid; gap: 8px; color: #aeb5ba; font-size: 11px; }
 select { width: 100%; min-width: 0; padding: 10px 8px; border: 1px solid #41464b; border-radius: 6px; background: #1b1e20; color: #e4e7e8; font-size: 11px; }
 </style>

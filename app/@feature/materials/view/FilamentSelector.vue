@@ -17,8 +17,8 @@ const series = computed(() => materialSeries.filter(item => item.vendor === prop
   </div>
 </template>
 <style scoped>
-.filament-selector { display: grid; gap: 12px; }
-.filter-pair { display: grid; grid-template-columns: 1.35fr 1fr; gap: 10px; }
-label { display: grid; gap: 6px; color: #aeb1b5; font-size: 11px; }
+.filament-selector { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; }
+.filter-pair { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 10px; }
+label { min-width: 0; display: grid; gap: 6px; color: #aeb1b5; font-size: 11px; }
 select { width: 100%; min-width: 0; background: #24262a; border: 1px solid #414348; border-radius: 6px; padding: 9px 7px; color: #eee; font-size: 12px; }
 </style>

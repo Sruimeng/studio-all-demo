@@ -47,13 +47,13 @@ function select(event: Event) {
 </template>
 
 <style scoped>
-.appearance-binding { display: grid; gap: 8px; padding: 12px; margin: 12px 0; background: #292e2a; border: 1px solid #4b5943; border-radius: 7px; }
-label { display: grid; gap: 8px; color: #d4dfca; font-size: 11px; }
+.appearance-binding { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; padding: 12px; margin: 12px 0; background: #292e2a; border: 1px solid #4b5943; border-radius: 7px; }
+label { min-width: 0; display: grid; gap: 8px; color: #d4dfca; font-size: 11px; }
 select { width: 100%; min-width: 0; background: #202421; border: 1px solid #4b5547; border-radius: 5px; color: #eee; padding: 8px; font-size: 11px; }
 p { color: #979f94; font-size: 10px; line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
 .binding-state { color: #c5dbb2; }
 button { text-align: left; font-size: 10px; color: #c2ef78; }
-.finish-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.finish-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(68px,100%),1fr)); gap: 6px; }
 .finish-choice { display: grid; justify-items: center; gap: 5px; border: 1px solid #3e4348; border-radius: 7px; background: #292d31; padding: 11px 3px 8px; }
 .finish-choice.active { border-color: #bcdb96; background: #30392b; }
 .finish-choice strong { font-size: 10px; font-weight: 500; color: #dce1e4; }

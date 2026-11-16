@@ -101,23 +101,38 @@ function edit() { if (detail.value) { adding.value = false; editing.value = clon
 
 <style scoped>
 .color-wheel-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #1a1e21; color: #e6ecef; border: 1px solid #32383c; border-radius: 0 18px 18px 0; overflow: hidden; }
-.wheel-header { display: flex; gap: 18px; align-items: center; justify-content: space-between; padding: 20px 25px; border-bottom: 1px solid #343b40; background: #22272a; }
+.wheel-header { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: space-between; padding: 20px 25px; border-bottom: 1px solid #343b40; background: #22272a; }
+.wheel-header > div { min-width: 0; }
+.color-wheel-workspace > :deep(.material-sync) { flex-shrink: 0; }
 .wheel-eyebrow { color: #a2bc86; font: 9px monospace; letter-spacing: 2px; }
 .wheel-header h1 { margin-top: 6px; font-size: 22px; font-weight: 500; letter-spacing: -.4px; }
 .wheel-header small { color: #8f9ba2; font-size: 11px; font-weight: 400; margin-left: 14px; letter-spacing: 0; }
 .add-color-button { background: #c2ef78; color: #1e2915; border-radius: 6px; padding: 11px 15px; font-size: 11px; white-space: nowrap; }
-.wheel-content { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr) 290px; }
-.wheel-main { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; background: #202528; color: #e2e7e8; }
+.wheel-content { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr) 290px; grid-template-rows: minmax(0,1fr); }
+.wheel-main { min-width: 0; min-height: 0; overflow: auto; scrollbar-width: thin; background: #202528; color: #e2e7e8; }
 .wheel-inspector { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 18px 12px; background: #23292d; border-left: 1px solid #343c41; scrollbar-width: thin; }
 .wheel-inspector > .wheel-material-preview { flex-shrink: 0; }
-.inspector-content { min-height: 120px; overflow-y: auto; scrollbar-width: thin; }
+.inspector-content { flex-shrink: 0; min-width: 0; min-height: 120px; }
 .inspector-note { color: #9ba9b2; font-size: 10px; line-height: 1.8; margin-bottom: 16px; overflow-wrap: anywhere; }
-.wheel-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; background: #613a35; color: #f3ccc6; font-size: 11px; }
+.wheel-error { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; background: #613a35; color: #f3ccc6; font-size: 11px; overflow-wrap: anywhere; }
 .wheel-empty { padding: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
 .empty-wheel { color: #758665; font-size: 90px; }
 .wheel-empty h2 { font-size: 18px; font-weight: 400; }
 .wheel-empty p { max-width: 320px; color: #8d9aa3; font-size: 11px; line-height: 1.8; }
 .wheel-empty button { color: #c2ddaa; font-size: 11px; }
 @media (max-width: 1200px) { .wheel-content { grid-template-columns: 190px minmax(0, 1fr) 255px; } .wheel-header { padding: 16px 18px; } }
-@media (max-width: 900px) { .wheel-content { grid-template-columns: 175px minmax(0, 1fr); overflow-y: auto; } .wheel-inspector { grid-column: 1 / -1; display: block; overflow: visible; border-top: 1px solid #343c41; } .inspector-content { overflow: visible; } .wheel-main { overflow-y: visible; overflow-x: clip; } .wheel-header small { display: block; margin: 7px 0 0; } }
+@media (max-width: 1100px) {
+  .color-wheel-workspace { overflow: visible; border-radius: 16px; }
+  .wheel-content { flex: none; grid-template-columns: 175px minmax(0,1fr); grid-template-rows: auto auto; align-items: start; }
+  .wheel-header { border-radius: 16px 16px 0 0; }
+  .wheel-header small { display: block; margin: 7px 0 0; }
+  .wheel-main { overflow: visible; }
+  .wheel-inspector { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 18px; overflow: visible; border-left: 0; border-top: 1px solid #343c41; border-radius: 0 0 16px 16px; }
+}
+@media (max-width: 700px) {
+  .wheel-content { grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto auto; }
+  .wheel-header { padding: 16px 12px; }
+  .wheel-header h1 { font-size: 20px; }
+  .wheel-inspector { grid-template-columns: minmax(0,1fr); gap: 0; }
+}
 </style>

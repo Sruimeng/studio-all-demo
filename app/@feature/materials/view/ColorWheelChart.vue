@@ -70,11 +70,13 @@ watch(zoom, async () => {
 .wheel-chart[data-theme='dark'] { --canvas: #202528; --ink: #e2e7e8; --muted: #a6afb4; --grid: #30373b; --line: #454e53; --selected: #d2efb1; }
 .chart-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin: 0 8px 6px; font-size: 11px; }
 .canvas-themes, .zoom-controls { display: flex; align-items: center; gap: 3px; }
+.zoom-controls { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.chart-toolbar button, .zoom-value { flex-shrink: 0; white-space: nowrap; }
 .canvas-themes { padding: 2px; border: 1px solid var(--line); border-radius: 6px; }
 .chart-toolbar button { padding: 5px 9px; border-radius: 4px; color: var(--muted); }
 .canvas-themes button[aria-pressed='true'] { background: var(--grid); color: var(--ink); }
 .chart-toolbar button:hover { color: var(--ink); }
-.zoom-controls input { width: 76px; accent-color: #7a8c64; }
+.zoom-controls input { width: 76px; min-width: 32px; flex: 1 1 54px; max-width: 76px; accent-color: #7a8c64; }
 .zoom-value { width: 38px; color: var(--muted); text-align: right; font: 10px monospace; }
 .chart-viewport { width: 100%; aspect-ratio: 1110 / 1080; max-height: calc(100dvh - 245px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .chart-sheet { min-width: 100%; min-height: 100%; }
@@ -95,5 +97,6 @@ watch(zoom, async () => {
 .chart-caption i { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 4px; flex-shrink: 0; }
 .chart-caption small { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; }
 .chart-note { text-align: center; font-size: 10px; color: var(--muted); line-height: 1.9; padding: 8px 12px 0; }
-@media (max-width: 600px) { .chart-toolbar { margin-inline: 0; } .zoom-controls input { width: 54px; } .wheel-chart { padding-inline: 6px; } }
+@media (max-width: 1100px) { .chart-viewport { max-height: none; } }
+@media (max-width: 700px) { .chart-toolbar { margin-inline: 0; } .zoom-controls input { width: 54px; } .wheel-chart { padding-inline: 6px; } }
 </style>

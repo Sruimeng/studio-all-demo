@@ -32,10 +32,12 @@ async function save() {
   </form>
 </template>
 <style scoped>
-.color-form { display: grid; gap: 11px; padding: 12px; border: 1px solid #596447; border-radius: 7px; background: #272b26; }
-.form-note { margin: 0; color: #a9b49d; line-height: 1.6; font-size: 10px; }
-label { display: grid; gap: 5px; color: #b5b9b2; font-size: 11px; }
+.color-form { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 11px; padding: 12px; border: 1px solid #596447; border-radius: 7px; background: #272b26; }
+.form-note { margin: 0; color: #a9b49d; line-height: 1.6; font-size: 10px; overflow-wrap: anywhere; }
+label { min-width: 0; display: grid; gap: 5px; color: #b5b9b2; font-size: 11px; }
+.button-row { flex-wrap: wrap; }
+.button-row > button { flex: 1 1 100px; padding: 8px; }
 input { width: 100%; min-width: 0; background: #202321; color: #eee; border: 1px solid #484d44; border-radius: 5px; padding: 7px; }
 .hex-input { display: flex; gap: 7px; }
-.hex-input input[type=color] { width: 36px; padding: 2px; height: 32px; }
+.hex-input input[type=color] { flex: 0 0 36px; width: 36px; padding: 2px; height: 32px; }
 </style>
