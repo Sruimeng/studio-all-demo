@@ -218,10 +218,10 @@ it('loads and regenerates regions with supplier SKU matches and keeps source col
   const palette = mocks.request.mock.calls.find(([type]) => type === 'palette');
   expect(palette?.[1]).toMatchObject({ mode: 'owned', N: 4, protect: true });
   const candidates = (palette?.[1] as { cands: Array<{ id: string; hex: string }> }).cands;
-  expect(candidates).toHaveLength(26);
+  expect(candidates).toHaveLength(59);
   expect(candidates.map(candidate => candidate.id)).not.toContain('polymaker:CA19010');
   expect(candidates.map(candidate => candidate.id)).not.toContain('polymaker:CA19012');
-  expect(new Set(candidates.map(candidate => candidate.id)).size).toBe(26);
+  expect(new Set(candidates.map(candidate => candidate.id)).size).toBe(59);
   expect(store.regions.map(region => region.material.materialId)).toEqual(['CA19001', 'CA19002']);
   expect(store.regions.map(region => region.sourceHex)).toEqual(['#FF0000', '#0000FF']);
   expect(store.regions[0]!.match).toEqual({ basis: 'catalog-hex-d65-deltae00', materialId: candidates[0]!.id, hex: candidates[0]!.hex, meanDeltaE: 0.25, areaShare: 0.5 });
@@ -240,7 +240,7 @@ it('canonical candidates ignore local colors, supplier copies and preview overri
   expect(await store.saveMaterial(material)).toBe(true);
   mocks.request.mockClear(); await store.segment();
   const candidates = mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands;
-  expect(candidates).toHaveLength(26);
+  expect(candidates).toHaveLength(59);
   expect(candidates.find((candidate: { id: string }) => candidate.id === material.id).hex).toBe(hex);
   expect(store.regions[0]!.material.hex).toBe('#123456');
   expect(store.regions[0]!.match!.hex).toBe(hex);
@@ -440,7 +440,7 @@ it('imports a mixed batch locally, avoids duplicate IDs and leaves assignments a
   expect(JSON.stringify(store.regions)).toBe(regions); expect(store.display!.labels).toBe(labels);
   expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.records.has('supplier-overrides')).toBe(false);
   await store.segment();
-  expect(mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands).toHaveLength(26);
+  expect(mocks.request.mock.calls.find(([type]) => type === 'palette')![1].cands).toHaveLength(59);
 });
 it('keeps the library and assignments intact if importing cannot be persisted', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files()); const before = JSON.stringify(store.materials);
@@ -491,7 +491,7 @@ it('a failed deletion preserves the local library, selection and validation appe
 
 it('starts with an empty local library and keeps supplier SKU matching available', async () => {
   const store = useWorkspace();
-  expect(store.materials).toEqual([]); expect(store.allMaterials).toHaveLength(28);
+  expect(store.materials).toEqual([]); expect(store.allMaterials).toHaveLength(61);
   await store.loadFiles(files()); await store.save(); await store.initialize();
   expect(store.failure).toBe(''); expect(store.materials).toEqual([]);
   expect(store.regions.every(region => region.material.supplier?.vendor === 'Polymaker')).toBe(true);

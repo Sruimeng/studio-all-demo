@@ -8,6 +8,7 @@ export interface SupplierProfile {
   colorNameEN: string;
   colorNameCN: string;
   materialType: string;
+  finish?: string;
   catalogHex: string | null;
   pantone: string | null;
   d65Lab: [number, number, number] | null;
@@ -44,7 +45,7 @@ export interface MaterialRecord {
   transparency: number;
   metalness: number;
   roughness: number;
-  filament?: { brand?: string; series?: string; materialType: string };
+  filament?: { brand?: string; series?: string; materialType: string; finish?: string };
   referenceImage?: string;
   colorSpace: 'srgb';
   renderRule: typeof RENDER_RULE | typeof OPENPBR_RULE;

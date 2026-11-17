@@ -5,6 +5,9 @@ import { materialHex, materialProblem } from './supplier';
 export const filamentBrand = (material: MaterialRecord) => material.supplier?.vendor || material.filament?.brand || '';
 export const filamentType = (material: MaterialRecord) => material.supplier?.materialType || material.filament?.materialType || '';
 export const filamentSeries = (material: MaterialRecord) => material.supplier?.product || material.filament?.series || '';
+export function filamentSubtitle(material: MaterialRecord, fallbackBrand: string) {
+  return [filamentBrand(material) || fallbackBrand, filamentType(material)].filter(Boolean).join(' · ');
+}
 export function filamentDescription(material: MaterialRecord) {
   const series = filamentSeries(material), type = filamentType(material);
   return [series, type && !series.toLowerCase().includes(type.toLowerCase()) ? type : ''].filter(Boolean).join(' · ');
@@ -28,7 +31,7 @@ export function searchFilaments(materials: MaterialRecord[], query: string): Mat
   return materials.filter(material => {
     if (materialProblem(material)) return false;
     if (hex && [material.hex, materialHex(material), material.supplier?.catalogHex].some(value => value?.toUpperCase() === hex)) return true;
-    const text = normalize([material.name, material.materialId, material.supplier?.sku, filamentBrand(material), filamentSeries(material), filamentType(material), material.supplier?.colorNameCN, material.supplier?.colorNameEN, material.hex, materialHex(material), material.supplier?.catalogHex].filter(Boolean).join(' '));
+    const text = normalize([material.name, material.materialId, material.supplier?.sku, filamentBrand(material), filamentBrand(material).toUpperCase() === 'SUNLU' ? '三绿' : '', filamentSeries(material), filamentType(material), material.supplier?.finish || material.filament?.finish, material.supplier?.colorNameCN, material.supplier?.colorNameEN, material.hex, materialHex(material), material.supplier?.catalogHex].filter(Boolean).join(' '));
     return terms.every(term => text.includes(term));
   }).sort((a, b) => Number(b.materialId.toLowerCase() === query.trim().toLowerCase()) - Number(a.materialId.toLowerCase() === query.trim().toLowerCase()));
 }

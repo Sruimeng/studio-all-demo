@@ -1,115 +1,155 @@
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 import { useLocale } from '~/@base/locale';
-import { computed } from 'vue';
 import { useWorkspace } from '~/@feature/workspace';
-import { filamentName } from '~/@feature/materials/filaments';
-import { materialHex } from '~/@feature/materials';
-import { slicers, type Slicer, type PrepTask } from '../print-preparation';
-const { t, tr } = useLocale();
 
-const props = defineProps<{ ownedIds: string[] }>();
+const { t } = useLocale();
 const studio = useWorkspace();
-const locale = useLocale();
-const useEnglish = computed(() => locale.language === 'en');
-const prep = computed(() => studio.preparation);
-const completed = computed(() => studio.printTasks.filter(studio.printTaskDone).length);
-const owned = computed(() => studio.currentColorResult.used.filter(m => props.ownedIds.includes(m.id)).length);
-const titles = { check: '可打印性检查', color: '颜色设置' };
-const colorNames = { 'not-started': '未开始', progress: '进行中', ready: '已就绪', review: '待复核' };
-const colorHelp = {
-  'not-started': '前往 Multi-color 分色，并为每个打印区域分配耗材。',
-  progress: '继续编辑分色草稿，完成后确认并返回。',
-  ready: '分色结果和耗材分配已确认。',
-  review: '分色或耗材映射已变更，请在 Multi-color 重新确认。',
-};
-const colorActions = { 'not-started': '设置颜色', progress: '继续设置', ready: '在 Multi-color 中编辑', review: '在 Multi-color 中复核' };
-const hasIssues = computed(() => { const c = studio.printMeshCheck; return c.boundary + c.nonManifold + c.degenerate + c.winding + c.duplicates > 0; });
-const axes = [{ key: 'width', label: 'W', name: '宽度' }, { key: 'depth', label: 'D', name: '深度' }, { key: 'height', label: 'H', name: '高度' }] as const;
-const pending = computed(() => studio.busy || studio.prepSaving || !studio.content);
-function toggleTask(task: PrepTask) { prep.value.expanded = prep.value.expanded === task ? '' : task; }
-function changeSize(axis: 'width' | 'depth' | 'height', event: Event) {
-  const input = event.target as HTMLInputElement;
-  studio.setPrintDimension(axis, Number(input.value));
-  input.value = String(Number(studio.printDimensions[axis].toFixed(2)));
+// This Figma prototype is deliberately local: it never repairs the mesh or
+// records a real printability confirmation. Remounting starts a fresh preview.
+const printability = ref<'issues' | 'fixing' | 'ready'>('issues');
+let repairTimer: ReturnType<typeof setTimeout> | undefined;
+function autoFix() {
+  if (printability.value !== 'issues') return;
+  printability.value = 'fixing';
+  repairTimer = setTimeout(() => { printability.value = 'ready'; repairTimer = undefined; }, 3000);
 }
+const axes = [
+  { key: 'width', label: 'W', en: 'Width', zh: '宽度' },
+  { key: 'depth', label: 'D', en: 'Depth', zh: '深度' },
+  { key: 'height', label: 'H', en: 'Height', zh: '高度' },
+] as const;
+// Values follow the three requested design states, including their ready labels.
+const metrics = computed(() => [
+  { label: t('Thin Walls', '薄壁'), value: printability.value === 'ready' ? t('Yes', '是') : t('7.6% below 2 mm', '7.6% 低于 2 mm') },
+  { label: t('Watertight', '水密性'), value: printability.value === 'ready' ? '0' : t('No', '否') },
+  { label: t('Holes', '孔洞'), value: printability.value === 'ready' ? '0' : '2' },
+  { label: t('Non-manifold Edges', '非流形边'), value: printability.value === 'ready' ? '0' : '7' },
+]);
+const slicerOptions = [
+  { name: 'Bambu Studio', icon: 'bambu' }, { name: 'Creality Print', icon: 'creality' },
+  { name: 'OrcaSlicer', icon: 'orca' }, { name: 'Anycubic Slicer', icon: 'anycubic' },
+  { name: 'Lychee Slicer', icon: 'lychee' }, { name: 'Blueprint Studio', icon: 'blueprint' },
+  { name: 'ElegooSlicer', icon: 'elegoo' },
+];
+const slicer = computed(() => slicerOptions.find(option => option.name === studio.preparation.slicer || (option.icon === 'anycubic' && studio.preparation.slicer === 'Anycubic')) ?? slicerOptions[0]!);
+const slicerOpen = ref(false), slicerTrigger = useTemplateRef<HTMLButtonElement>('slicerTrigger'), slicerList = useTemplateRef<HTMLDivElement>('slicerList');
+const slicerPosition = ref({ left: '0px', top: '0px', maxHeight: '310px' });
+function positionSlicers() {
+  if (!slicerOpen.value || !slicerTrigger.value) return;
+  const rect = slicerTrigger.value.getBoundingClientRect(), panel = slicerTrigger.value.closest('section.prep-panel')!.getBoundingClientRect();
+  const width = 224, menuHeight = Math.min(310, window.innerHeight - 24);
+  const right = panel.right + 8;
+  const left = right + width <= window.innerWidth - 12 ? right : Math.max(12, panel.left - width - 8);
+  slicerPosition.value = { left: `${left}px`, top: `${Math.max(12, Math.min(rect.top - 4, window.innerHeight - menuHeight - 12))}px`, maxHeight: `${menuHeight}px` };
+}
+async function toggleSlicers() {
+  slicerOpen.value = !slicerOpen.value; positionSlicers();
+  if (slicerOpen.value) { await nextTick(); slicerList.value?.focus({ preventScroll: true }); }
+}
+function dismissSlicers(event: PointerEvent) {
+  if (!slicerOpen.value) return;
+  const target = event.target as Node;
+  if (!slicerTrigger.value?.contains(target) && !slicerList.value?.contains(target)) slicerOpen.value = false;
+}
+function escapeSlicers(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !slicerOpen.value) return;
+  event.stopPropagation(); slicerOpen.value = false; slicerTrigger.value?.focus();
+}
+onMounted(() => {
+  window.addEventListener('pointerdown', dismissSlicers);
+  window.addEventListener('resize', positionSlicers);
+  window.addEventListener('scroll', positionSlicers, true);
+});
+onBeforeUnmount(() => {
+  clearTimeout(repairTimer);
+  window.removeEventListener('pointerdown', dismissSlicers);
+  window.removeEventListener('resize', positionSlicers);
+  window.removeEventListener('scroll', positionSlicers, true);
+});
 </script>
 
 <template>
-  <section id="print-preparation-panel" class="studio-left-panel prep-panel" :aria-label="tr('打印准备')">
-    <h1 class="prep-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M7 12h10M12 7v10" /></svg>{{ tr("打印准备") }}</h1>
+  <section id="print-preparation-panel" class="studio-left-panel prep-panel" :aria-label="t('Print Preparation', '打印准备')" @keydown.esc="escapeSlicers">
+    <h1 class="prep-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18M6 3v16H3v3h18v-3h-3V3M9 4v4h6V4M12 8v3M6 19h12" /><path d="m12 12 3 1.5v3L12 18l-3-1.5v-3Zm0 3v3m-3-4.5 3 1.5 3-1.5" /></svg>{{ t('Print Preparation', '打印准备') }}</h1>
     <div class="prep-scroll">
-      <div class="prep-choice">
-        <label class="prep-label" for="prep-slicer">{{ tr("切片器") }}</label>
-        <select id="prep-slicer" :value="prep.slicer" :disabled="pending" @change="studio.changePrintSlicer(($event.target as HTMLSelectElement).value as Slicer)"><option v-for="slicer in slicers" :key="slicer">{{ tr(slicer) }}</option></select>
-        <span class="prep-label mode-label">{{ tr("打印模式") }}</span>
-        <div class="prep-modes"><button type="button" :disabled="pending" :class="{ active: prep.mode === 'single' }" :aria-pressed="prep.mode === 'single'" @click="studio.changePrintMode('single')">{{ tr("单色打印") }}</button><button type="button" :disabled="pending" :class="{ active: prep.mode === 'multi' }" :aria-pressed="prep.mode === 'multi'" @click="studio.changePrintMode('multi')">{{ t('Multicolor', '多色打印') }}</button></div>
-        <section class="prep-size-settings" :aria-label="tr('模型尺寸')">
-          <p class="prep-size-label">{{ tr("尺寸") }} <span>mm</span></p>
-          <div class="prep-dimensions"><label v-for="axis in axes" :key="axis.key"><span>{{ tr(axis.label) }}</span><input :aria-label="t(`${tr(axis.name)} (mm)`, `${axis.name}（mm）`)" type="number" min="0.0001" step="any" :value="Number(studio.printDimensions[axis.key].toFixed(2))" :disabled="pending" @change="changeSize(axis.key, $event)"></label></div>
-          <div class="prep-size-confirm"><span>{{ tr("⌁ 等比例锁定") }}</span><button type="button" :disabled="pending" :class="{ confirmed: studio.printSizeReady }" @click="studio.confirmPrintSize">{{ tr(studio.printSizeReady ? '✓ 已确认' : '确认尺寸') }}</button></div>
-          <p class="prep-help muted">{{ tr("修改尺寸后需重新确认并复核可打印性。高度范围：10–320 mm。") }}</p>
-        </section>
-      </div>
-      <div class="prep-check-title"><strong>{{ tr("打印清单") }}</strong><span>{{ tr(completed) }}/{{ tr(studio.printTasks.length) }} {{ tr("已完成") }}</span></div>
-      <div class="prep-progress" role="progressbar" :aria-label="tr('打印清单完成进度')" :aria-valuenow="completed" :aria-valuemax="studio.printTasks.length" :aria-valuemin="0"><i :style="{ width: `${completed / studio.printTasks.length * 100}%` }" /></div>
-      <section v-for="task in studio.printTasks" :key="task" class="prep-task" :class="{ open: prep.expanded === task, done: studio.printTaskDone(task) }">
-        <button type="button" class="prep-task-head" :disabled="pending" :aria-expanded="prep.expanded === task" :aria-controls="`prep-${task}-body`" @click="toggleTask(task)"><i class="prep-dot">{{ tr(studio.printTaskDone(task) ? '✓' : '') }}</i><strong>{{ tr(titles[task]) }}</strong><em>{{ tr(task === 'color' ? colorNames[studio.printColorState] : !studio.printSizeReady ? '待确认尺寸' : studio.printCheckReady ? '已复核' : '待复核') }}</em><span>{{ tr(prep.expanded === task ? '⌃' : '⌄') }}</span></button>
-        <div v-if="prep.expanded === task" :id="`prep-${task}-body`" class="prep-task-body">
-          <template v-if="task === 'check'">
-            <p v-if="!studio.printSizeReady" class="prep-help warning">{{ tr("请先在上方确认尺寸，再复核当前尺寸下的检测结果。薄壁与自相交仍需在切片器中检查。") }}</p>
-            <template v-else>
-              <div v-if="studio.printMeshCheck.available" class="prep-check-results">
-                <p><span>{{ tr("表面闭合") }}</span><b :class="{ warning: studio.printMeshCheck.boundary > 0 }">{{ tr(studio.printMeshCheck.boundary ? '存在开放边界' : '边界已闭合') }}</b></p>
-                <p><span>{{ tr("开放边") }}</span><b :class="{ warning: studio.printMeshCheck.boundary > 0 }">{{ tr(studio.printMeshCheck.boundary) }}</b></p>
-                <p><span>{{ tr("非流形边") }}</span><b :class="{ warning: studio.printMeshCheck.nonManifold > 0 }">{{ tr(studio.printMeshCheck.nonManifold) }}</b></p>
-                <p><span>{{ tr("退化 / 重复面") }}</span><b :class="{ warning: studio.printMeshCheck.degenerate + studio.printMeshCheck.duplicates > 0 }">{{ tr(studio.printMeshCheck.degenerate) }} / {{ tr(studio.printMeshCheck.duplicates) }}</b></p>
-                <p><span>{{ tr("朝向不一致的边") }}</span><b :class="{ warning: studio.printMeshCheck.winding > 0 }">{{ tr(studio.printMeshCheck.winding) }}</b></p>
-                <p><span>{{ tr("薄壁 / 自相交") }}</span><b class="muted">{{ tr("未检测") }}</b></p>
-              </div>
-              <p v-else class="prep-help warning">{{ tr("无法检测当前模型，请重新导入有效模型。") }}</p>
-              <p class="prep-help">{{ tr(hasIssues ? '检测到网格问题，请在切片器中修复后再打印。' : '基础网格检查已完成。') }}{{ tr("薄壁、自相交和设备适配仍需在切片器中检查。") }}</p>
-              <p class="prep-help muted">{{ tr("自动修复暂未接入；当前操作仅确认已阅读检测结果。") }}</p>
-            </template>
-            <button type="button" class="prep-primary" :class="{ secondary: studio.printCheckReady }" :disabled="pending || !studio.printSizeReady || !studio.printMeshCheck.available" @click="studio.acknowledgePrintCheck">{{ tr(!studio.printSizeReady ? '请先确认尺寸' : studio.printCheckReady ? '已复核检测结果' : hasIssues ? '知悉问题，继续准备' : '确认检测结果') }}</button>
-          </template>
-          <template v-else>
-            <div v-if="studio.currentColorResult.used.length && studio.printColorState !== 'not-started'" class="prep-color-summary">
-              <div class="prep-color-summary-title"><span>{{ tr("方案耗材") }}</span><strong>{{ tr(studio.currentColorResult.used.length) }} {{ tr("种使用中") }}</strong></div>
-              <div class="prep-swatches" :aria-label="tr('实际使用耗材')"><i v-for="material in studio.currentColorResult.used" :key="material.id" :style="{ background: materialHex(material) }" :title="`${useEnglish ? filamentName(material, true) : material.name} · ${tr(props.ownedIds.includes(material.id) ? '已拥有' : '未拥有')}`" /></div>
-              <div class="prep-owned">{{ tr(owned) }} {{ tr("已拥有") }} <span>·</span><span :class="{ warning: owned < studio.currentColorResult.used.length }">{{ tr(studio.currentColorResult.used.length - owned) }} {{ tr("未拥有") }}</span></div>
-            </div>
-            <p class="prep-help" :class="{ warning: studio.printColorState === 'review' }">{{ tr(colorHelp[studio.printColorState]) }}</p>
-            <p v-if="studio.printColorState !== 'not-started'" class="prep-help muted">{{ tr("未拥有耗材仅作提醒，不影响完成与导出。") }}</p>
-            <button type="button" class="prep-primary" :class="{ secondary: studio.printColorState === 'ready' }" :disabled="pending" @click="studio.navigatePreparation('multi-color', true)">{{ tr(colorActions[studio.printColorState]) }} ↗</button>
-          </template>
+      <section class="prep-size-settings" :aria-label="t('Model size', '模型尺寸')">
+        <div class="prep-label-row"><h2 class="prep-label">{{ t('Size', '尺寸') }}</h2><div class="prep-units" :aria-label="t('Units: millimetres', '单位：毫米')"><span class="active">mm</span><span>cm</span><span>inch</span></div></div>
+        <div class="prep-dimensions">
+          <template v-for="(axis, index) in axes" :key="axis.key"><span v-if="index" class="prep-times" aria-hidden="true">×</span><label><span>{{ axis.label }}</span><input :aria-label="`${t(axis.en, axis.zh)} (mm)`" type="text" :value="Math.round(studio.printDimensions[axis.key])" :title="`${Number(studio.printDimensions[axis.key].toFixed(2))} mm`" readonly></label></template>
         </div>
+      </section>
+
+      <section class="prep-printability" :aria-label="t('Printability', '可打印性')">
+        <h2 class="prep-label">{{ t('Printability', '可打印性') }}</h2>
+        <div class="prep-check-card" :class="{ ready: printability === 'ready' }" :data-state="printability" :aria-busy="printability === 'fixing'">
+          <div class="prep-check-heading" role="status" aria-live="polite">
+            <svg v-if="printability === 'ready'" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="currentColor" /><path d="m6 10 2.7 2.7 5-5" fill="none" stroke="#234d34" stroke-width="1.4" /></svg>
+            <svg v-else viewBox="0 0 20 20" aria-hidden="true"><path d="M8.3 3.1a2 2 0 0 1 3.4 0l6.7 12A2 2 0 0 1 16.7 18H3.3a2 2 0 0 1-1.7-2.9Z" fill="currentColor" /><path d="M10 6.5v5M10 13.5v1" stroke="#484328" stroke-width="1.7" stroke-linecap="round" /></svg>
+            <span>{{ printability === 'ready' ? t('Printable Ready', '已就绪，可打印') : t('A few fixes needed', '需要少量修复') }}</span>
+          </div>
+          <dl class="prep-check-results"><div v-for="metric in metrics" :key="metric.label"><dt>{{ metric.label }}<span class="prep-info" aria-hidden="true">?</span></dt><dd>{{ metric.value }}<svg v-if="printability === 'ready'" viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg></dd></div></dl>
+          <div v-if="printability !== 'ready'" class="prep-repair-slot"><button class="prep-pill prep-repair" :class="{ fixing: printability === 'fixing' }" type="button" :disabled="printability === 'fixing'" :aria-label="printability === 'fixing' ? t('Auto Fix in progress', '正在自动修复') : t('Auto Fix', '自动修复')" @click="autoFix"><span>Auto Fix</span><span class="prep-cost"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" /><path d="m10.8 3-5 8h3l-.6 6 5.9-9.1h-3.6Z" /></svg>10</span></button></div>
+        </div>
+      </section>
+
+      <section class="prep-slicer-settings" :aria-label="t('Send to Slicer', '发送到切片器')">
+        <div class="prep-label-row"><h2 class="prep-label">{{ t('Send to Slicer', '发送到切片器') }}</h2><div class="prep-slicer-logos" aria-hidden="true"><img v-for="option in [slicerOptions[4]!, ...slicerOptions.slice(0, 1), ...slicerOptions.slice(2, 4), slicerOptions[5]!, slicerOptions[6]!, slicerOptions[1]!]" :key="option.icon" :src="`/slicers/${option.icon}.${option.icon === 'blueprint' ? 'svg' : 'png'}`" alt=""></div></div>
+        <button ref="slicerTrigger" class="prep-slicer-trigger" type="button" aria-haspopup="dialog" :aria-expanded="slicerOpen" aria-controls="prep-slicer-list" @click="toggleSlicers"><img :src="`/slicers/${slicer.icon}.png`" alt=""><span>{{ slicer.name }}</span><svg viewBox="0 0 16 16" :class="{ open: slicerOpen }" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg></button>
       </section>
     </div>
     <footer class="prep-footer">
-      <p v-if="studio.prepSaveError" class="prep-error" role="alert">{{ tr("本地保存失败：") }}{{ tr(studio.prepSaveError) }}<button type="button" :disabled="pending" @click="studio.savePreparation">{{ tr("重试保存") }}</button></p>
-      <small>{{ tr("最后一步 ·") }} {{ tr(prep.slicer) }}</small>
-      <div :title="tr(studio.printTodo || undefined)">
-        <button type="button" class="prep-primary prep-download" :disabled="!!studio.printTodo" :aria-description="tr(studio.printTodo || undefined)" @click="studio.downloadPreparedModel">{{ tr(studio.busy ? '正在处理…' : '导出模型文件') }}</button>
-      </div>
-      <button type="button" class="prep-primary prep-download prep-slicer-import" disabled :title="tr('一键导入暂未接入')">{{ tr("一键导入") }} {{ tr(prep.slicer) }}</button>
+      <button class="prep-delivery" type="button" aria-disabled="true"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="#FFB54A" d="M3 9h14v8H3ZM2 6h16v4H2Z" /><path fill="#FF725B" d="M9 6h2v11H9Z" /><path d="M10 6C3 6 4 1 7 3l3 3Zm0 0c7 0 6-5 3-3l-3 3Z" fill="none" stroke="#FFCE77" stroke-width="1.5" /></svg>{{ t('Print & Delivery', '打印配送') }}</button>
+      <button class="prep-pill prep-send" type="button" aria-disabled="true"><svg class="prep-premium" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10" /><path d="m5 7 2.6 2L10 5.5 12.4 9 15 7l-1.1 6H6.1Zm1.5 7h7v1h-7Z" /></svg><span>{{ t('Send to slicer', '发送到切片器') }}</span><span class="prep-cost"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" /><path d="m10.8 3-5 8h3l-.6 6 5.9-9.1h-3.6Z" /></svg>10</span></button>
     </footer>
+    <Teleport to="body">
+      <div v-if="slicerOpen" id="prep-slicer-list" ref="slicerList" class="prep-slicer-list" :style="slicerPosition" role="dialog" :aria-label="t('Slicer selection', '切片器选择')" tabindex="-1" @keydown.esc="escapeSlicers">
+        <div v-for="option in slicerOptions" :key="option.icon" class="prep-slicer-option" :class="{ selected: slicer.icon === option.icon }"><span class="prep-slicer-app-icon"><img :src="`/slicers/${option.icon}.${option.icon === 'blueprint' ? 'svg' : 'png'}`" alt=""></span><span>{{ option.name }}</span></div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
 <style scoped>
-.prep-panel{color:#eeeef0;padding:18px 14px 14px;gap:0;font-size:12px;background:#292a2d}
-.prep-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;margin:0 0 17px}.prep-title svg{width:18px;height:18px}
-.prep-scroll{flex:1;min-height:0;overflow:auto;padding-right:2px}.prep-choice{padding:12px;background:#232427;border:1px solid #ffffff0a;border-radius:11px;margin-bottom:18px}
-.prep-label{display:block;font-size:11px;color:#b4b5ba;margin-bottom:7px}.mode-label{margin-top:13px}
-select{width:100%;height:36px;border:1px solid #ffffff15;border-radius:8px;background:#303135;color:#f1f1f2;padding:0 9px;font:inherit;outline:none}.prep-modes{display:grid;grid-template-columns:1fr 1fr;gap:5px}.prep-modes button{border:1px solid #ffffff14;border-radius:7px;height:32px;background:#303135;color:#b5b6bc;font:inherit}.prep-modes button.active{background:#ffd40019;color:#ffd400;border-color:#ffd40066}
-button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.48}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #ffd400;outline-offset:2px}
-.prep-check-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.prep-check-title strong{font-size:12px;font-weight:600}.prep-check-title span{font-size:10px;color:#a7a8ae}.prep-progress{height:3px;border-radius:4px;background:#ffffff14;margin-bottom:13px;overflow:hidden}.prep-progress i{display:block;background:#ffd400;height:100%;transition:width .2s}
-.prep-task{border:1px solid #ffffff12;border-radius:10px;background:#242528;margin-bottom:8px}.prep-task.open{background:#292a22;border-color:#ffd40060}.prep-task.done{border-color:#45da7d30}.prep-task-head{display:flex;align-items:center;gap:7px;padding:12px 10px;background:none;border:0;width:100%;color:inherit;text-align:left}.prep-task-head strong{flex:1;font-size:12px;font-weight:500;white-space:nowrap}.prep-task-head em{font-size:10px;font-style:normal;color:#95969d;white-space:nowrap}.prep-task-head>span{color:#999aa0}.prep-dot{display:grid;place-items:center;border:1px solid #74757b;width:15px;height:15px;border-radius:50%;font-style:normal;font-size:10px;flex:none}.done .prep-dot{background:#45da7d;border-color:#45da7d;color:#13241a}.open:not(.done) .prep-dot{border-color:#ffd400}.prep-task-body{padding:0 10px 11px}
-.prep-check-results{background:#303135;border-radius:8px;padding:5px 9px;margin-bottom:9px}.prep-check-results p{display:flex;justify-content:space-between;gap:4px;align-items:center;margin:0;min-height:29px;font-size:10px}.prep-check-results b{font-weight:500;color:#b5d4bc}.prep-help{font-size:10px;line-height:1.65;color:#c3c4c9;margin:7px 0 10px}.muted{color:#92939a!important}.warning{color:#e6bc69!important}
-.prep-primary{width:100%;border:1px solid transparent;border-radius:18px;background:#ffd400;color:#25210b;min-height:35px;padding:7px 8px;font-size:11px;font-weight:600}.prep-primary.secondary{background:transparent;color:#f3f3f4;border-color:#505154}.prep-primary:disabled{background:#38383a;color:#85868b;opacity:1}
-.prep-size-settings{margin-top:14px;padding-top:13px;border-top:1px solid #ffffff12}.prep-size-settings>.prep-help{margin-bottom:0}.prep-size-label{font-size:11px;margin:0 0 8px}.prep-size-label span{color:#8f9095;margin-left:4px}.prep-dimensions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.prep-dimensions label{min-width:0;display:flex;gap:4px;align-items:center;background:#303135;border:1px solid #ffffff1a;border-radius:8px;padding:7px 5px}.prep-dimensions span{font-size:10px;color:#a5a6ac}.prep-dimensions input{min-width:0;width:100%;background:none;border:0;outline:none;color:#eeeeef;font-size:11px;appearance:textfield}.prep-dimensions input::-webkit-inner-spin-button{appearance:none}.prep-size-confirm{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:5px}.prep-size-confirm span{font-size:10px;color:#a5a6ac}.prep-size-confirm button{font-size:10px;padding:6px 9px;border:0;border-radius:6px;background:#ffd400;color:#24210d}.prep-size-confirm button.confirmed{background:#45da7d19;color:#8fdfa9}
-.prep-color-summary{padding:10px;background:#303135;border-radius:8px;margin-bottom:10px}.prep-color-summary-title{display:flex;justify-content:space-between;font-size:11px;color:#c4c5ca;gap:4px}.prep-color-summary-title strong{font-weight:500;color:#f0f0f1}.prep-swatches{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}.prep-swatches i{width:21px;height:21px;border-radius:50%;box-shadow:inset 0 0 0 1px #ffffff30}.prep-owned{display:flex;gap:6px;font-size:10px;color:#b6b7bc}
-.prep-footer{margin-top:12px;border-top:1px solid #ffffff14;padding-top:12px;flex:none}.prep-footer small{display:block;font-size:10px;color:#a7a8ae;margin:0 0 8px 2px}.prep-download{border-radius:9px;min-height:38px}.prep-slicer-import{margin-top:8px}.prep-slicer-import:disabled{background:transparent;border-color:#505154;color:#85868b}.prep-error{font-size:10px;line-height:1.6;padding:9px;border-radius:8px;color:#f3b6ac;background:#ed847c10}.prep-error button{display:block;color:#ffd400;border:0;background:none;padding:4px 0 0;font:inherit}
-.prep-panel:lang(en) .prep-task-head strong,.prep-panel:lang(en) .prep-task-head em{white-space:normal}.prep-panel:lang(en) .prep-task-head strong{min-width:0}.prep-panel:lang(en) .prep-task-head em{max-width:85px;text-align:right}
-@media(prefers-reduced-motion:reduce){.prep-progress i{transition:none}}
+.prep-panel{padding:12px 12px 16px;gap:0;border-radius:0 20px 20px 0;background:#27282d;color:#f2f2f2;font-size:12px}
+.prep-title{display:flex;align-items:center;gap:8px;margin:0 0 16px;font-size:12px;font-weight:500;line-height:20px;flex:none}
+.prep-title svg{width:14px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.prep-scroll{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#515256 transparent;padding-bottom:16px}
+.prep-label{margin:0;font-size:12px;line-height:20px;font-weight:400}
+.prep-label-row{display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:12px}
+.prep-units{display:flex;align-items:center;padding:2px;border-radius:7px;background:#ffffff05;color:#999;line-height:20px}
+.prep-units span{padding:0 8px;border-radius:5px}.prep-units .active{background:#ffffff08;color:#dedee1}
+.prep-dimensions{display:grid;grid-template-columns:minmax(0,1fr) 8px minmax(0,1fr) 8px minmax(0,1fr);align-items:center;gap:8px}
+.prep-dimensions label{display:flex;align-items:center;gap:3px;min-width:0;height:32px;padding:0 10px;border:1px solid #ffffff0a;border-radius:8px}
+.prep-dimensions label:first-child{border-color:#eee}.prep-dimensions span,.prep-times{color:#999}
+.prep-dimensions input{width:100%;min-width:0;border:0;outline:none;background:transparent;color:#eee;font:inherit;font-size:11px;text-overflow:ellipsis}
+.prep-times{text-align:center;font-size:15px;font-weight:300}
+.prep-printability{margin-top:16px}.prep-printability>.prep-label{margin-bottom:10px}
+.prep-check-card{overflow:hidden;border-radius:14px;background:#ffffff0d;color:#ffdb32}
+.prep-check-heading{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;background:#ffdb321a;font-size:12px;font-weight:500}
+.prep-check-heading>svg{width:14px;height:14px;flex:none}
+.prep-check-results{margin:8px 12px 0}.prep-check-results>div{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:28px}
+.prep-check-results dt{display:flex;align-items:center;gap:5px;color:#999;white-space:nowrap;font-size:12px}
+.prep-info{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border:1px solid #68696c;border-radius:50%;color:#777;font-size:9px;line-height:1}
+.prep-check-results dd{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex:none;font-size:12px;white-space:nowrap}
+.prep-check-results dd svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.prep-check-card.ready{color:#40d67d}.prep-check-card.ready .prep-check-heading{background:#40d67d14}.prep-check-card.ready .prep-check-results{margin-bottom:4px}
+.prep-repair-slot{padding:4px 12px 12px}.prep-pill{display:flex;justify-content:center;align-items:center;gap:7px;width:100%;height:40px;border-radius:24px;font-size:14px;font-weight:700;white-space:nowrap}
+.prep-repair{--button-fill:#fff;background:var(--button-fill);color:#050505}
+.prep-repair:not(:disabled):hover{background:#eee}.prep-cost{display:flex;align-items:center;gap:4px;flex:none}
+.prep-repair .prep-cost{padding-left:8px;border-left:1px solid #00000018}.prep-cost svg{width:14px;height:14px;flex:none}
+.prep-premium{width:16px;height:16px;flex:none}.prep-premium circle,.prep-cost circle{fill:currentColor}.prep-premium path,.prep-cost path{fill:var(--button-fill)}
+.prep-repair.fixing{--button-fill:#504831;position:relative;isolation:isolate;overflow:hidden;border:1px solid #b99e4780;background:#b99e4724;color:#b7a05b;opacity:1;cursor:default}
+.prep-repair.fixing::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(100deg,transparent,#ffdf482b,transparent);animation:prep-fix-sweep 1.5s linear infinite}
+.prep-repair.fixing .prep-cost{border-left-color:#b99e4733}@keyframes prep-fix-sweep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.prep-slicer-settings{margin-top:16px}.prep-slicer-settings .prep-label-row{margin-bottom:10px}
+.prep-slicer-logos{display:flex;align-items:center;padding-left:7px;border-left:1px solid #ffffff1a}.prep-slicer-logos img{width:16px;height:16px;margin-left:-4px;object-fit:contain}.prep-slicer-logos img:first-child{margin-left:0}
+.prep-slicer-trigger{display:flex;align-items:center;gap:7px;width:100%;height:40px;padding:0 12px;border:1px solid #ffffff08;border-radius:8px;color:#eee;font-size:12px;text-align:left}
+.prep-slicer-trigger:hover,.prep-slicer-trigger[aria-expanded=true]{background:#ffffff04}.prep-slicer-trigger>img{width:16px;height:16px;object-fit:contain}.prep-slicer-trigger>svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;margin-left:auto}.prep-slicer-trigger>svg.open{transform:rotate(180deg)}
+.prep-footer{display:grid;gap:16px;flex:none;padding-top:12px}.prep-delivery{display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 12px;border-radius:14px;background:#ffffff0d;color:#eee;font-size:12px;text-align:left;cursor:default}.prep-delivery svg{width:16px;height:16px;flex:none}
+.prep-send{--button-fill:#ffdc00;background:var(--button-fill);color:#08090b;cursor:default}
+.prep-slicer-list{position:fixed;z-index:60;width:224px;overflow-y:auto;border:1px solid #ffffff08;border-radius:12px;background:#27282d;color:#eee;box-shadow:0 8px 24px #0005;outline:none;scrollbar-width:thin}
+.prep-slicer-option{display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;font-size:12px}.prep-slicer-option.selected{background:#ffffff1a}.prep-slicer-option:not(.selected):hover{background:#ffffff06}
+.prep-slicer-app-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:#ffffff05;flex:none}.prep-slicer-app-icon img{width:22px;height:22px;object-fit:contain}
+@media(prefers-reduced-motion:reduce){.prep-repair.fixing::before{animation:none}}
 </style>
