@@ -7,7 +7,8 @@ it('finds filaments across brand, series, material, localized names and partial 
   const white = supplierMaterials.find(material => material.materialId === 'CA19001')!;
   for (const query of ['polymaker Panchroma PLA White', '暖白', 'ca19001', '19001', 'PLA Polymaker']) expect(searchFilaments(supplierMaterials, query)).toContain(white);
   expect(searchFilaments(supplierMaterials, 'unknown brand')).toEqual([]);
-  expect(searchFilaments(supplierMaterials, '')).toHaveLength(26);
+  expect(searchFilaments(supplierMaterials, '')).toHaveLength(59);
+  expect(searchFilaments(supplierMaterials, 'Polymaker')).toHaveLength(26);
   expect(filamentDescription(white)).toBe('Panchroma™ PLA');
 });
 

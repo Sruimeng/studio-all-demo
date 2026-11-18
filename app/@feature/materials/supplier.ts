@@ -1,6 +1,7 @@
 import { Color, LinearSRGBColorSpace, SRGBColorSpace } from 'three';
 import type { SurfaceValues } from '~/@engine/viewer';
 import data from './data/polymaker-pla.json';
+import sunlu from './data/sunlu-pla.json';
 import { OPENPBR_RULE, RENDER_RULE, type MaterialRecord, type SupplierCatalog, type SupplierProfile } from './types';
 
 export const supplierCatalog = data as SupplierCatalog;
@@ -20,7 +21,17 @@ export function supplierMaterial(profile: SupplierProfile): MaterialRecord {
     supplier: profile, overrides: {},
   };
 }
-export const supplierMaterials = supplierCatalog.records.map(supplierMaterial);
+// SUNLU's reference demo supplies a color card, not confirmed finish/shader data.
+export const sunluCatalog: SupplierCatalog = {
+  version: 1, vendor: sunlu.vendor,
+  records: sunlu.colors.map(color => ({
+    vendor: sunlu.vendor, product: sunlu.product, materialType: sunlu.materialType,
+    sku: color.sku, colorNameCN: color.colorNameCN, colorNameEN: color.colorNameEN,
+    catalogHex: color.hex, pantone: null, d65Lab: null, status: 'color-only', issues: ['openpbr-missing'],
+    source: { spreadsheet: '', row: null, file: null, sha256: null, materialName: null, colorSpace: 'unknown', parameters: {}, materialUSDA: null },
+  })),
+};
+export const supplierMaterials = [...supplierCatalog.records, ...sunluCatalog.records].map(supplierMaterial);
 
 export function restoreSupplier(material: MaterialRecord): MaterialRecord {
   if (!material.supplier) return cloneMaterial(material);

@@ -14,7 +14,7 @@ export function validateMaterial(material: MaterialRecord, catalog: MaterialReco
   if (!material.materialId.trim() || !material.name.trim()) return 'Name and material ID are required / 名称和材质 ID 必填';
   if (catalog.some(item => item.id !== material.id && item.materialId.toLowerCase() === material.materialId.trim().toLowerCase())) return 'Material ID already exists / 材质 ID 已存在';
   if (!/^#[\da-f]{6}$/i.test(material.hex)) return 'Use a six-digit HEX color / 请输入六位 HEX 颜色';
-  if (material.filament && (typeof material.filament.materialType !== 'string' || !material.filament.materialType.trim() || ['brand', 'series'].some(key => { const value = material.filament![key as 'brand']; return value !== undefined && typeof value !== 'string'; }))) return 'Invalid filament details / 耗材信息无效';
+  if (material.filament && (typeof material.filament.materialType !== 'string' || !material.filament.materialType.trim() || ['brand', 'series', 'finish'].some(key => { const value = material.filament![key as 'brand']; return value !== undefined && typeof value !== 'string'; }))) return 'Invalid filament details / 耗材信息无效';
   if ([material.transparency, material.metalness, material.roughness].some(value => !Number.isFinite(value) || value < 0 || value > 1)) return 'Parameters must be between 0 and 1 / 参数范围为 0–1';
   if (material.ior !== undefined && (!Number.isFinite(material.ior) || material.ior < 1 || material.ior > 3)) return 'IOR must be between 1 and 3 / 折射率范围为 1–3';
   if (material.overrides) {
@@ -25,6 +25,7 @@ export function validateMaterial(material: MaterialRecord, catalog: MaterialReco
   }
   if (material.supplier) {
     const supplier = material.supplier;
+    if (supplier.finish !== undefined && typeof supplier.finish !== 'string') return 'Invalid supplier finish / 耗材光泽信息无效';
     if (!supplier || typeof supplier.sku !== 'string' || typeof supplier.vendor !== 'string' || !['paired', 'color-only', 'unmatched', 'imported'].includes(supplier.status) || !Array.isArray(supplier.issues) || !supplier.issues.every(issue => typeof issue === 'string') || !supplier.source || typeof supplier.source.parameters !== 'object' || !supplier.source.parameters) return 'Invalid supplier profile';
     const color = supplier.source.parameters.base_color;
     if (supplier.source.file && (!Array.isArray(color) || color.length !== 3 || !color.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0))) return 'Invalid source base color';
