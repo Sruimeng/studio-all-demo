@@ -176,6 +176,7 @@ export interface PrintCommands {
   palette: [PaletteOptions, PaletteResult];
   label: [LabelOptions, LabelResult];
   lowpoly: [LowOptions, LowResult];
+  regenerate: [LowOptions & { scheme: 'high' | 'low' }, { label: Uint8Array | null; low: LowResult | null }];
   paintHigh: [{ faces: Uint32Array; label: number }, EditResult];
   brushHigh: [{ hits: Array<{ face: number; point: [number, number, number]; radius: number }>; label: number }, EditResult];
   fillHigh: [{ seed: number; label: number; tol: number }, EditResult];

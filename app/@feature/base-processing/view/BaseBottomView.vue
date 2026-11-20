@@ -77,12 +77,20 @@ onBeforeUnmount(() => cleanup());
 </script>
 <template>
   <aside class="base-bottom" :aria-label="t('Live bottom view', '实时底面视图')">
-    <header><span>{{ t('Bottom view', '底面视图') }}</span><span class="base-bottom-key"><i />{{ t('Cut surface', '切面') }}</span></header>
+    <header><span>{{ t('Bottom view', '底面视图') }}</span></header>
     <div ref="host" class="base-bottom-canvas" />
+    <div v-if="tool.mode === 'flatten' && tool.view === 'preview'" class="base-bottom-legend" aria-label="Legend">
+      <span><i class="base-retained" />{{ t('Keep', '保留') }}</span>
+      <span><i class="base-removed" />{{ t('Remove', '删除') }}</span>
+      <span><i class="base-sealed" />{{ t('Cut surface', '切面') }}</span>
+    </div>
+    <div v-else-if="tool.mode === 'flatten' && tool.view === 'result' && tool.result?.stats.capFaces" class="base-bottom-legend">
+      <span><i class="base-sealed" />{{ t('New cap', '新增封口') }}</span>
+    </div>
     <p v-if="tool.empty" class="base-bottom-message">{{ t('No retained geometry', '未保留模型') }}</p>
     <p v-if="error" class="base-bottom-message" role="alert">{{ t('Preview unavailable', '底面预览不可用') }}</p>
   </aside>
 </template>
 <style scoped>
-.base-bottom{position:absolute;right:18px;top:72px;width:clamp(150px,25%,210px);background:#202127;border:1px solid #ffffff20;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px #0003;pointer-events:none}.base-bottom header{height:34px;padding:0 12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#c3c5d0;border-bottom:1px solid #ffffff0d}.base-bottom-key{display:flex;align-items:center;gap:5px;color:#969aa8;font-size:10px}.base-bottom-key i{height:6px;width:6px;border-radius:50%;background:#ffdb57}.base-bottom-canvas{height:160px}.base-bottom-canvas :deep(canvas){display:block;width:100%;height:100%}.base-bottom-message{position:absolute;inset:50% 4px auto;text-align:center;color:#a8adbc;font-size:11px}@media(max-width:1000px){.base-bottom{width:145px;right:12px}.base-bottom-canvas{height:120px}}
+.base-bottom{position:absolute;right:18px;top:72px;width:clamp(150px,25%,210px);background:#202127;border:1px solid #ffffff20;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px #0003;pointer-events:none}.base-bottom header{height:34px;padding:0 12px;display:flex;align-items:center;font-size:11px;color:#c3c5d0;border-bottom:1px solid #ffffff0d}.base-bottom-canvas{height:160px}.base-bottom-canvas :deep(canvas){display:block;width:100%;height:100%}.base-bottom-legend{display:flex;align-items:center;gap:14px;padding:9px 12px 11px;color:#b0b3c2;font-size:10px;white-space:nowrap}.base-bottom-legend span{display:flex;align-items:center;gap:6px}.base-bottom-legend i{width:7px;height:7px;border-radius:50%;flex:none}.base-retained{background:#d9dce5}.base-removed{background:#e87d80}.base-sealed{background:#e0c66f}.base-bottom-message{position:absolute;inset:50% 4px auto;text-align:center;color:#a8adbc;font-size:11px}@media(max-width:1000px){.base-bottom{width:145px;right:12px}.base-bottom-canvas{height:120px}.base-bottom-legend{gap:8px;padding-left:8px;padding-right:8px;font-size:9px}.base-bottom-legend span{gap:4px}}
 </style>

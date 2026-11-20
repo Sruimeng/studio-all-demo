@@ -28,6 +28,7 @@ vi.mock('~/@engine/multicolor', () => ({ MulticolorClient: class {
       const candidates = (payload as { cands?: Array<{ id: string; hex: string }> }).cands ?? [];
       return { slots: candidates.slice(0, 2).map((candidate, index) => ({ hex: candidate.hex, sourceHex: index ? '#0000FF' : '#FF0000', filamentId: candidate.id, w: 0.5, de: index + 0.25 })) };
     }
+    if (type === 'regenerate') return { label: new Uint8Array([0]), low: null };
     if (type === 'label' || type === 'restore') return { label: new Uint8Array([0]) };
     if (type === 'export3mf') return { blob: new Blob(['3mf']) };
     if (type === 'snapshot') return { snapshot: { version: 1, geometryKey: 'test-geometry', faceCount: 1, labels: [0], slotCount: 2 } };
@@ -147,7 +148,7 @@ it('failed replacement keeps the active model and worker usable', async () => {
 });
 it('previews without editing, then fills with the chosen filament without a selection step', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files());
-  store.settings.tool = 'fill';
+  store.settings.tool = 'fill'; store.settings.mode = 'original';
   store.refinement = { positions: new Float32Array(27), labels: new Uint8Array([0, 0, 0]), sourceFaces: new Uint32Array([0, 1, 2]), uvs: new Float32Array(18), faceIsland: new Int32Array(3), facePart: new Uint32Array(3), faceAtlas: new Int32Array(3), islandCount: 1, partCount: 1 };
   store.display = { positions: store.refinement.positions, labels: store.refinement.labels };
   store.selectedRegion = 1; store.saved = true;
@@ -231,6 +232,41 @@ it('loads and regenerates regions with supplier SKU matches and keeps source col
   expect(mocks.request.mock.calls.filter(([type]) => type === 'palette').length).toBe(before + 1);
   expect(store.regions.every(region => region.material.supplier?.vendor === 'Polymaker')).toBe(true);
   expect(store.regions[0]!.match).toBeDefined();
+});
+it('keeps the last palette and editable result until regeneration succeeds, including on failure', async () => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.apply(store.materials[0]!);
+  store.undoCount = 2; store.saved = true;
+  const previousDisplay = store.display, previousRegions = store.regions;
+  let rejectGeneration!: (error: Error) => void;
+  mocks.request.mockImplementation(type => type === 'regenerate' ? new Promise((_, reject) => { rejectGeneration = reject; }) : undefined);
+  const pending = store.segment();
+  await vi.waitFor(() => expect(rejectGeneration).toBeTypeOf('function'));
+  expect(store.busy).toBe(true);
+  expect(store.display).toBe(previousDisplay); expect(store.regions).toBe(previousRegions);
+  expect(store.undoCount).toBe(2);
+  rejectGeneration(new Error('Generation failed')); await pending;
+  expect(store.failure).toBe('Generation failed'); expect(store.busy).toBe(false);
+  expect(store.display).toBe(previousDisplay); expect(store.regions).toBe(previousRegions);
+  expect(store.undoCount).toBe(2); expect(store.saved).toBe(true);
+  expect(mocks.request.mock.calls.some(([type]) => type === 'reset')).toBe(false);
+  mocks.request.mockImplementation(type => type === 'regenerate' ? { label: new Uint8Array([1]), low: null } : undefined);
+  await store.segment();
+  expect(store.failure).toBe(''); expect(Array.from(store.display!.labels)).toEqual([1]);
+  expect(store.regions).not.toBe(previousRegions); expect(store.undoCount).toBe(0);
+  expect(store.saved).toBe(false);
+});
+it.each(['original', 'compare', 'print'] as const)('restores %s projects as a single assigned model in Multi-color while retaining Print preferences', async mode => {
+  const store = workspaceWithMaterials(); await store.loadFiles(files());
+  store.settings.mode = mode; await store.save();
+  const id = store.project!.id;
+  await store.openProject(id);
+  expect(store.preparation.activeModule).toBe('multi-color');
+  expect(store.viewportSettings.mode).toBe('print'); expect(store.settings.mode).toBe(mode);
+  await store.navigateModule('print');
+  expect(store.viewportSettings.mode).toBe(mode);
+  await store.navigateModule('multi-color');
+  expect(store.viewportSettings.mode).toBe('print'); expect(store.settings.mode).toBe(mode);
 });
 it('canonical candidates ignore local colors, supplier copies and preview overrides', async () => {
   const store = workspaceWithMaterials(); await store.loadFiles(files());

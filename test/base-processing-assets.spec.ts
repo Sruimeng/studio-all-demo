@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Box3, Mesh, MeshStandardMaterial, SRGBColorSpace, Vector3 } from 'three';
+import { buildTextMesh } from '../app/@feature/base-processing/text-geometry';
+import { conformTextToBase, subdivideText, textBaseSurface, textSurfaceOrientation } from '../app/@feature/base-processing/text-surface';
+import { cutMesh } from '../app/@engine/base-processing/geometry';
 import { baseAssetPresets, createBaseAssetLibrary, resizeBaseAsset } from '../app/@feature/base-processing/base-assets';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -33,6 +36,33 @@ it.each(['black-disc', 'white-cloud'] as const)('loads the bundled %s with origi
     mesh.positions.forEach((v, i) => { min[i % 3] = Math.min(min[i % 3]!, v); max[i % 3] = Math.max(max[i % 3]!, v); });
     expect(min).toEqual([-25, -10, -20]); expect(max).toEqual([25, 0, 20]);
     expect(asset.mesh.positions).not.toBe(mesh.positions); expect(mesh.indices).toBe(asset.mesh.indices);
+    if (shape === 'white-cloud') {
+      const cloud = resizeBaseAsset(asset, 50, 41.2, 7.45), surface = textBaseSurface(cloud), label = subdivideText(buildTextMesh('Text'));
+      // These rays traverse curved lobes and the valleys of the user's GLB.
+      const before = cloud.indices.slice();
+      let previous: ReturnType<typeof surface.raycast> = null, orientation: ReturnType<typeof textSurfaceOrientation> | undefined;
+      for (const angle of [25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45]) {
+        const direction = new Vector3(Math.sin(angle * Math.PI / 180), 0, Math.cos(angle * Math.PI / 180));
+        const hit = surface.raycast(direction.clone().multiplyScalar(40).setY(-1.5), direction.negate())!;
+        expect(hit).not.toBeNull();
+        const stable = surface.smooth(hit, 0.26);
+        if (previous) expect(surface.follow(previous, stable, 0.3)).not.toBeNull();
+        const nextOrientation = textSurfaceOrientation(stable.normal, orientation);
+        if (orientation) expect(orientation.angleTo(nextOrientation)).toBeLessThan(0.25);
+        orientation = nextOrientation; previous = stable;
+        const fitted = conformTextToBase(label, cloud, stable.point, orientation, 0.4, 1.8);
+        expect(fitted, `cloud lobe ${angle}°`).not.toBeNull();
+        expect(Array.from(fitted!.mesh.positions).every(Number.isFinite)).toBe(true);
+        if (angle === 45) {
+          const stats = cutMesh(fitted!.mesh, { normal: [0, 1, 0], offset: -100, cap: true }).stats;
+          expect(stats.boundary).toBe(0); expect(stats.nonManifold).toBe(0);
+        }
+      }
+      const groove = surface.raycast(new Vector3(40, -3.7, 0), new Vector3(-1, 0, 0))!;
+      expect(conformTextToBase(label, cloud, groove.point, textSurfaceOrientation(groove.normal), 0.4, 1.8)).toBeNull();
+      expect(cloud.indices.every((value, i) => value === before[i])).toBe(true);
+
+    }
     const dispose = vi.spyOn(rendered.geometry, 'dispose'); library.dispose();
     expect(dispose).toHaveBeenCalledOnce(); expect(close).toHaveBeenCalledOnce();
     library.dispose(); expect(dispose).toHaveBeenCalledOnce();

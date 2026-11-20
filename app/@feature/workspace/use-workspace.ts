@@ -47,6 +47,10 @@ export const useWorkspace = defineStore('workspace', () => {
   const busy = ref(false); const status = ref(''); const failure = ref(''); const progress = ref(0); const warnings = ref<string[]>([]);
   const colorCount = ref(4); const precision = ref(4); const scheme = ref<'high' | 'low'>('high');
   const settings = ref<ViewerSettings>({ mode: 'compare', compareSplit: 0.5, height: 80, layers: false, grid: false, tool: 'orbit', radius: 3, workflow: 'assignment', preview: { preset: 'studio-v1', exposure: 1, environmentIntensity: 1, environmentRotation: 0 } });
+  const preparation = ref(newPreparation());
+  // Keep legacy/Print appearance preferences; Multi-color always renders the assigned model.
+  const viewportSettings = computed<ViewerSettings>(() => preparation.value.activeModule === 'multi-color'
+    ? { ...settings.value, mode: 'print' } : settings.value);
   const undoCount = ref(0); const saved = ref(true); const modelInfo = shallowRef<InitResult | null>(null);
   const refinement = shallowRef<RefinementResult | null>(null);
   const selection = shallowRef<Uint32Array>(new Uint32Array());
@@ -57,9 +61,9 @@ export const useWorkspace = defineStore('workspace', () => {
     return (await client.request('selectRefinement', { face, scope: 'color', materialGroups: materialGroups.value })).faces;
   }, faces => { fillPreview.value = faces; });
   function previewFill(face: number | null) {
-    fillHover.hover(!busy.value && settings.value.tool === 'fill' && settings.value.workflow !== 'validation' && settings.value.mode !== 'original' && refinement.value ? face : null);
+    fillHover.hover(!busy.value && settings.value.tool === 'fill' && settings.value.workflow !== 'validation' && viewportSettings.value.mode !== 'original' && refinement.value ? face : null);
   }
-  watch(() => [refinement.value, materialGroups.value, settings.value.tool, settings.value.mode, settings.value.workflow, busy.value, content.value], () => fillHover.clear(), { flush: 'sync' });
+  watch(() => [refinement.value, materialGroups.value, settings.value.tool, viewportSettings.value.mode, settings.value.workflow, busy.value, content.value], () => fillHover.clear(), { flush: 'sync' });
   const selectionScope = ref<SelectionScope>('island');
   const selectionMaterial = computed(() => {
     if (!selection.value.length || !refinement.value) return null;
@@ -103,7 +107,6 @@ export const useWorkspace = defineStore('workspace', () => {
       await editResult(await client.request('paintRefinement', { faces: selection.value, label: index }));
     });
   }
-  const preparation = ref(newPreparation());
   const segmentation = shallowRef<SegmentDocument | null>(null);
   const prepSaving = ref(false); const prepSaveError = ref(''); const prepDirty = ref(false);
   const prepNotice = ref('');
@@ -208,7 +211,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const surfaces = computed(() => regions.value.map(region => materialSurface(draft.value && region.index === selectedRegion.value ? draft.value : region.material)));
   const validationSurface = computed(() => selected.value ? materialSurface(draft.value ?? selected.value) : null);
   const scale = computed(() => settings.value.height / ((modelInfo.value?.bbox.maxY ?? 1) - (modelInfo.value?.bbox.minY ?? 0) || 1));
-  const labelOptions = () => ({ slotHex: regions.value.map(region => region.sourceHex), slotCount: regions.value.length, regionMap: regions.value.map((_, i) => i), precision: precision.value, scale: scale.value });
+  const labelOptions = (items = regions.value) => ({ slotHex: items.map(region => region.sourceHex), slotCount: items.length, regionMap: items.map((_, i) => i), precision: precision.value, scale: scale.value });
   const materialData = (items = allMaterials.value) => ({ version: 2, colorSpace: 'srgb', renderRules: [...new Set(items.map(item => item.renderRule))], materials: items, viewerSettings: settings.value, validationMaterial: validationMaterial.value, project: project.value ? { id: project.value.id, name: project.value.name, heightMM: settings.value.height, regions: regions.value } : null });
   watch(settings, () => { saved.value = false; }, { deep: true, flush: 'sync' });
   function report(error: unknown) { failure.value = error instanceof Error ? error.message : String(error); }
@@ -228,14 +231,19 @@ export const useWorkspace = defineStore('workspace', () => {
   async function segmentInternal(options: { ownedIds?: string[]; preferOwned?: boolean } = {}) {
     if (!client) return;
     clearPlanHighlight();
-    const started = performance.now(); advance();
+    const started = performance.now();
+    status.value = t('Regenerating color plan…', '正在重新分色…');
     const ownedLocal = options.preferOwned ? materials.value.filter(material => options.ownedIds?.includes(material.id) && !materialProblem(material) && !matchingCandidates.some(candidate => candidate.id === material.id)).map(material => ({ id: material.id, hex: materialHex(material) })) : [];
     const candidates = [...matchingCandidates, ...ownedLocal];
     const palette = await client.request('palette', paletteOptions(colorCount.value, options.ownedIds, options.preferOwned, candidates));
-    regions.value = palette.slots.map((slot, index) => regionFromPaletteSlot(slot, index, candidates));
+    const nextRegions = palette.slots.map((slot, index) => regionFromPaletteSlot(slot, index, candidates));
+    const result = await client.request('regenerate', { ...labelOptions(nextRegions), scheme: scheme.value, target: 0 });
+    // Publish palette and geometry together, only after the worker commits successfully.
+    regions.value = nextRegions;
     selectedRegion.value = Math.min(selectedRegion.value, regions.value.length - 1);
-    refinement.value = null; clearSelection();
-    await client.request('reset', {}); await rebuild(); undoCount.value = 0;
+    refinement.value = null; clearSelection(); low = null;
+    if (result.low) showLow(result.low); else showHigh(result.label);
+    undoCount.value = 0; advance();
     durations.value.segment = performance.now() - started;
     status.value = '分色完成';
   }
@@ -721,7 +729,7 @@ export const useWorkspace = defineStore('workspace', () => {
   }
   onScopeDispose(() => { fillHover.clear(); clearTimeout(prepTimer); generation++; client?.dispose(); });
   return { segmentation, loadSegmentResult, preparation, prepSaving, prepDirty, prepSaveError, prepNotice, printDimensions, printMeshCheck, currentColorResult, printColorState, printSizeReady, printCheckReady, printCompatibility, printTasks, printTaskDone, printTodo, navigatePreparation, changePrintMode, changePrintSlicer, setPrintDimension, confirmPrintSize, acknowledgePrintCheck, completePrintColors, downloadPreparedModel, savePreparation, refinement, selection, selectionScope, selectionMaterial, selectionIslandCount, prepareRefinement, selectRefinement, assignSelection, clearSelection, materials, allMaterials, validationMaterial, validationSurface, checked, content, display, regions, selectedRegion, selected, surfaces, draft, project, projects, busy, status, failure, progress, warnings, colorCount, precision, scheme, settings, undoCount, saved, modelInfo, durations,
-    planFilaments, highlightedFilamentId, planHighlight, selectPlanFilament, clearPlanHighlight, navigateModule, addPlanFilament, sampleSource, fillPreview, previewFill, loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, replaceMaterial, saveMaterial, addFilament, deleteMaterial, importMaterials, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
+    viewportSettings, planFilaments, highlightedFilamentId, planHighlight, selectPlanFilament, clearPlanHighlight, navigateModule, addPlanFilament, sampleSource, fillPreview, previewFill, loadFiles, demo, validationSample, setWorkflow, setHeight, segment, changeScheme, stroke, fill, undo, reset, apply, replaceMaterial, saveMaterial, addFilament, deleteMaterial, importMaterials, exportMaterials, save, openProject, backup, restoreBackup, export3mf, selftest, initialize, report };
 });
 
 function validateRegion(region: RegionAssignment, index: number) {
