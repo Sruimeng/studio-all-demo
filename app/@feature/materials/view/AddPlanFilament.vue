@@ -7,16 +7,15 @@ import { colorQuery, customFilament, filamentName, filamentSubtitle, filamentTyp
 
 const props = defineProps<{
   catalog: MaterialRecord[]; ownedIds: string[]; plan: MaterialRecord[]; slotCount: number;
-  current: MaterialRecord | null; busy: boolean; picking: boolean;
+  current: MaterialRecord | null; busy: boolean;
   add: (material: MaterialRecord) => Promise<boolean>;
 }>();
-const emit = defineEmits<{ close: []; sample: []; cancelSample: [] }>();
+const emit = defineEmits<{ close: [] }>();
 const locale = useLocale();
 const { t } = locale;
 const step = ref<'mine' | 'new' | 'custom'>('mine');
 const query = ref('');
 const target = ref(props.current ? materialHex(props.current) : '#808080');
-const hasTarget = ref(false);
 const selected = ref<MaterialRecord | null>(null);
 const resultsList = useTemplateRef<HTMLDivElement>('resultsList');
 const customHex = ref(target.value);
@@ -29,7 +28,7 @@ const error = ref('');
 const automaticName = computed(() => `${customType.value} ${colorQuery(customHex.value) ?? customHex.value}`);
 const available = computed(() => [...new Map([...props.catalog, ...props.plan].map(material => [material.id, material])).values()]);
 const mine = computed(() => searchFilaments(available.value.filter(material => props.ownedIds.includes(material.id)), query.value));
-const matches = computed(() => hasTarget.value ? similarFilaments(available.value, target.value, props.ownedIds).slice(0, 8) : []);
+const matches = computed(() => similarFilaments(available.value, target.value, props.ownedIds).slice(0, 8));
 const results = computed(() => step.value === 'mine' ? mine.value : matches.value);
 const inPlan = computed(() => !!selected.value && props.plan.some(material => material.id === selected.value!.id));
 const atLimit = computed(() => props.slotCount >= 12 && (step.value === 'custom' || !inPlan.value));
@@ -37,22 +36,19 @@ const valid = computed(() => step.value === 'custom' ? !!colorQuery(customHex.va
 const name = (material: MaterialRecord) => filamentName(material, locale.language === 'en');
 const cannotAdd = (material: MaterialRecord) => props.busy || submitting.value || props.slotCount >= 12 && !props.plan.some(item => item.id === material.id);
 watch([step, query, target], () => { selected.value = null; error.value = ''; if (resultsList.value) resultsList.value.scrollTop = 0; });
-function create() { step.value = 'new'; emit('sample'); }
-function back() { emit('cancelSample'); step.value = step.value === 'custom' ? 'new' : 'mine'; }
-function customize() { emit('cancelSample'); customHex.value = colorQuery(target.value) ?? '#808080'; step.value = 'custom'; }
-function changeTarget(value: string) { emit('cancelSample'); target.value = value; hasTarget.value = true; }
-function acceptSample(hex: string) { step.value = 'new'; target.value = hex; hasTarget.value = true; selected.value = null; }
-function choose(material: MaterialRecord) { emit('cancelSample'); selected.value = material; }
+function create() { step.value = 'new'; }
+function back() { step.value = step.value === 'custom' ? 'new' : 'mine'; }
+function customize() { customHex.value = colorQuery(target.value) ?? '#808080'; step.value = 'custom'; }
+function changeTarget(value: string) { target.value = value; }
+function choose(material: MaterialRecord) { selected.value = material; }
 function applyMaterial(material: MaterialRecord) {
   if (cannotAdd(material)) return;
   choose(material);
   return confirm();
 }
-function escape() { if (props.picking) emit('cancelSample'); else emit('close'); }
-defineExpose({ acceptSample });
+function escape() { emit('close'); }
 async function confirm() {
   if (!valid.value || atLimit.value || props.busy || submitting.value) return;
-  emit('cancelSample');
   const material = step.value === 'custom' ? customFilament(customName.value.trim() || automaticName.value, customType.value, colorQuery(customHex.value)!) : selected.value!;
   submitting.value = true; error.value = '';
   try {
@@ -66,17 +62,16 @@ async function confirm() {
   <section class="add-plan-panel" role="dialog" :aria-label="t('Add filament', '添加耗材')" @keydown.esc.stop.prevent="escape">
     <header>
       <input v-if="step === 'mine'" v-model="query" class="add-plan-search" type="search" :disabled="submitting" :placeholder="t('Search my filaments', '搜索我的耗材')" :aria-label="t('Search my filaments', '搜索我的耗材')">
-      <template v-else><button v-if="step === 'custom'" class="add-plan-back" type="button" :aria-label="t('Back', '返回')" :disabled="submitting" @click="back"><svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6" /></svg></button><strong>{{ step === 'custom' ? t('Custom filament', '自定义耗材') : t('New filament', '新建耗材') }}</strong></template>
+      <template v-else><button class="add-plan-back" type="button" :aria-label="t('Back', '返回')" :disabled="submitting" @click="back"><svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6" /></svg></button><strong>{{ step === 'custom' ? t('Custom filament', '自定义耗材') : t('New filament', '新建耗材') }}</strong></template>
       <button class="add-plan-close" type="button" :aria-label="t('Close', '关闭')" :disabled="submitting" @click="emit('close')"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6" /></svg></button>
     </header>
     <template v-if="step !== 'custom'">
       <template v-if="step === 'new'">
         <div class="add-plan-target" role="group" :aria-label="t('Target color', '目标颜色')">
-          <button class="add-plan-picker" :class="{ active: picking }" type="button" :disabled="busy || submitting" :aria-pressed="picking" :aria-label="t('Pick color from original model', '从原模型取色')" :title="picking ? t('Turn off eyedropper · Esc', '关闭取色器 · Esc') : t('Pick color from original model', '从原模型取色')" @click="picking ? emit('cancelSample') : emit('sample')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l5 5M14 5 5 14v3l-3 3 1 1 3-3h3l10-10a2.8 2.8 0 0 0-4-4Z" /></svg></button>
-          <span class="add-plan-target-inputs"><input type="color" :value="colorQuery(target) ?? '#808080'" :aria-label="t('Choose target color', '选择目标颜色')" @input="changeTarget(($event.target as HTMLInputElement).value.toUpperCase())"><input :value="target" type="text" maxlength="7" spellcheck="false" :aria-label="t('Target HEX', '目标色值')" :aria-invalid="!colorQuery(target)" @input="changeTarget(($event.target as HTMLInputElement).value)"></span>
+          <span>{{ t('Target color', '目标颜色') }}</span><span class="add-plan-target-inputs"><input type="color" :value="colorQuery(target) ?? '#808080'" :aria-label="t('Choose target color', '选择目标颜色')" @input="changeTarget(($event.target as HTMLInputElement).value.toUpperCase())"><input :value="target" type="text" maxlength="7" spellcheck="false" :aria-label="t('Target HEX', '目标色值')" :aria-invalid="!colorQuery(target)" @input="changeTarget(($event.target as HTMLInputElement).value)"></span>
         </div>
       </template>
-      <template v-if="step === 'mine' || hasTarget">
+      <div>
         <div class="add-plan-list-label">{{ step === 'mine' ? t('My filaments', '我的耗材') : t('Similar filaments', '相近耗材') }}</div>
         <div ref="resultsList" class="add-plan-results" role="list" :aria-label="step === 'mine' ? t('My filaments', '我的耗材') : t('Similar filaments', '相近耗材')">
           <div v-for="material in results" :key="material.id" class="add-plan-result" :class="{ selected: selected?.id === material.id }" role="listitem">
@@ -91,7 +86,7 @@ async function confirm() {
           </div>
           <div v-if="!results.length" class="add-plan-empty">{{ step === 'new' && !colorQuery(target) ? t('Enter a valid HEX color', '请输入有效色值') : step === 'mine' && !ownedIds.length ? t('No filaments yet', '暂无耗材') : t('No matching filaments', '暂无匹配耗材') }}</div>
         </div>
-      </template>
+      </div>
       <button class="add-plan-new" type="button" :disabled="submitting" @click="step === 'mine' ? create() : customize()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>{{ step === 'mine' ? t('New color', '新颜色') : t('Custom filament', '自定义耗材') }}</button>
     </template>
     <form v-else class="add-plan-custom" @submit.prevent="confirm">
@@ -118,11 +113,6 @@ input[aria-invalid=true] { border-color: #df827b; }
 .add-plan-search { flex: 1; width: 100%; }
 .add-plan-target { justify-content: space-between; }
 .add-plan-target-inputs { display: flex; align-items: center; gap: 8px; }
-.add-plan-picker { width: 36px; height: 36px; padding: 8px; border-radius: 8px; color: #fff; }
-.add-plan-picker:hover:not(:disabled) { background: #ffffff08; }
-.add-plan-picker.active { color: #c4b7ff; background: #a38aff12; }
-.add-plan-picker:focus-visible { outline: 2px solid #c4b7ff; outline-offset: 2px; }
-.add-plan-picker svg { width: 20px; height: 20px; }
 .add-plan-target input[type=text] { width: 98px; }
 input[type=color] { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
 input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }

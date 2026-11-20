@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { Icon, Popover, PopoverClose, PopoverContent, PopoverTrigger, Tooltip, TooltipContent, TooltipTrigger } from '@tripo3d/design';
 import { useWorkspace } from '~/@feature/workspace';
 import { useLocale } from '~/@base/locale';
@@ -24,10 +24,11 @@ const baseActive = ref(false);
 const base = useBaseProcessing(() => studio.content, () => studio.settings.height, () => baseActive.value);
 function openBase() {
   if (studio.busy || segmentation.busy || segmentation.editing || preparingRefine.value) return;
-  cancelSourcePick(); pickerActive.value = false; addPlanOpen.value = false;
+  pickerActive.value = false; addPlanOpen.value = false;
   baseActive.value = true;
 }
 const inSegment = computed(() => studio.preparation.activeModule === 'segment');
+const inMultiColor = computed(() => studio.preparation.activeModule === 'multi-color');
 async function navigateModule(target: 'segment' | 'print' | 'multi-color') {
   if (segmentation.busy || segmentation.editing) return;
   if (baseActive.value && target === studio.preparation.activeModule) { baseActive.value = false; return; }
@@ -49,33 +50,12 @@ const planSection = useTemplateRef<HTMLElement>('planSection');
 const preparingRefine = ref(false);
 const pickerActive = ref(false);
 const addPlanOpen = ref(false);
-const addPlanPanel = useTemplateRef('addPlanPanel');
-const sourcePickerActive = ref(false);
-const samplingSource = ref(false);
-let sourceSampleTicket = 0;
-function closeAddPlan() { cancelSourcePick(); addPlanOpen.value = false; }
-function cancelSourcePick() { sourceSampleTicket++; sourcePickerActive.value = false; samplingSource.value = false; }
-function startSourcePick() {
-  cancelSourcePick();
+function closeAddPlan() { addPlanOpen.value = false; }
+function toggleAddPlan() {
+  if (refineDisabled.value) return;
   pickerActive.value = false;
-  if (studio.settings.mode === 'print') studio.settings.mode = 'compare';
-  sourcePickerActive.value = true;
-}
-async function sampleOriginal(face: number, weights: [number, number, number]) {
-  if ((!sourcePickerActive.value && !pickerActive.value) || samplingSource.value || refineDisabled.value) return;
-  samplingSource.value = true;
-  const ticket = ++sourceSampleTicket;
-  const hex = await studio.sampleSource(face, weights);
-  if (ticket !== sourceSampleTicket) return;
-  if (hex) {
-    pickerActive.value = false; sourcePickerActive.value = false;
-    addPlanOpen.value = true;
-    studio.previewFill(null);
-    await nextTick();
-    if (ticket !== sourceSampleTicket || !addPlanOpen.value) return;
-    addPlanPanel.value?.acceptSample(hex);
-  }
-  samplingSource.value = false;
+  studio.previewFill(null);
+  addPlanOpen.value = !addPlanOpen.value;
 }
 const refineMode = computed(() => studio.settings.tool === 'brush' ? 'brush' : studio.settings.tool === 'fill' ? 'color' : null);
 const refineDisabled = computed(() => studio.busy || preparingRefine.value || !studio.content || !studio.regions.length);
@@ -100,7 +80,6 @@ const preferOwned = ref(true);
 const ownedIds = ref<string[]>([]);
 
 const ownedMaterials = computed(() => studio.allMaterials.filter(material => ownedIds.value.includes(material.id)));
-const usedPlanFilaments = computed(() => studio.currentColorResult.used);
 const paletteFilaments = computed(() => {
   const map = new Map<string, { material: MaterialRecord; count: number; indices: number[] }>();
   studio.regions.forEach((region, index) => {
@@ -118,12 +97,18 @@ function normalizeColorCount() {
   const count = Number(studio.colorCount);
   studio.colorCount = Number.isFinite(count) && count > 0 ? Math.min(12, Math.max(1, Math.round(count))) : 4;
 }
+function normalizeDetail() {
+  const detail = Number(studio.precision);
+  studio.precision = Number.isFinite(detail) && detail > 0 ? Math.min(6, Math.max(1, Math.round(detail))) : 4;
+}
+const separationRangeStyle = (value: number, min: number, max: number) => ({ '--progress': `${Math.max(0, Math.min(100, (value - min) / (max - min) * 100))}%` });
 function returnToPlan() {
   studio.draft = null;
   if (studio.settings.workflow === 'validation') studio.setWorkflow('assignment');
 }
 function generatePlan() {
   normalizeColorCount();
+  normalizeDetail();
   finishRefine();
   returnToPlan();
   void studio.segment({ ownedIds: ownedIds.value, preferOwned: preferOwned.value });
@@ -148,9 +133,8 @@ function pickRefinement(materialIndex: number) {
 }
 function togglePicker() {
   if (refineDisabled.value) return;
-  if (sourcePickerActive.value) { cancelSourcePick(); return; }
   closeAddPlan(); pickerActive.value = !pickerActive.value;
-  if (pickerActive.value && studio.settings.mode === 'print') studio.settings.mode = 'compare';
+  studio.previewFill(null);
 }
 async function startRefine(mode: 'brush' | 'color') {
   if (refineDisabled.value || studio.preparation.activeModule !== 'multi-color') return;
@@ -163,7 +147,6 @@ async function startRefine(mode: 'brush' | 'color') {
     if (!studio.refinement || studio.content?.id !== contentId || studio.preparation.activeModule !== 'multi-color') return;
     pickerActive.value = false;
     studio.clearSelection(); studio.selectionScope = 'color';
-    if (studio.settings.mode === 'original') studio.settings.mode = 'print';
     studio.settings.tool = mode === 'brush' ? 'brush' : 'fill';
   } finally { preparingRefine.value = false; }
 }
@@ -200,7 +183,7 @@ async function restoreFiles(event: Event) {
 
 function shortcut(event: KeyboardEvent) {
   if (event.defaultPrevented || baseActive.value) return;
-  if (event.key === 'Escape' && (sourcePickerActive.value || pickerActive.value || samplingSource.value)) { event.preventDefault(); cancelSourcePick(); pickerActive.value = false; return; }
+  if (event.key === 'Escape' && pickerActive.value) { event.preventDefault(); pickerActive.value = false; return; }
   if (event.key === 'Escape' && addPlanOpen.value) { event.preventDefault(); closeAddPlan(); return; }
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
   if (event.key === 'Escape') studio.clearPlanHighlight();
@@ -224,7 +207,7 @@ function updateCompareSplit(event: PointerEvent) {
 }
 
 function startCompareDrag(event: PointerEvent) {
-  if (studio.settings.mode !== 'compare') return;
+  if (inMultiColor.value || studio.settings.mode !== 'compare') return;
   compareDragging.value = true;
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   updateCompareSplit(event);
@@ -328,31 +311,45 @@ onBeforeUnmount(() => {
         <BasePanel v-if="baseActive" :tool="base" />
         <SegmentPanel v-else-if="inSegment" :seg="segmentation" />
         <PrintPreparation v-else-if="studio.preparation.activeModule === 'print'" />
-        <section v-else id="multicolor-panel" class="studio-left-panel">
+        <section v-else id="multicolor-panel" class="studio-left-panel multicolor-panel">
           <div class="studio-panel-title">
-            <Icon icon="i-tripo:segmentation" class="size-4" />
-            <h1>{{ t('Multicolor print', '多色打印') }}</h1>
+            <svg class="multicolor-heading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10c0-2-1.5-2.7-3.5-2.7H17a2 2 0 0 1-2-2V5c0-1.7-1-3-3-3Z" /><circle cx="7" cy="9" r="1" /><circle cx="7" cy="15" r="1" /><circle cx="12" cy="18" r="1" /><circle cx="11" cy="6" r="1" /></svg>
+            <h1>{{ t('Multicolor Print', '多色打印') }}</h1>
           </div>
           <div v-if="studio.preparation.origin === 'print'" class="prep-editor-back-row">
             <button class="prep-editor-back" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing" @click="navigateModule('print')">{{ tr("← 返回打印准备") }}</button>
           </div>
           <div class="studio-panel-scroll">
-            <button class="filament-library-card" type="button" :aria-expanded="myFilamentsOpen" aria-controls="my-filaments-panel" @click="toggleLibrary"><span><strong>{{ t('My filaments', '我的耗材') }}</strong><small>{{ tr(ownedMaterials.length) }}</small></span><span class="filament-swatches"><i v-for="material in ownedMaterials.slice(0, 4)" :key="material.id" :style="{ background: materialHex(material) }" /><Icon icon="i-tripo:caret" class="size-3 rotate-90" /></span></button>
-            <section class="print-section">
-              <div class="print-section-heading"><h2>{{ t('Color separation', '分色') }}</h2></div>
-              <label class="print-field"><span>{{ t('Filament count', '耗材数量') }}</span><input v-model.number="studio.colorCount" type="number" min="1" max="12" step="1" :disabled="studio.busy || segmentation.busy || segmentation.editing" @change="normalizeColorCount"></label>
-              <label class="studio-range separation-detail"><span>{{ t('Color detail', '分色细节') }}</span><input v-model.number="studio.precision" type="range" min="1" max="6" step="1" :disabled="studio.busy || segmentation.busy || segmentation.editing"></label>
-              <label class="print-switch"><span>{{ t('Use mine first', '优先使用我的耗材') }}</span><input v-model="preferOwned" class="studio-switch" type="checkbox" :disabled="!ownedMaterials.length"></label>
-              <p v-if="!ownedMaterials.length" class="print-help">{{ t('Add your filaments to enable this option.', '添加耗材后可启用此选项。') }}</p>
-              <button class="print-primary" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="requestGenerate"><Icon icon="i-tripo:magic" class="size-4" />{{ t('Match Filaments', studio.regions.length ? '重新分色' : '生成分色方案') }} <span>⚡ 10</span></button>
+            <section class="multicolor-library-card" :aria-label="t('My filaments', '我的耗材')">
+              <button class="filament-library-card" type="button" :aria-expanded="myFilamentsOpen" aria-controls="my-filaments-panel" @click="toggleLibrary">
+                <span class="multicolor-library-heading"><strong>{{ t('My filaments', '我的耗材') }}</strong><small>{{ t(`${ownedMaterials.length} Saved`, `${ownedMaterials.length} 已保存`) }}</small><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg></span>
+                <span class="filament-swatches"><i v-for="material in ownedMaterials.slice(0, 4)" :key="material.id" :style="{ backgroundColor: materialHex(material) }" /><span v-if="ownedMaterials.length > 4" class="multicolor-more-colors">+{{ ownedMaterials.length - 4 }}</span><span v-if="!ownedMaterials.length" class="multicolor-empty-library">{{ t('Add your filaments', '添加我的耗材') }}</span></span>
+              </button>
+              <label class="multicolor-owned-toggle"><span>{{ t('Use mine first', '优先使用我的耗材') }}</span><input :checked="preferOwned && !!ownedMaterials.length" type="checkbox" role="switch" :disabled="!ownedMaterials.length" :title="!ownedMaterials.length ? t('Add your filaments to enable this option.', '添加耗材后可启用此选项。') : undefined" @change="preferOwned = ($event.target as HTMLInputElement).checked"></label>
             </section>
-            <section v-if="studio.regions.length" ref="planSection" class="print-section plan-section">
-              <div class="print-section-heading"><h2>{{ t('Plan filaments', '方案耗材') }}</h2></div>
-              <div class="plan-summary"><span>{{ tr(usedPlanFilaments.filter(isOwned).length) }} owned</span><span>{{ tr(usedPlanFilaments.filter(item => !isOwned(item)).length) }} not owned</span></div>
-              <button v-for="item in studio.planFilaments" :key="item.material.id" type="button" class="plan-row" :data-material-id="item.material.id" :class="{ active: studio.highlightedFilamentId === item.material.id }" :aria-pressed="studio.highlightedFilamentId === item.material.id" :disabled="studio.busy" :title="tr(materialName(item.material))" @click="selectPlan(item.indices[0]!)">
+            <section class="multicolor-separation" :aria-label="t('Color separation', '分色')">
+              <div class="multicolor-parameter">
+                <label for="multicolor-count-range">{{ t('Filament count', '耗材数量') }}</label>
+                <div class="multicolor-slider-row">
+                  <input id="multicolor-count-range" v-model.number="studio.colorCount" class="multicolor-range" type="range" min="1" max="12" step="1" :style="separationRangeStyle(studio.colorCount, 1, 12)" :disabled="studio.busy || segmentation.busy || segmentation.editing">
+                  <input v-model.number="studio.colorCount" class="multicolor-value" type="number" min="1" max="12" step="1" :aria-label="t('Filament count value', '耗材数量数值')" :disabled="studio.busy || segmentation.busy || segmentation.editing" @change="normalizeColorCount" @keydown.enter="($event.target as HTMLInputElement).blur()">
+                </div>
+              </div>
+              <div class="multicolor-parameter">
+                <div class="multicolor-detail-label"><label for="multicolor-detail-range">{{ t('Detail', '细节') }}</label><ModuleTooltip :title="t('Color detail', '分色细节')" :description="t('Higher values preserve finer color details. Matching may take longer.', '数值越高，保留的颜色细节越多，匹配可能需要更长时间。')" side="right"><button class="multicolor-help" type="button" :aria-label="t('About color detail', '了解分色细节')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><circle cx="8" cy="8" r="6.5" /><path d="M6.4 6a1.7 1.7 0 0 1 3.3.5c0 1.4-1.7 1.3-1.7 2.5M8 11v.2" /></svg></button></ModuleTooltip></div>
+                <div class="multicolor-slider-row">
+                  <input id="multicolor-detail-range" v-model.number="studio.precision" class="multicolor-range" type="range" min="1" max="6" step="1" :style="separationRangeStyle(studio.precision, 1, 6)" :disabled="studio.busy || segmentation.busy || segmentation.editing">
+                  <input v-model.number="studio.precision" class="multicolor-value" type="number" min="1" max="6" step="1" :aria-label="t('Detail value', '细节数值')" :disabled="studio.busy || segmentation.busy || segmentation.editing" @change="normalizeDetail" @keydown.enter="($event.target as HTMLInputElement).blur()">
+                </div>
+              </div>
+              <button class="print-primary multicolor-match" type="button" :disabled="studio.busy || segmentation.busy || segmentation.editing || !studio.content" @click="requestGenerate"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="currentColor" /><path d="m5.5 7 2.3 1.5L10 5.5l2.2 3L14.5 7l-.9 6h-7.2ZM7 15h6" fill="#f9cf00" stroke="#f9cf00" stroke-width="1.1" stroke-linejoin="round" /></svg>{{ studio.busy ? t('Matching…', '匹配中…') : t('Match Filaments', '匹配耗材') }}</button>
+            </section>
+            <section v-if="studio.regions.length" ref="planSection" class="multicolor-filament-list plan-section">
+              <h2>{{ t('Filament List', '耗材列表') }}</h2>
+              <button v-for="item in studio.planFilaments" :key="item.material.id" type="button" class="plan-row" :data-material-id="item.material.id" :class="{ active: studio.highlightedFilamentId === item.material.id }" :aria-pressed="studio.highlightedFilamentId === item.material.id" :disabled="studio.busy" :title="`${materialName(item.material)} · ${isOwned(item.material) ? t('In My filaments', '已在我的耗材中') : t('Not in My filaments', '未在我的耗材中')}`" @click="selectPlan(item.indices[0]!)">
                 <i :style="{ background: materialHex(item.material) }" />
                 <span class="plan-filament-name"><strong>{{ tr(materialName(item.material)) }}</strong><small>{{ tr(filamentSubtitle(item.material, t('Custom', '自定义'))) }}</small></span>
-                <em>{{ tr(isOwned(item.material) ? 'Owned' : 'Not owned') }}</em>
+                <svg v-if="isOwned(item.material)" class="multicolor-owned-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img" :aria-label="t('In My filaments', '已在我的耗材中')"><path d="m4 10 4 4 8-8" /></svg>
               </button>
             </section>
           </div>
@@ -371,12 +368,12 @@ onBeforeUnmount(() => {
 
       <section class="studio-viewer-shell">
         <div ref="canvasArea" class="studio-viewer">
-          <ClientOnly><ModelViewport v-show="!inSegment && !baseActive" ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.settings" :validation-surface="studio.validationSurface" :selection="studio.selection" :fill-preview="studio.fillPreview" :plan-highlight="studio.planHighlight" :busy="studio.busy" :picker="pickerActive" :source-picker="sourcePickerActive" :editing-blocked="(addPlanOpen && !sourcePickerActive) || samplingSource" @sample="sampleOriginal" @hover="studio.previewFill" @select="studio.selectRefinement" @pick="pickRefinement" @error="studio.report" @stroke="studio.stroke" @fill="studio.fill" /></ClientOnly>
+          <ClientOnly><ModelViewport v-show="!inSegment && !baseActive" ref="viewport" :content="studio.content" :display="studio.display" :surfaces="studio.surfaces" :settings="studio.viewportSettings" :validation-surface="studio.validationSurface" :selection="studio.selection" :fill-preview="studio.fillPreview" :plan-highlight="studio.planHighlight" :busy="studio.busy" :picker="pickerActive" :editing-blocked="addPlanOpen" @hover="studio.previewFill" @select="studio.selectRefinement" @pick="pickRefinement" @error="studio.report" @stroke="studio.stroke" @fill="studio.fill" /></ClientOnly>
           <ClientOnly><SegmentViewport v-if="!baseActive && inSegment && studio.content" :key="studio.content.id" :content="studio.content" :seg="segmentation" /></ClientOnly>
           <ClientOnly><BaseViewport v-if="baseActive" :tool="base" /></ClientOnly>
           <template v-if="!inSegment && !baseActive">
           <div class="viewer-mode-bar">
-            <div class="studio-segmented viewer-modes" role="group" :aria-label="t('Model appearance', '模型外观')"><ModuleTooltip v-for="mode in (['original', 'print', 'compare'] as const)" :key="mode" :title="tr(modeTitle(mode))" :description="modeDescription(mode)" side="bottom"><button type="button" :disabled="sourcePickerActive" :class="{ active: studio.settings.mode === mode }" :aria-pressed="studio.settings.mode === mode" @click="studio.settings.mode = mode">{{ tr(mode === 'original' ? t('Original', '原模型') : mode === 'print' ? t('Preview', '预览') : t('Compare', '对比')) }}</button></ModuleTooltip></div>
+            <div v-if="!inMultiColor" class="studio-segmented viewer-modes" role="group" :aria-label="t('Model appearance', '模型外观')"><ModuleTooltip v-for="mode in (['original', 'print', 'compare'] as const)" :key="mode" :title="tr(modeTitle(mode))" :description="modeDescription(mode)" side="bottom"><button type="button" :class="{ active: studio.settings.mode === mode }" :aria-pressed="studio.settings.mode === mode" @click="studio.settings.mode = mode">{{ tr(mode === 'original' ? t('Original', '原模型') : mode === 'print' ? t('Preview', '预览') : t('Compare', '对比')) }}</button></ModuleTooltip></div>
             <dl class="viewer-model-stats" :aria-label="t('Model statistics', '模型信息')">
               <div><dt>{{ t('Topology', '拓扑') }}</dt><dd>{{ t('Triangle', '三角形') }}</dd></div>
               <div><dt>{{ t('Faces', '面数') }}</dt><dd>{{ modelFaces }} / {{ modelFaces }}</dd></div>
@@ -384,7 +381,7 @@ onBeforeUnmount(() => {
             </dl>
           </div>
 
-          <ModuleTooltip v-if="studio.settings.mode === 'compare'" :title="t('Compare divider', '对比分割线')" :description="t('Drag left or right to compare the original model and color preview. The split is kept between 20% and 80%.', '向左或向右拖动，比较原模型与分色预览。分割位置限制在 20% 到 80%。')" side="bottom"><div class="compare-divider" :style="{ left: `${studio.settings.compareSplit * 100}%` }" role="slider" aria-label="Compare split" :aria-valuenow="Math.round(studio.settings.compareSplit * 100)" aria-valuemin="20" aria-valuemax="80" tabindex="0" @pointerdown="startCompareDrag" @pointermove="updateCompareSplit" @pointerup="stopCompareDrag" @pointercancel="stopCompareDrag"><span>{{ t('Original', '原模型') }}</span><i /><span>{{ t('Preview', '预览') }}</span></div></ModuleTooltip>
+          <ModuleTooltip v-if="!inMultiColor && studio.settings.mode === 'compare'" :title="t('Compare divider', '对比分割线')" :description="t('Drag left or right to compare the original model and color preview. The split is kept between 20% and 80%.', '向左或向右拖动，比较原模型与分色预览。分割位置限制在 20% 到 80%。')" side="bottom"><div class="compare-divider" :style="{ left: `${studio.settings.compareSplit * 100}%` }" role="slider" aria-label="Compare split" :aria-valuenow="Math.round(studio.settings.compareSplit * 100)" aria-valuemin="20" aria-valuemax="80" tabindex="0" @pointerdown="startCompareDrag" @pointermove="updateCompareSplit" @pointerup="stopCompareDrag" @pointercancel="stopCompareDrag"><span>{{ t('Original', '原模型') }}</span><i /><span>{{ t('Preview', '预览') }}</span></div></ModuleTooltip>
 
           <div class="viewer-controls">
           <div class="viewer-gizmo">
@@ -418,9 +415,10 @@ onBeforeUnmount(() => {
           <div v-if="studio.preparation.activeModule === 'multi-color'" class="print-tools">
             <div v-if="refineMode" class="refine-toolbar" role="toolbar" :aria-label="t('Color refinement tools', '分色精修工具')">
               <div class="add-plan-anchor">
-                <button class="toolbar-icon refine-picker" type="button" :class="{ active: pickerActive || sourcePickerActive }" :aria-pressed="pickerActive || sourcePickerActive" :disabled="refineDisabled" :title="t('Pick color from model', '从模型取色')" :aria-label="t('Pick color from model', '从模型取色')" @click="togglePicker"><svg viewBox="0 0 24 24"><path :d="refineIcons.picker" /></svg></button>
-                <AddPlanFilament v-if="addPlanOpen" ref="addPlanPanel" :catalog="studio.allMaterials" :owned-ids="ownedIds" :plan="paletteFilaments.map(item => item.material)" :slot-count="studio.regions.length" :current="studio.selected" :busy="studio.busy" :add="studio.addPlanFilament" :picking="sourcePickerActive" @sample="startSourcePick" @cancel-sample="cancelSourcePick" @close="closeAddPlan" />
+                <button class="toolbar-icon" type="button" :class="{ active: addPlanOpen }" :aria-expanded="addPlanOpen" aria-haspopup="dialog" :disabled="refineDisabled" :title="t('Add filament', '添加耗材')" :aria-label="t('Add filament', '添加耗材')" @click="toggleAddPlan"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
+                <AddPlanFilament v-if="addPlanOpen" :catalog="studio.allMaterials" :owned-ids="ownedIds" :plan="paletteFilaments.map(item => item.material)" :slot-count="studio.regions.length" :current="studio.selected" :busy="studio.busy" :add="studio.addPlanFilament" @close="closeAddPlan" />
               </div>
+              <button class="toolbar-icon refine-picker" type="button" :class="{ active: pickerActive }" :aria-pressed="pickerActive" :disabled="refineDisabled" :title="t('Pick assigned filament', '吸取已分配耗材')" :aria-label="t('Pick assigned filament', '吸取已分配耗材')" @click="togglePicker"><svg viewBox="0 0 24 24"><path :d="refineIcons.picker" /></svg></button>
               <button class="refine-current-color" type="button" :title="materialName(studio.selected)" :aria-label="t('Choose from plan filaments', '从方案耗材选色')" @click="focusPlanFilament"><i :style="{ background: studio.selected ? materialHex(studio.selected) : '#888' }" /></button>
               <span class="toolbar-divider" />
               <template v-if="refineMode === 'brush'">
@@ -455,4 +453,51 @@ onBeforeUnmount(() => {
 <style scoped>
 .header-language-toggle{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.header-language-toggle svg{width:14px;height:14px}.studio-shell:lang(en) .prep-editor-footer .print-primary{white-space:normal}
 .prep-editor-back-row{padding:0 20px 10px;flex:none}.prep-editor-footer{margin-top:auto;padding:12px 20px 16px;border-top:1px solid #ffffff14;flex:none}.prep-editor-back{display:block;border:0;background:none;color:#c5c6cb;font-size:11px;padding:5px 0 8px;cursor:pointer}.prep-editor-back:disabled{opacity:.45;cursor:not-allowed}.prep-editor-footer .print-primary{min-height:34px;font-size:11px}.prep-editor-footer p{font-size:10px;color:#94959c;line-height:1.5;margin:0 0 8px}.prep-editor-forward{width:100%;padding:8px 0;text-align:center}.prep-editor-back:focus-visible{outline:2px solid #ffd400;outline-offset:3px}
+
+.multicolor-panel { background: #26272c; color: #f2f2f2; font-size: 12px; }
+.multicolor-panel .studio-panel-title { flex: none; }
+.multicolor-heading-icon { width: 16px; height: 16px; flex: none; }
+.multicolor-library-card { padding: 12px; border-radius: 10px; background: #2d2e33; }
+.multicolor-panel .filament-library-card { display: block; min-height: 0; padding: 0; margin: 0; border-radius: 0; background: transparent; }
+.multicolor-library-heading { display: flex; align-items: center; gap: 8px; line-height: 18px; }
+.multicolor-library-heading strong { flex: 1; font-weight: 400; }
+.multicolor-panel .multicolor-library-heading small { margin: 0; font-size: 10px; color: #999; white-space: nowrap; }
+.multicolor-library-heading svg { width: 14px; height: 14px; flex: none; }
+.multicolor-panel .filament-swatches { min-height: 16px; gap: 4px; margin-top: 4px; }
+.multicolor-panel .filament-swatches i { flex: none; width: 16px; height: 16px; background-image: radial-gradient(circle at 32% 24%, #fff9, transparent 55%, #0005 100%); box-shadow: inset 0 0 0 1px #ffffff08; }
+.multicolor-empty-library, .multicolor-more-colors { font-size: 10px; color: #999; }
+.multicolor-owned-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 24px; min-height: 20px; cursor: pointer; }
+.multicolor-owned-toggle input { appearance: none; flex: none; width: 30px; height: 16px; margin: 0; border-radius: 99px; background: #48494f; cursor: pointer; transition: background .15s; }
+.multicolor-owned-toggle input::before { content: ''; display: block; width: 10px; height: 10px; margin: 3px; border-radius: 50%; background: #f2f2f2; transition: transform .15s; }
+.multicolor-owned-toggle input:checked { background: #503be3; }
+.multicolor-owned-toggle input:checked::before { transform: translateX(14px); }
+.multicolor-owned-toggle input:disabled { opacity: .4; cursor: not-allowed; }
+.multicolor-separation { margin-top: 16px; }
+.multicolor-parameter + .multicolor-parameter { margin-top: 16px; }
+.multicolor-parameter label, .multicolor-detail-label { line-height: 18px; }
+.multicolor-detail-label { display: flex; align-items: center; gap: 6px; }
+.multicolor-help { display: grid; place-items: center; padding: 0; width: 14px; height: 14px; color: #6c6d73; }
+.multicolor-help svg { width: 14px; height: 14px; }
+.multicolor-help:hover { color: #b5b6bd; }
+.multicolor-slider-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; height: 32px; }
+.multicolor-range { appearance: none; flex: 1; width: 0; min-width: 0; height: 4px; border: 0; border-radius: 99px; margin: 0; background: linear-gradient(to right, #d5d5d8 var(--progress), #303136 var(--progress)); cursor: pointer; }
+.multicolor-range::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border: 2px solid #f2f2f2; border-radius: 50%; background: #101114; }
+.multicolor-range::-moz-range-thumb { width: 10px; height: 10px; border: 2px solid #f2f2f2; border-radius: 50%; background: #101114; }
+.multicolor-value { flex: 0 0 72px; min-width: 0; width: 72px; height: 32px; padding: 0 8px; border: 1px solid #ffffff0a; border-radius: 8px; background: transparent; font-size: 12px; text-align: center; appearance: textfield; font-variant-numeric: tabular-nums; }
+.multicolor-value::-webkit-inner-spin-button, .multicolor-value::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.multicolor-value:focus { border-color: #ffffff40; }
+.multicolor-panel .multicolor-match { height: 40px; margin-top: 16px; border-radius: 99px; font-size: 14px; gap: 8px; }
+.multicolor-match svg { width: 18px; height: 18px; flex: none; }
+.multicolor-match:enabled:hover { background: #ffdc32; }
+.multicolor-filament-list { margin-top: 40px; }
+.multicolor-filament-list h2 { font-size: 12px; font-weight: 400; line-height: 18px; margin-bottom: 12px; }
+.multicolor-panel .plan-row { gap: 8px; padding: 3px 0; margin: 0 0 8px; min-height: 40px; border-radius: 8px; }
+.multicolor-panel .plan-row > i { width: 32px; height: 32px; border-radius: 6px; box-shadow: inset 0 0 0 1px #ffffff08; }
+.multicolor-panel .plan-row.active { border-color: transparent; background: #ffffff06; }
+.multicolor-panel .plan-row.active > i { outline-offset: 1px; }
+.multicolor-panel .plan-row:hover:enabled { background: #ffffff06; }
+.multicolor-panel .plan-filament-name strong { color: #f2f2f2; font-size: 12px; font-weight: 400; line-height: 18px; }
+.multicolor-panel .plan-filament-name small { margin-top: 2px; color: #999; font-size: 10px; line-height: 14px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.multicolor-owned-check { width: 16px; height: 16px; margin-right: 2px; flex: none; color: #999; }
+.multicolor-panel .prep-editor-footer { border-top: 0; }
 </style>

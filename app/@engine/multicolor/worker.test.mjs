@@ -466,3 +466,30 @@ test('source sampling interpolates linear vertex colors and applies texture/mate
   assert.equal((await textured.request('sampleSource', { face: 0, barycentric: [1,0,0] })).hex, '#BCBC00');
   assert.equal((await textured.request('sampleSource', { face: 0, barycentric: [0,1,0] })).hex, '#BCBCFF');
 });
+
+for (const scheme of ['high', 'low']) {
+  test(`failed ${scheme} regeneration preserves refined labels and undo; success replaces both`, async () => {
+    const { request, context } = await labeledRuntime();
+    if (scheme === 'low') await request('lowpoly', { ...options, target: 0 });
+    await request('prepareRefinement', { scheme });
+    const selected = await request('selectRefinement', { face: 0, scope: 'color', materialGroups: [0, 1] });
+    await request('paintRefinement', { faces: selected.faces, label: 1 });
+    const before = (await request('snapshot')).snapshot;
+    // Fail after the worker stages fresh assignment data, not just input validation.
+    vm.runInContext("globalThis.savedLayerStats = layerStats; layerStats = () => { throw new Error('Injected generation failure'); };", context);
+    const failed = await request('regenerate', { ...options, target: 0, scheme });
+    assert.equal(failed.type, 'error');
+    assert.match(failed.message, /Injected generation failure/);
+    assert.deepEqual((await request('snapshot')).snapshot, before);
+    vm.runInContext('layerStats = globalThis.savedLayerStats;', context);
+    const undone = await request('undo');
+    assert.equal(undone.ok, true); assert.equal(undone.left, 0);
+    assert.equal(undone.refinementLabels[0], 0);
+    const regenerated = await request('regenerate', { ...options, slotHex: ['#FFFFFF'], target: 0, scheme });
+    assert.equal(regenerated.type, 'regenerated');
+    assert.ok((regenerated.low?.leafLab ?? regenerated.label).every(label => label === 0));
+    const after = (await request('snapshot')).snapshot;
+    assert.equal(after.refinement, undefined); assert.equal(after.slotCount, 1);
+    assert.equal((await request('undo')).ok, false);
+  });
+}

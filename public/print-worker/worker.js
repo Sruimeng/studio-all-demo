@@ -12,8 +12,9 @@ let projectId = null;
 let editRevision = -1;
 let sequence = Promise.resolve();
 let captured = null;
+let regenerationProgress = false;
 const post = (type, data, transfer) => {
-  if (captured) { if (type !== "progress") captured.push({ type, ...data }); return; }
+  if (captured && (type !== "progress" || !regenerationProgress)) { if (type !== "progress") captured.push({ type, ...data }); return; }
   self.postMessage({ ...data, type, projectId: active.projectId, requestId: active.requestId, editRevision: active.editRevision }, transfer || []);
 };
 const progress = (reqId) => (p, text) => post("progress", { reqId, p, text });
@@ -996,6 +997,34 @@ function restore(m, reqId) {
   post("restore", { reqId, label: S.label ? S.label.slice() : null, low: result, refinement: refinement ? refinementResult() : undefined });
 }
 
+// Stage mutable assignment data while retaining the old buffers and undo stack.
+// A failed regeneration restores the exact editable state, including UV refinements.
+function regenerate(m, reqId) {
+  validateLabel(m);
+  if (m.scheme !== 'high' && m.scheme !== 'low') throw new Error('Invalid color scheme.');
+  const previous = { ...S };
+  const responses = [];
+  try {
+    S.highPaint = new Int8Array(S.nf).fill(-1);
+    S.undo = []; S.refinement = null;
+    S.label = null; S.autoLabel = null; S.regionLabel = null; S.labelSlots = null;
+    S.lastLabel = null; S.lastLow = null;
+    S.low = m.scheme === 'low' && previous.low ? {
+      ...previous.low, den: [],
+      override: previous.low.override.map(o => o ? new Int8Array(o.length).fill(-1) : null),
+    } : null;
+    captured = responses; regenerationProgress = true;
+    if (m.scheme === 'low') { S.lastLow = m; lowpoly(m, reqId); }
+    else { S.lastLabel = m; labelHigh(m, reqId); S.labelSlots = m.slotHex.join(); }
+    captured = null; regenerationProgress = false;
+    post('regenerated', { reqId, label: m.scheme === 'high' ? responses[0].label : null, low: m.scheme === 'low' ? responses[0] : null });
+  } catch (error) {
+    Object.keys(S).forEach(key => delete S[key]);
+    Object.assign(S, previous);
+    throw error;
+  } finally { captured = null; regenerationProgress = false; }
+}
+
 function refinementResult() {
   const { adjacency, bvh, ...result } = S.refinement;
   return result;
@@ -1066,6 +1095,7 @@ async function dispatch(m) {
         if (!Number.isInteger(m.N) || m.N < 1 || m.N > 12) throw new Error("Choose 1–12 colors.");
         if (m.mode !== "free" && (!m.cands?.length || m.cands.some(c => !/^#[a-f0-9]{6}$/i.test(c.hex)))) throw new Error("Choose valid materials.");
         palette(m, reqId); break;
+      case "regenerate": regenerate(m, reqId); break;
       case "label": validateLabel(m); S.lastLabel = m; labelHigh(m, reqId); S.labelSlots = m.slotHex.join(); break;
       case "lowpoly": validateLabel(m); S.lastLow = m; lowpoly(m, reqId); break;
       case "brushHigh": {
