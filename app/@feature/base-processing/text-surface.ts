@@ -1,6 +1,7 @@
 import { BufferAttribute, BufferGeometry, DoubleSide, Matrix4, Quaternion, Ray, Triangle, Vector3 } from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import type { MeshData } from '~/@engine/base-processing';
+import { createLocalSurfaceSdf } from './text-sdf';
 
 export interface TextSurfaceHit { point: Vector3; normal: Vector3; distance: number }
 const cache = new WeakMap<MeshData, ReturnType<typeof buildSurface>>();
@@ -13,6 +14,7 @@ export function textBaseSurface(mesh: MeshData) {
 function buildSurface(mesh: MeshData) {
   const geometry = new BufferGeometry().setAttribute('position', new BufferAttribute(mesh.positions, 3)).setIndex(new BufferAttribute(mesh.indices.slice(), 1));
   const tree = new MeshBVH(geometry), triangle = new Triangle();
+  const fields = new Map<number, ReturnType<typeof createLocalSurfaceSdf>>();
   function faceNormal(index: number) {
     const positions = geometry.getAttribute('position'), indices = geometry.index!;
     triangle.a.fromBufferAttribute(positions, indices.getX(index * 3));
@@ -33,6 +35,28 @@ function buildSurface(mesh: MeshData) {
       // Orient toward the query, independent of the imported mesh's winding.
       if (normal.dot(delta) < 0) normal.negate();
       return { ...hit, normal };
+    },
+    /** Interpolated distance gradients smooth faceted normals, while exact
+     * patch projection prevents jumping to a neighboring cloud lobe. */
+    field(cellSize: number) {
+      const size = Math.max(1e-5, cellSize);
+      if (!fields.has(size)) {
+        if (fields.size >= 3) fields.clear();
+        fields.set(size, createLocalSurfaceSdf((point, reach) => {
+          const hit = tree.closestPointToPoint(point, undefined, 0, reach);
+          return hit ? { ...hit, normal: faceNormal(hit.faceIndex) } : null;
+        }, size));
+      }
+      const field = fields.get(size)!;
+      return {
+        project(point: Vector3, normal: Vector3, reach: number): TextSurfaceHit | null {
+          const exact = surface.project(point, normal, reach); if (!exact) return null;
+          const estimate = field.project(exact.point, normal, Math.min(reach, size));
+          if (!estimate || estimate.normal.dot(exact.normal) < 0.9 || estimate.point.distanceTo(exact.point) > size * 0.5) return exact;
+          // SDF is guidance, not a substitute for the original geometric surface.
+          return { ...exact, normal: estimate.normal };
+        },
+      };
     },
     /** Project only within the current patch, using its outward direction.
      * Choose the hit closest to the prediction instead of the first outer lobe. */
@@ -126,8 +150,15 @@ interface SurfaceSample { point: Vector3; normal: Vector3; frame: Quaternion }
  * projecting the entire word in one direction. Every grid edge is validated,
  * including the spaces between letters, so a word cannot jump over a groove. */
 export function conformTextToBase(mesh: MeshData, base: MeshData, anchor: Vector3, orientation: Quaternion, unit: number, depth: number) {
+  return conformWithField(mesh, base, anchor, orientation, unit, depth, true)
+    ?? conformWithField(mesh, base, anchor, orientation, unit, depth, false);
+}
+// Distance interpolation is only accepted when the entire chart passes the
+// same fold/gap checks. Keep the exact-mesh fallback around sharp creases.
+function conformWithField(mesh: MeshData, base: MeshData, anchor: Vector3, orientation: Quaternion, unit: number, depth: number, useField: boolean): { mesh: MeshData; curved: boolean } | null {
   if (!Number.isFinite(unit) || unit <= 0) return null;
   const surface = textBaseSurface(base), normal = new Vector3(0, 0, 1).applyQuaternion(orientation);
+  const field = useField ? surface.field(0.2 * unit) : surface;
   let width = 0, height = 0;
   for (let i = 0; i < mesh.positions.length; i += 3) {
     width = Math.max(width, Math.abs(mesh.positions[i]!)); height = Math.max(height, Math.abs(mesh.positions[i + 1]!));
@@ -142,7 +173,7 @@ export function conformTextToBase(mesh: MeshData, base: MeshData, anchor: Vector
   function walk(previous: SurfaceSample, axis: Vector3, amount: number): SurfaceSample | null {
     const step = Math.abs(amount * unit), tangent = axis.clone().applyQuaternion(previous.frame);
     const prediction = previous.point.clone().addScaledVector(tangent, amount * unit);
-    const hit = surface.project(prediction, previous.normal, Math.max(step * 0.7, 0.08 * unit));
+    const hit = field.project(prediction, previous.normal, Math.max(step * 0.7, 0.08 * unit));
     if (!hit || hit.normal.dot(previous.normal) < 0.8 || hit.normal.dot(normal) < -0.1) return null;
     const travel = hit.point.distanceTo(previous.point);
     if (travel > step * 1.35 || travel < step * 0.65) return null;
@@ -184,7 +215,7 @@ export function conformTextToBase(mesh: MeshData, base: MeshData, anchor: Vector
       }
       outward.normalize();
       // Small corrections account for mesh detail between chart samples.
-      const hit = surface.project(local, outward, Math.max(dx, dy) * unit * 0.45);
+      const hit = field.project(local, outward, Math.max(dx, dy) * unit * 0.45);
       if (!hit || hit.normal.dot(outward) < 0.8) return null;
       sample = { point: hit.point, normal: outward.clone() }; chart.set(key, sample);
       curved ||= Math.abs(hit.point.clone().sub(anchor).dot(normal)) / unit > 0.08;

@@ -1,3 +1,6 @@
+import createManifold from 'manifold-3d';
+import { joinBaseText } from '../app/@feature/base-processing/text-solid';
+import { Matrix4 } from 'three';
 import { readFile } from 'node:fs/promises';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Box3, Mesh, MeshStandardMaterial, SRGBColorSpace, Vector3 } from 'three';
@@ -36,6 +39,19 @@ it.each(['black-disc', 'white-cloud'] as const)('loads the bundled %s with origi
     mesh.positions.forEach((v, i) => { min[i % 3] = Math.min(min[i % 3]!, v); max[i % 3] = Math.max(max[i % 3]!, v); });
     expect(min).toEqual([-25, -10, -20]); expect(max).toEqual([25, 0, 20]);
     expect(asset.mesh.positions).not.toBe(mesh.positions); expect(mesh.indices).toBe(asset.mesh.indices);
+    if (shape === 'black-disc') {
+      const base = resizeBaseAsset(asset,50,50,10), surface = textBaseSurface(base);
+      const hit = surface.raycast(new Vector3(0,30,10),new Vector3(0,-1,0))!;
+      const orientation = textSurfaceOrientation(hit.normal), label = subdivideText(buildTextMesh('O'));
+      const fitted = conformTextToBase(label,base,hit.point,orientation,0.4,1.8)!;
+      expect(fitted).not.toBeNull();
+      const transform = new Matrix4().compose(hit.point.clone().addScaledVector(hit.normal,0.9*0.4-0.08),orientation,new Vector3().setScalar(0.4));
+      const positions = fitted.mesh.positions.slice(), point = new Vector3();
+      for (let i=0;i<positions.length;i+=3) point.fromArray(positions,i).applyMatrix4(transform).toArray(positions,i);
+      const module = await createManifold(); module.setup();
+      const joined = joinBaseText(module,base,{positions,indices:fitted.mesh.indices});
+      expect(joined.volume).toBeGreaterThan(0); expect(new Set(joined.faceMaterials)).toEqual(new Set([0,1]));
+    }
     if (shape === 'white-cloud') {
       const cloud = resizeBaseAsset(asset, 50, 41.2, 7.45), surface = textBaseSurface(cloud), label = subdivideText(buildTextMesh('Text'));
       // These rays traverse curved lobes and the valleys of the user's GLB.
@@ -56,6 +72,12 @@ it.each(['black-disc', 'white-cloud'] as const)('loads the bundled %s with origi
         if (angle === 45) {
           const stats = cutMesh(fitted!.mesh, { normal: [0, 1, 0], offset: -100, cap: true }).stats;
           expect(stats.boundary).toBe(0); expect(stats.nonManifold).toBe(0);
+          const module = await createManifold(); module.setup();
+          const transform = new Matrix4().compose(stable.point.clone().addScaledVector(stable.normal, 0.9 * 0.4 - 0.08), orientation, new Vector3().setScalar(0.4));
+          const positions = fitted!.mesh.positions.slice(), point = new Vector3();
+          for (let i = 0; i < positions.length; i += 3) point.fromArray(positions,i).applyMatrix4(transform).toArray(positions,i);
+          const joined = joinBaseText(module,cloud,{positions,indices:fitted!.mesh.indices});
+          expect(joined.volume).toBeGreaterThan(0); expect(new Set(joined.faceMaterials)).toEqual(new Set([0,1]));
         }
       }
       const groove = surface.raycast(new Vector3(40, -3.7, 0), new Vector3(-1, 0, 0))!;
@@ -67,7 +89,7 @@ it.each(['black-disc', 'white-cloud'] as const)('loads the bundled %s with origi
     expect(dispose).toHaveBeenCalledOnce(); expect(close).toHaveBeenCalledOnce();
     library.dispose(); expect(dispose).toHaveBeenCalledOnce();
   } finally { library.dispose(); }
-}, 15000);
+}, 45000);
 
 it('evicts failed downloads so retry can fetch again, and aborts requests on disposal', async () => {
   const fetchAsset = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));

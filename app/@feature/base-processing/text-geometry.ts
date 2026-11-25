@@ -60,8 +60,9 @@ function systemGlyph(character: string, family: TextFont) {
   if (fallbackGlyphs.size > 160) fallbackGlyphs.clear(); fallbackGlyphs.set(key, result); return result;
 }
 
-export function buildTextMesh(content: string, family: TextFont = 'Helvetiker'): MeshData & { size: [number, number, number] } {
+export function buildTextMesh(content: string, family: TextFont = 'Helvetiker'): MeshData & { size: [number, number, number]; seatingOffset: number } {
   const font = fonts[family], parts: BufferGeometry[] = []; let advance = 0;
+  const glyphBottoms: number[] = [];
   try {
     for (const character of content) {
       const glyph = font.data.glyphs[character];
@@ -69,6 +70,7 @@ export function buildTextMesh(content: string, family: TextFont = 'Helvetiker'):
       const shapes = glyph ? font.generateShapes(character, 10) : fallback!.shapes;
       if (shapes.length) {
         const geometry = new ExtrudeGeometry(shapes, { depth: 1.8, steps: 1, curveSegments: 8, bevelEnabled: false });
+        geometry.computeBoundingBox(); glyphBottoms.push(geometry.boundingBox!.min.y);
         geometry.translate(advance, 0, 0); parts.push(geometry);
       }
       advance += glyph ? glyph.ha / font.data.resolution * 10 : fallback!.advance;
@@ -81,7 +83,10 @@ export function buildTextMesh(content: string, family: TextFont = 'Helvetiker'):
     combined.computeBoundingBox(); const bounds = combined.boundingBox!, center = bounds.getCenter(new Vector3()), size = bounds.getSize(new Vector3()).toArray();
     combined.dispose();
     for (let i = 0; i < positions.length; i += 3) { positions[i] = positions[i]! - center.x; positions[i + 1] = positions[i + 1]! - center.y; positions[i + 2] = positions[i + 2]! - center.z; }
-    return { positions, indices: Uint32Array.from({ length: positions.length / 3 }, (_, i) => i), size };
+    // Curved glyph overshoot can leave another glyph floating above a flat
+    // base. Seat the entire word a small, bounded amount, retaining typography.
+    const seatingOffset = Math.min(size[1] * 0.12, Math.max(...glyphBottoms) - Math.min(...glyphBottoms));
+    return { positions, indices: Uint32Array.from({ length: positions.length / 3 }, (_, i) => i), size, seatingOffset };
   } finally { parts.forEach(part => part.dispose()); }
 }
 

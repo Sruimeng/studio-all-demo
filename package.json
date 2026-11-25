@@ -22,6 +22,7 @@
     "@tripo3d/utils": "file:vendor/tripo3d-utils-0.4.0",
     "@vueuse/core": "^14.3.0",
     "fflate": "^0.8.3",
+    "manifold-3d": "3.5.5",
     "nuxt": "4.5.1",
     "pinia": "^3.0.4",
     "three": "^0.183.2",

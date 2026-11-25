@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref, shallowRef } from 'vue';
 import { BoxGeometry, BufferAttribute, BufferGeometry, Color, Group, Object3D, PerspectiveCamera, Quaternion, Scene, Vector3 } from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { buildTextMesh } from '../app/@feature/base-processing/text-geometry';
 import { cutMesh } from '../app/@engine/base-processing/geometry';
 import type { ViewerContent } from '../app/@engine/viewer';
 import { useBaseProcessing } from '../app/@feature/base-processing';
@@ -9,7 +10,7 @@ import { prepareBaseAsset } from '../app/@feature/base-processing/base-assets';
 import { createBaseTranslationControls } from '../app/@feature/base-processing/base-translation-controls';
 import { Mesh, MeshStandardMaterial } from 'three';
 
-const mocks = vi.hoisted(() => ({ run: vi.fn(), cancel: vi.fn(), download: vi.fn(), asset: vi.fn(), disposeAssets: vi.fn(), custom: vi.fn() }));
+const mocks = vi.hoisted(() => ({ run: vi.fn(), cancel: vi.fn(), join: vi.fn(), cancelJoin: vi.fn(), download: vi.fn(), asset: vi.fn(), disposeAssets: vi.fn(), custom: vi.fn() }));
 vi.mock('~/@feature/base-processing/custom-base', () => ({ loadCustomBase: mocks.custom }));
 vi.mock('~/@feature/base-processing/base-assets', async original => ({
   ...await original<object>(), createBaseAssetLibrary: () => ({ get: mocks.asset, dispose: mocks.disposeAssets }),
@@ -17,9 +18,10 @@ vi.mock('~/@feature/base-processing/base-assets', async original => ({
 vi.mock('~/@engine/base-processing', async original => ({
   ...await original<object>(), CutClient: class { run = mocks.run; cancel = mocks.cancel; },
 }));
+vi.mock('~/@feature/base-processing/text-solid-client', async original => ({ ...await original<object>(), TextSolidClient: class { run = mocks.join; cancel = mocks.cancelJoin; } }));
 vi.mock('~/@base/storage', () => ({ downloadFile: mocks.download }));
 const scopes: ReturnType<typeof effectScope>[] = [];
-beforeEach(() => { vi.clearAllMocks(); mocks.run.mockImplementation(async (mesh, plane) => cutMesh(mesh, plane)); mocks.asset.mockReset(); mocks.custom.mockReset(); });
+beforeEach(() => { vi.clearAllMocks(); mocks.join.mockReset().mockImplementation(async base => ({ positions: base.positions.slice(), indices: base.indices.slice(), faceMaterials: new Uint8Array(base.indices.length / 3), volume: 1 })); mocks.run.mockImplementation(async (mesh, plane) => cutMesh(mesh, plane)); mocks.asset.mockReset(); mocks.custom.mockReset(); });
 afterEach(() => scopes.splice(0).forEach(s => s.stop()));
 function setup() {
   const geometry = new BoxGeometry(20,20,20), root = new Group(); root.name = 'test';
@@ -69,13 +71,13 @@ it('edits solid text, preserves its contact and prevents exporting blank content
   tool.setTextPosition([5, tool.textWorldHeight / 2, 10]);
   tool.setTextContent('TRIPO'); tool.setTextScale(1.5);
   expect(tool.textPosition[0]).toBe(5); expect(tool.textPosition[2]).toBe(10);
-  expect(tool.textPosition[1] - tool.textWorldHeight / 2).toBeCloseTo(-0.08);
-  tool.addBase(); tool.exportSTL(); expect(tool.unsaved).toBe(false);
+  expect(tool.textPosition[1] - tool.textWorldHeight / 2 + buildTextMesh(tool.textContent, tool.textFont).seatingOffset * tool.textWorldScale).toBeCloseTo(-0.08);
+  await tool.addBase(); tool.exportSTL(); expect(tool.unsaved).toBe(false);
   const data = new DataView(await (mocks.download.mock.calls.at(-1)![0] as Blob).arrayBuffer());
-  expect(data.getUint32(80, true)).toBe((tool.source!.indices.length + tool.baseMesh!.indices.length + tool.textMeshData!.indices.length) / 3);
+  expect(data.getUint32(80, true)).toBe((tool.source!.indices.length + tool.joinedBaseText!.indices.length) / 3);
   tool.setTextContent(''); expect(tool.textReady).toBe(false); expect(tool.textError).toBeTruthy();
   tool.addBase(); expect(tool.canExport).toBe(false);
-  tool.setTextContent('2026'); tool.addBase(); expect(tool.canExport).toBe(true); expect(tool.unsaved).toBe(true);
+  tool.setTextContent('2026'); await tool.addBase(); expect(tool.canExport).toBe(true); expect(tool.unsaved).toBe(true);
   tool.removeText(); expect(tool.textMeshData).toBeNull(); expect(tool.textSelected).toBe(false);
   expect(content.value.mesh.positions).toEqual(original);
 });
@@ -87,7 +89,7 @@ it('snaps only over the base, releases when pulled away and follows base transla
   tool.setTextPosition([0, 40, 10], true); expect(tool.textSnapped).toBe(true);
   tool.setBasePosition([12, 4, -8]);
   expect(tool.textPosition[0]).toBe(12); expect(tool.textPosition[2]).toBe(2);
-  expect(tool.textPosition[1] - tool.textWorldHeight / 2).toBeCloseTo(3.92);
+  expect(tool.textPosition[1] - tool.textWorldHeight / 2 + buildTextMesh(tool.textContent).seatingOffset * tool.textWorldScale).toBeCloseTo(3.92);
   tool.setBaseScale(2); expect(tool.textPosition[2]).toBeCloseTo(12);
   tool.setBaseRotationY(90); expect(tool.textPosition[0]).toBeCloseTo(32); expect(tool.textPosition[2]).toBeCloseTo(-8);
   const forward = new Vector3(0, 0, 1).transformDirection(tool.textTransform); expect(forward.x).toBeCloseTo(1);
@@ -126,7 +128,7 @@ it('imports a custom base, preserves its proportions and colors, and exports wit
   expect(tool.baseHeight / tool.baseWidth).toBeCloseTo(0.2); expect(tool.baseScale).toBe(1.5); expect(tool.baseRotationY).toBe(30);
   tool.setBaseColor('#829efa'); expect(tool.baseAssetOriginal).toBe(false); tool.restoreBaseAppearance(); expect(tool.baseAssetOriginal).toBe(true);
   await tool.setBaseShape('round'); await tool.setBaseShape('custom'); expect(tool.baseAsset).toBe(asset);
-  tool.addBase(); tool.exportSTL(); expect(mocks.download).toHaveBeenCalledOnce(); expect(tool.unsaved).toBe(false);
+  await tool.addBase(); tool.exportSTL(); expect(mocks.download).toHaveBeenCalledOnce(); expect(tool.unsaved).toBe(false);
   const disposed = vi.spyOn(asset, 'dispose'); scope.stop(); expect(disposed).toHaveBeenCalledOnce();
 });
 
@@ -156,7 +158,7 @@ it('places an imported base below the model, preserves aspect and exports its re
   expect(Math.max(...tool.baseMesh!.positions.filter((_, i) => i % 3 === 1))).toBe(0);
   tool.setDimension('height', 152); tool.setBasePosition([12, 4, -8]);
   expect(tool.basePivot).toEqual([12, -6, -8]);
-  tool.addBase(); tool.exportSTL();
+  await tool.addBase(); tool.exportSTL();
   const data = new DataView(await (mocks.download.mock.calls.at(-1)![0] as Blob).arrayBuffer());
   const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
   for (let f = tool.source!.indices.length / 3; f < data.getUint32(80, true); f++) for (let c = 0; c < 3; c++) for (let a = 0; a < 3; a++) {
@@ -234,7 +236,7 @@ it('moves and colors an additive base without changing the source model', () => 
 
 it('keeps additive base placement in the exported STL', async () => {
   const { tool } = setup();
-  tool.setMode('add'); tool.setBasePosition([12, 4, -7]); tool.addBase(); tool.exportSTL();
+  tool.setMode('add'); tool.setBasePosition([12, 4, -7]); await tool.addBase(); tool.exportSTL();
   expect(mocks.download).toHaveBeenCalledOnce();
   const data = new DataView(await (mocks.download.mock.calls[0]![0] as Blob).arrayBuffer());
   expect(data.getUint32(80, true)).toBeGreaterThan(12);
@@ -277,7 +279,7 @@ it.each(['square', 'white-cloud'] as const)('exports %s with uniform scale, Y ro
   const { tool } = setup(); tool.setMode('add'); await tool.setBaseShape(shape);
   tool.setBaseDimension('width', 40); tool.setBaseDimension('depth', 24); tool.setBaseDimension('height', 10);
   tool.setBaseScale(1.5); tool.setBaseRotationY(90); tool.setDimension('width', 160); tool.setBasePosition([12, 4, -8]);
-  tool.addBase(); tool.exportSTL();
+  await tool.addBase(); tool.exportSTL();
   const data = new DataView(await (mocks.download.mock.calls.at(-1)![0] as Blob).arrayBuffer());
   const bounds = (start: number, end: number) => {
     const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
@@ -505,7 +507,7 @@ it.each([0, 1, 2, 3])('uniformly scales a base with corner %i while keeping its 
     v.send('pointermove', start.x + (start.x - pivot.x) * 0.5, start.y + (start.y - pivot.y) * 0.5);
     expect(tool.baseScale).toBeCloseTo(1.5); expect(tool.basePosition).toEqual(originalTop);
     expect(tool.textScale).toBe(originalTextScale); expect(tool.textSnapped).toBe(true);
-    expect(tool.textPosition[1] - tool.textWorldHeight / 2).toBeCloseTo(-0.08);
+    expect(tool.textPosition[1] - tool.textWorldHeight / 2 + buildTextMesh(tool.textContent, tool.textFont).seatingOffset * tool.textWorldScale).toBeCloseTo(-0.08);
     expect(v.feedback.mock.lastCall![0].value).toBeCloseTo(1.5);
     v.send('pointerup', start.x, start.y);
     expect(tool.dragging).toBe(false); expect(v.transform.enabled).toBe(true); expect(v.captured.size).toBe(0);
@@ -521,14 +523,16 @@ it.each([true, false])('scales text from its bottom contact with snapped=%s and 
     const { tool } = v;
     if (!snapped) tool.setTextPosition([200, 40, 0]);
     tool.selectText(); v.update();
-    const start = v.handle(2), bottom = tool.textPosition[1] - tool.textWorldHeight / 2;
+    const start = v.handle(2);
+    const baseline = () => tool.textPosition[1] - tool.textWorldHeight / 2 + (snapped ? buildTextMesh(tool.textContent).seatingOffset * tool.textWorldScale : 0);
+    const bottom = baseline();
     const pivot = v.project(new Vector3(tool.textPosition[0], bottom, tool.textPosition[2]));
     v.send('pointerdown', start.x, start.y);
     v.send('pointermove', start.x + (start.x - pivot.x) * 0.5, start.y + (start.y - pivot.y) * 0.5);
     expect(tool.textScale).toBeCloseTo(1.5); expect(tool.baseScale).toBe(1); expect(tool.textSnapped).toBe(snapped);
-    expect(tool.textPosition[1] - tool.textWorldHeight / 2).toBeCloseTo(bottom);
+    expect(baseline()).toBeCloseTo(bottom);
     v.send('pointermove', start.x - (start.x - pivot.x) * 4, start.y - (start.y - pivot.y) * 4);
-    expect(tool.textScale).toBe(0.05); expect(tool.textPosition[1] - tool.textWorldHeight / 2).toBeCloseTo(bottom);
+    expect(tool.textScale).toBe(0.05); expect(baseline()).toBeCloseTo(bottom);
     v.send('pointermove', start.x + (start.x - pivot.x) * 10, start.y + (start.y - pivot.y) * 10);
     expect(tool.textScale).toBe(3);
     v.send('pointerup', start.x, start.y); expect(v.feedback.mock.lastCall![0]).toBeNull();
@@ -582,9 +586,9 @@ it('wraps text around the actual round base side and keeps its surface attachmen
   const beforeMove = [...tool.textPosition]; tool.setBasePosition([12, 4, -8]);
   expect(new Vector3(...tool.textPosition).sub(new Vector3(...beforeMove)).distanceTo(new Vector3(12, 4, -8))).toBeLessThan(0.001);
   tool.setBaseRotationY(90); expect(new Vector3(0, 0, 1).applyQuaternion(tool.textOrientation).x).toBeGreaterThan(0.9);
-  tool.addBase(); tool.exportSTL();
+  await tool.addBase(); tool.exportSTL();
   const exported = new DataView(await (mocks.download.mock.calls.at(-1)![0] as Blob).arrayBuffer());
-  expect(exported.getUint32(80, true)).toBe((tool.source!.indices.length + tool.baseMesh!.indices.length + tool.textMeshData!.indices.length) / 3);
+  expect(exported.getUint32(80, true)).toBe((tool.source!.indices.length + tool.joinedBaseText!.indices.length) / 3);
   tool.setTextPosition([500, 80, 0]); expect(tool.textSnapped).toBe(false); expect(tool.textCurved).toBe(false);
 });
 
@@ -727,4 +731,32 @@ it('does not retain stale drag holds after a module switch or deleting the text'
   tool.setMode('flatten'); expect(tool.textSurfaceHeld).toBe(false); expect(tool.retainTextSurface()).toBe(false);
   tool.setMode('add'); tool.beginTextSurfaceDrag(); expect(tool.retainTextSurface()).toBe(true);
   tool.removeText(); expect(tool.textSurfaceHeld).toBe(false); expect(tool.retainTextSurface()).toBe(false);
+});
+
+it('joins only attached text, gates export during processing and invalidates the result after edits', async () => {
+  const { tool } = setup(); tool.setMode('add'); tool.addText();
+  let finish!: (value: unknown) => void;
+  mocks.join.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const pending = tool.apply();
+  expect(tool.busy).toBe(true); expect(tool.canExport).toBe(false);
+  tool.exportSTL(); expect(mocks.download).not.toHaveBeenCalled();
+  const result = { positions: tool.baseMesh!.positions.slice(), indices: tool.baseMesh!.indices.slice(), faceMaterials: new Uint8Array(tool.baseMesh!.indices.length / 3), volume: 1 };
+  finish(result); await pending;
+  expect(tool.joinedBaseText).toEqual(result); expect(tool.canExport).toBe(true);
+  tool.setTextContent('NEW'); expect(tool.joinedBaseText).toBeNull(); expect(tool.canExport).toBe(false);
+  tool.setTextPosition([500,80,0]); await tool.apply();
+  expect(mocks.join).toHaveBeenCalledTimes(1); expect(tool.canExport).toBe(true); expect(tool.joinedBaseText).toBeNull();
+});
+
+it('keeps editable geometry on failed or cancelled text joins and ignores late worker results', async () => {
+  const { tool } = setup(); tool.setMode('add'); tool.addText(); const mesh = tool.textMeshData;
+  mocks.join.mockRejectedValueOnce(new Error('Open base')); await tool.apply();
+  expect(tool.failure).toBe('Open base'); expect(tool.canExport).toBe(false); expect(tool.textMeshData).toBe(mesh);
+  let finish!: (value: unknown) => void;
+  mocks.join.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const pending = tool.apply(); tool.cancel();
+  expect(tool.busy).toBe(false); expect(mocks.cancelJoin).toHaveBeenCalled();
+  finish({ ...tool.baseMesh!, faceMaterials: new Uint8Array(), volume: 1 }); await pending;
+  expect(tool.baseAdded).toBe(false); expect(tool.joinedBaseText).toBeNull(); expect(tool.textMeshData).toBe(mesh);
+  await tool.apply(); expect(tool.canExport).toBe(true); expect(tool.failure).toBe('');
 });

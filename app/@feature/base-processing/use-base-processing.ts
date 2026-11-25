@@ -8,6 +8,8 @@ import { baseAssetPresets, createBaseAssetLibrary, isAssetBaseShape, resizeBaseA
 import { loadCustomBase } from './custom-base';
 import { baseSurfaceHeight, buildTextMesh, textFonts, type TextFont } from './text-geometry';
 import { conformTextToBase, subdivideText, textBaseSurface, textSurfaceOrientation, type TextSurfaceHit } from './text-surface';
+import { TextSolidClient, TextSolidCancelled } from './text-solid-client';
+import type { TextSolidResult } from './text-solid';
 
 export interface BaseAppearance {
   uvs: Float32Array | null;
@@ -47,17 +49,22 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
   const textSurfaceHeld = ref(false);
   const textOrientation = shallowRef(new Quaternion()), textSurfaceAttached = ref(false), textCurved = ref(false), textSurfaceHint = ref('');
   let textRestMesh: MeshData | null = null;
+  const textSeatingOffset = ref(0);
   const surfaceFrame = new Quaternion(), surfaceNormal = new Vector3(0, 1, 0);
   let textAnchor: Vector3 | null = null;
   let textSurfaceDragging = false;
   const textMetrics = ref({ width: 0, height: 12, depth: 2 });
   const textMeshData = shallowRef<MeshData | null>(null);
+  const joinedBaseText = shallowRef<TextSolidResult | null>(null);
+  const textSolidClient = new TextSolidClient();
   const basePosition = computed<Point3>(() => baseOffset.value.map(v => v * scale.value) as Point3);
   const baseWorldScale = computed(() => scale.value * baseScale.value);
   const baseBottom = computed(() => basePosition.value[1] - baseHeight.value * baseWorldScale.value);
   const basePivot = computed<Point3>(() => [basePosition.value[0], basePosition.value[1] - baseHeight.value * baseWorldScale.value / 2, basePosition.value[2]]);
   const textWorldScale = computed(() => scale.value * textScale.value);
   const textWorldHeight = computed(() => textMetrics.value.height * textWorldScale.value);
+  const standingInset = computed(() => 0.08 * scale.value + textSeatingOffset.value * textWorldScale.value);
+  const surfaceInset = computed(() => Math.min(0.08 * scale.value, textMetrics.value.depth * textWorldScale.value * 0.2));
   const textPivot = computed<Point3>(() => [...textPosition.value] as Point3);
   const textTransform = computed(() => new Matrix4().compose(new Vector3(...textPosition.value), textOrientation.value, new Vector3().setScalar(textWorldScale.value)));
   const textContact = computed<Point3>(() => new Vector3(0, textSurfaceAttached.value ? 0 : -textMetrics.value.height / 2, textSurfaceAttached.value ? -textMetrics.value.depth / 2 : 0).applyMatrix4(textTransform.value).toArray());
@@ -110,11 +117,11 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
   const textReady = computed(() => !textAdded.value || !!textMeshData.value);
   const canExport = computed(() => mode.value === 'add' ? baseAdded.value && baseReady.value && textReady.value && !busy.value : !!result.value && !busy.value);
   const unsaved = computed(() => mode.value === 'add' ? baseAdded.value && exportedBase.value !== baseSignature.value : !!result.value && (exportedResult.value !== result.value || exportedScale.value !== scale.value));
-  function cancel() { revision++; client.cancel(); busy.value = false; }
+  function cancel() { revision++; client.cancel(); textSolidClient.cancel(); busy.value = false; }
   function invalidate() { cancel(); result.value = null; exportedResult.value = null; failure.value = ''; view.value = 'preview'; }
   watch([direction, depthRatio, flip], invalidate, { flush: 'sync' });
   function reset() {
-    textAdded.value = false; textAnchor = null; textSurfaceDragging = false; textSurfaceHeld.value = false;
+    joinedBaseText.value = null; textAdded.value = false; textAnchor = null; textSurfaceDragging = false; textSurfaceHeld.value = false;
     if (customBaseLoading.value) { baseAssetRequest++; customBaseLoading.value = false; }
     customBaseError.value = '';
     invalidate(); direction.value = 'y'; flip.value = false; scale.value = 1; dragging.value = false;
@@ -127,14 +134,18 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
   function setMode(next: 'flatten' | 'add') {
     if (busy.value || next === mode.value) return;
     endTextSurfaceDrag();
-    mode.value = next; baseAdded.value = false; failure.value = '';
+    mode.value = next; joinedBaseText.value = null; baseAdded.value = false; failure.value = '';
     baseSelected.value = next === 'add';
     textSelected.value = false;
     dragging.value = false;
     if (next === 'add') view.value = 'preview';
     else invalidate();
   }
-  function invalidateBase() { baseAdded.value = false; if (mode.value === 'add') view.value = 'preview'; }
+  function invalidateBase() {
+    if (mode.value === 'add' && busy.value) cancel();
+    joinedBaseText.value = null; baseAdded.value = false;
+    if (mode.value === 'add') { view.value = 'preview'; failure.value = ''; }
+  }
   async function loadBaseAsset(shape: BaseShape) {
     const request = ++baseAssetRequest;
     customBaseLoading.value = false; customBaseError.value = '';
@@ -247,7 +258,8 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
     const unit = textWorldScale.value / baseWorldScale.value, surface = textBaseSurface(baseMesh.value);
     const continuing = textSurfaceDragging && textSurfaceAttached.value && textSnapped.value && !!textAnchor;
     if (continuing && !surface.follow({ point: textAnchor!, normal: surfaceNormal, distance: 0 }, hit, Math.max(0.3, 0.6 * unit))) return false;
-    const stable = surface.smooth(hit, Math.max(0.12, 0.65 * unit));
+    const guided = surface.field(0.2 * unit).project(hit.point, hit.normal, 0.2 * unit) ?? hit;
+    const stable = surface.smooth(guided, Math.max(0.12, 0.65 * unit));
     if (continuing) {
       const distance = stable.point.distanceTo(textAnchor!);
       stable.normal.copy(surfaceNormal.clone().lerp(stable.normal, Math.min(0.65, 0.25 + distance / Math.max(unit * 3, 0.001))).normalize());
@@ -276,7 +288,7 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
     const rotation = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), MathUtils.degToRad(baseRotationY.value));
     textOrientation.value = rotation.multiply(surfaceFrame);
     const normal = surfaceNormal.clone().transformDirection(baseTransform.value);
-    textPosition.value = textAnchor!.clone().applyMatrix4(baseTransform.value).addScaledVector(normal, textMetrics.value.depth * textWorldScale.value / 2 - 0.08 * scale.value).toArray();
+    textPosition.value = textAnchor!.clone().applyMatrix4(baseTransform.value).addScaledVector(normal, textMetrics.value.depth * textWorldScale.value / 2 - surfaceInset.value).toArray();
     textMeshData.value = conformed.mesh; textCurved.value = conformed.curved;
   }
   // Drag placement uses the actual front-facing base surface, including side walls.
@@ -307,7 +319,7 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
       detachText(position); invalidateBase(); return;
     }
     const surface = baseReady.value && baseMesh.value ? baseSurfaceHeight(baseMesh.value, local.x, local.z) : null;
-    const targetY = surface === null ? null : surface * baseWorldScale.value + basePosition.value[1] + textWorldHeight.value / 2 - 0.08 * scale.value;
+    const targetY = surface === null ? null : surface * baseWorldScale.value + basePosition.value[1] + textWorldHeight.value / 2 - standingInset.value;
     const threshold = Math.max(2.4 * scale.value, textWorldHeight.value * 0.3);
     textSnapped.value = targetY !== null && (surfaceDrop || Math.abs(position[1] - targetY) <= threshold);
     textAnchor = textSnapped.value ? new Vector3(local.x, surface!, local.z) : null;
@@ -329,6 +341,7 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
     if (!textAdded.value) return;
     try {
       const mesh = buildTextMesh(textContent.value, textFont.value);
+      textSeatingOffset.value = mesh.seatingOffset;
       textMetrics.value = { width: mesh.size[0], height: mesh.size[1], depth: mesh.size[2] };
       textRestMesh = subdivideText(mesh); textMeshData.value = textRestMesh;
       if (textSnapped.value) syncTextToBase();
@@ -346,7 +359,7 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
     if (surface === null) { detachText(textPosition.value); return; }
     textAnchor.y = surface;
     const contact = textAnchor.clone().applyMatrix4(baseTransform.value);
-    textPosition.value = [contact.x, contact.y + textWorldHeight.value / 2 - 0.08 * scale.value, contact.z];
+    textPosition.value = [contact.x, contact.y + textWorldHeight.value / 2 - standingInset.value, contact.z];
     textRotationY.value = baseRotationY.value;
     textOrientation.value = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), MathUtils.degToRad(textRotationY.value));
   }
@@ -372,7 +385,26 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
     baseSelected.value = selected;
     if (selected) textSelected.value = false;
   }
-  function addBase() { if (baseReady.value && textReady.value) { baseSelected.value = false; textSelected.value = false; baseAdded.value = true; view.value = 'result'; } }
+  async function addBase() {
+    if (!baseReady.value || !textReady.value || busy.value) return;
+    failure.value = ''; joinedBaseText.value = null;
+    if (textAdded.value && textSnapped.value && textMeshData.value && baseMesh.value) {
+      const ticket = ++revision, signature = baseSignature.value;
+      const transform = baseTransform.value.clone().invert().multiply(textTransform.value), point = new Vector3();
+      const positions = textMeshData.value.positions.slice();
+      for (let i = 0; i < positions.length; i += 3) point.fromArray(positions, i).applyMatrix4(transform).toArray(positions, i);
+      busy.value = true; baseAdded.value = false;
+      try {
+        const joined = await textSolidClient.run(baseMesh.value, { positions, indices: textMeshData.value.indices });
+        if (ticket !== revision || signature !== baseSignature.value) return;
+        joinedBaseText.value = joined;
+      } catch (error) {
+        if (ticket === revision && !(error instanceof TextSolidCancelled)) failure.value = error instanceof Error ? error.message : String(error);
+        return;
+      } finally { if (ticket === revision) busy.value = false; }
+    }
+    baseSelected.value = false; textSelected.value = false; baseAdded.value = true; view.value = 'result';
+  }
   function setDirection(value: CutDirection) {
     if (busy.value || !source.value || !['x', 'y', 'z'].includes(value)) return;
     direction.value = value;
@@ -431,7 +463,7 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
   }, { immediate: true });
   watch(active, enabled => { if (!enabled) { dragging.value = false; baseSelected.value = false; textSelected.value = false; cancel(); } });
   async function apply() {
-    if (mode.value === 'add') { addBase(); return; }
+    if (mode.value === 'add') { await addBase(); return; }
     if (!source.value || busy.value || empty.value) return;
     failure.value = ''; busy.value = true; const ticket = ++revision;
     try {
@@ -444,8 +476,8 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
   function exportSTL() {
     if (!canExport.value || !source.value) return;
     if (mode.value === 'add' && baseMesh.value) {
-      const model = source.value, base = baseMesh.value, text = textAdded.value ? textMeshData.value : null;
-      if (textAdded.value && !text) return;
+      const model = source.value, base = joinedBaseText.value ?? baseMesh.value, text = textAdded.value && !joinedBaseText.value ? textMeshData.value : null;
+      if (textAdded.value && !text && !joinedBaseText.value) return;
       const textPositions = text ? text.positions.length : 0;
       const positions = new Float32Array(model.positions.length + base.positions.length + textPositions);
       positions.set(model.positions.map(v => v * scale.value));
@@ -473,6 +505,6 @@ export function useBaseProcessing(content: () => ViewerContent | null, height: (
     exportedResult.value = result.value; exportedScale.value = scale.value;
   }
   onScopeDispose(() => { cancel(); baseAssetRequest++; baseAssets.dispose(); ownedCustomBases.forEach(asset => asset.dispose()); ownedCustomBases.clear(); });
-  return reactive({ source, result, direction, normal, rotation, pivot, planeCenter, dragging, depthMin, depthMax, depthMM, flip, scale, view, busy, failure, span, plane, dimensions, empty, issues, canExport, unsaved, mode, customBase, customBaseName, customBaseSize, customBaseLoading, customBaseError, importCustomBase, baseShape, baseWidth, baseDepth, baseHeight, baseScale, baseRotationY, baseTransform, baseBottom, baseAdded, baseMesh, baseReady, baseAsset, baseIsAsset, baseAssetOriginal, baseAssetLoading, baseAssetError, retryBaseAsset, restoreBaseAppearance, basePosition, basePivot, baseColor, baseSelected, setBasePosition, setBaseWorldCenter, setBaseColor, selectBase, setMode, setBaseShape, setBaseDimension, setBaseScale, setBaseRotationY, addBase, setDirection, setDepthMM, setDimension, apply, reset, cancel, exportSTL, textContent, textAdded, textSelected, textFont, textScale, textColor, textPosition, textPivot, textWorldScale, textWorldHeight, textSnapped, textMetrics, textMeshData, textTransform, textOrientation, textContact, textSurfaceAttached, textCurved, textSurfaceHint, textSurfaceHeld, retainTextSurface, beginTextSurfaceDrag, endTextSurfaceDrag, setTextSurfaceFromRay, textReady, textError, setTextContent, setTextFont, setTextColor, setTextScale, setTextPosition, setTextWorldPosition, addText, removeText, selectText });
+  return reactive({ source, result, direction, normal, rotation, pivot, planeCenter, dragging, depthMin, depthMax, depthMM, flip, scale, view, busy, failure, span, plane, dimensions, empty, issues, canExport, unsaved, mode, customBase, customBaseName, customBaseSize, customBaseLoading, customBaseError, importCustomBase, baseShape, baseWidth, baseDepth, baseHeight, baseScale, baseRotationY, baseTransform, baseBottom, baseAdded, baseMesh, baseReady, baseAsset, baseIsAsset, baseAssetOriginal, baseAssetLoading, baseAssetError, retryBaseAsset, restoreBaseAppearance, basePosition, basePivot, baseColor, baseSelected, setBasePosition, setBaseWorldCenter, setBaseColor, selectBase, setMode, setBaseShape, setBaseDimension, setBaseScale, setBaseRotationY, addBase, setDirection, setDepthMM, setDimension, apply, reset, cancel, exportSTL, joinedBaseText, textContent, textAdded, textSelected, textFont, textScale, textColor, textPosition, textPivot, textWorldScale, textWorldHeight, textSnapped, textMetrics, textMeshData, textTransform, textOrientation, textContact, textSurfaceAttached, textCurved, textSurfaceHint, textSurfaceHeld, retainTextSurface, beginTextSurfaceDrag, endTextSurfaceDrag, setTextSurfaceFromRay, textReady, textError, setTextContent, setTextFont, setTextColor, setTextScale, setTextPosition, setTextWorldPosition, addText, removeText, selectText });
 }
 export type BaseProcessingController = ReturnType<typeof useBaseProcessing>;
