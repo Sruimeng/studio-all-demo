@@ -4,6 +4,17 @@ type: guide
 ---
 # 验证记录
 
+## 2026-11-20：Multi-color 单模型展示
+
+Multi-color 只展示已分配耗材的完整模型，移除 Original / Preview / Compare 入口与分割线。`use-workspace.ts` 的 `viewportSettings` 对 Multi-color 固定使用 `print`，保留 `settings.mode` 供 Print 使用；旧项目恢复和模块往返也遵守此规则。其他模块面板保持原样。
+
+- 精修吸管读取命中区域的耗材槽，选中后返回画笔/填充，不再取原贴图颜色或改变视图。画笔、填充预高亮和耗材区域高亮覆盖完整视口。
+- 底部工具栏独立「＋」打开添加耗材，无需先进入精修；支持我的耗材、目标色/HEX 推荐相近耗材、自定义耗材。相同耗材复用现有槽，上限仍为 12。
+- 重新分色期间保留旧显示、禁用编辑，完成后一起替换标签与耗材。Worker `regenerate` 暂存新的可变数据，计算失败恢复原状态，包括精修和撤销记录；成功后重置精修历史。显示结果替换不触发相机重置。
+- 本地 Chrome，1440 × 1000，`127.0.0.1:3104` 实际点击验证：Print Original → Multi-color 单模型 → 添加自定义耗材 → 吸管选已有耗材 → 自定义耗材复用 → 画笔与撤销 → 填充悬停与点击 → 重新分色确认 → Print 恢复 Original → Compare → Multi-color 单模型。无运行异常。
+- 工作台、Worker、填充预览共 80 项测试通过，包含新结果待定时保持旧结果、分色失败保留编辑历史、旧项目三种展示模式恢复、表面与低模分色失败回滚及成功提交。相关文件 ESLint、Nuxt 类型检查、静态构建与 `git diff --check` 通过。
+- 临时验证脚本 `/tmp/verify-multicolor-single.cjs`；截图 `/tmp/multicolor-single-overview.png`、`/tmp/multicolor-add-filament.png`；构建日志 `/tmp/multicolor-single-build.log`。未提交或部署。
+
 ## 2026-10-14：本地材质删除
 
 `127.0.0.1:3103` 的 Chrome，1280 × 720，实际按钮流程：本地垃圾桶 → 取消保持记录；应用 PLA-001 后确认删除，本地库 6 → 5，区域仍绑定 PLA-001；刷新库仍为 5、内置供应商 28 条保留，错误为空。单测覆盖 USDA 导入记录删除、导出勾选清理、区域/验证快照保持、供应商保护与存储失败。88 项测试、类型检查、lint、构建与 `git diff --check` 通过。只更新本地静态产物，未提交或部署。

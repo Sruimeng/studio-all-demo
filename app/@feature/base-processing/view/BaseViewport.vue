@@ -6,13 +6,12 @@ import { ViewportGizmo } from 'three-viewport-gizmo';
 import { useLocale } from '~/@base/locale';
 import type { MeshData } from '~/@engine/base-processing';
 import type { BaseAppearance, BaseProcessingController } from '../index';
-import { createPlaneRotationControls } from '../plane-rotation-controls';
-import BasePlaneGizmo from './BasePlaneGizmo.vue';
+import { createBaseTranslationControls, type BaseGizmoFeedback } from '../base-translation-controls';
 const props = defineProps<{ tool: BaseProcessingController }>();
 const tool = props.tool;
 const { t } = useLocale();
 const host = useTemplateRef<HTMLDivElement>('host'), error = ref('');
-const gizmoPosition = ref({ left: '0px', top: '0px', visibility: 'hidden' as 'visible' | 'hidden' });
+const gizmoFeedback = ref<BaseGizmoFeedback | null>(null);
 let cleanup = () => {}, fit = () => {};
 onMounted(() => {
   if (!host.value) return;
@@ -45,8 +44,8 @@ onMounted(() => {
     const sectionMaterial = new MeshBasicMaterial({ color: '#ffdb57', side: DoubleSide, toneMapped: false, stencilWrite: true, stencilRef: 0, stencilFunc: NotEqualStencilFunc, stencilFail: ReplaceStencilOp, stencilZFail: ReplaceStencilOp, stencilZPass: ReplaceStencilOp, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     const planeMaterial = new MeshBasicMaterial({ color: '#c5b5ff', transparent: true, opacity: 0.16, side: DoubleSide, depthWrite: false });
     // PlaneGeometry faces +Z by default. Rotate the shared geometry once so its
-    // local normal is +Y; the same quaternion can then drive both the cut
-    // plane and TransformControls without a hidden 90° gizmo offset.
+    // local normal is +Y; apply the selected standard direction to both the
+    // visible plane and its highlighted cross-section.
     const planeGeometry = new PlaneGeometry(1, 1, 12, 12); planeGeometry.rotateX(-Math.PI / 2);
     const planeMesh = new Mesh(planeGeometry, planeMaterial);
     const section = new Mesh(planeGeometry, sectionMaterial), sectionGroup = new Group();
@@ -60,13 +59,15 @@ onMounted(() => {
     function disposeTexture(texture: Texture) { texture.dispose(); (texture.image as ImageBitmap).close(); }
     disposers.push(() => { sourceGeneration++; clearSourceAppearance(); planeGeometry.dispose(); [solid, red, capMaterial, sectionBack, sectionFront, sectionMaterial, planeMaterial, planeGrid.material].forEach(m => m.dispose()); });
     planeMesh.add(planeGrid); scene.add(planeMesh);
-    const sourceGroup = new Group(), resultGroup = new Group(), baseGroup = new Group(); scene.add(sourceGroup, resultGroup, baseGroup);
-    const rotationControls = createPlaneRotationControls(camera, scene, renderer.domElement, planeMesh, baseGroup, tool, dragging => { controls.enabled = !dragging; });
-    disposers.push(() => rotationControls.dispose());
+    const sourceGroup = new Group(), resultGroup = new Group(), baseGroup = new Group(), textGroup = new Group(); scene.add(sourceGroup, resultGroup, baseGroup, textGroup);
+    const baseControls = createBaseTranslationControls(camera, scene, renderer.domElement, baseGroup, tool, dragging => { controls.enabled = !dragging; }, textGroup, value => { gizmoFeedback.value = value; });
+    disposers.push(() => baseControls.dispose());
     // A soft plastic/ceramic response gives the base a broad, continuous
     // highlight instead of the small hard hotspot from the previous standard
     // material. Keep metalness at zero so user-selected colors stay stable.
     const baseMaterial = new MeshPhysicalMaterial({ color: tool.baseColor, roughness: 0.46, metalness: 0, clearcoat: 0.16, clearcoatRoughness: 0.34, sheen: 0.08, sheenRoughness: 0.5, specularIntensity: 0.42, side: DoubleSide });
+    const textMaterial = new MeshPhysicalMaterial({ color: tool.textColor, roughness: 0.42, metalness: 0, clearcoat: 0.12, clearcoatRoughness: 0.4 });
+    let textGeometry: BufferGeometry | null = null;
     let sourceGeometry: BufferGeometry | null = null, original: Mesh | null = null, removed: Mesh | null = null, floor: GridHelper | null = null, baseGeometry: BufferGeometry | null = null;
     let baseAssetView: Group | null = null;
     const baseOriginalMaterials = new Map<Mesh, Material | Material[]>();
@@ -74,7 +75,7 @@ onMounted(() => {
     disposers.push(() => {
       cancelAnimationFrame(frame); sourceGeometry?.dispose(); baseGeometry?.dispose(); clearResult();
       if (floor) { floor.geometry.dispose(); (Array.isArray(floor.material) ? floor.material : [floor.material]).forEach(m => m.dispose()); }
-      baseMaterial.dispose();
+      baseMaterial.dispose(); textGeometry?.dispose(); textMaterial.dispose();
     });
     function geometry(mesh: MeshData, indices = mesh.indices, appearance?: BaseAppearance | null) {
       const geo = new BufferGeometry(); geo.setAttribute('position', new BufferAttribute(mesh.positions, 3)); geo.setIndex(new BufferAttribute(indices, 1));
@@ -92,6 +93,19 @@ onMounted(() => {
       geo.computeVertexNormals(); return geo;
     }
     function clearResult() { for (const object of [...resultGroup.children]) { if (object instanceof Mesh) object.geometry.dispose(); resultGroup.remove(object); } }
+    function updateText() {
+      textGroup.visible = tool.mode === 'add' && !!tool.source && tool.textAdded;
+      tool.textTransform.decompose(textGroup.position, textGroup.quaternion, textGroup.scale);
+      textMaterial.color.set(tool.textColor);
+      textMaterial.emissive.set('#000000');
+    }
+    function refreshText() {
+      textGroup.clear(); textGeometry?.dispose(); textGeometry = null;
+      if (tool.textAdded && tool.textMeshData) {
+        textGeometry = geometry(tool.textMeshData); textGroup.add(new Mesh(textGeometry, textMaterial));
+      }
+      updateText();
+    }
     // Asset geometries/textures are owned by the controller cache. Cloned
     // objects can change material without mutating or disposing those resources.
     function clearBase() { baseGroup.clear(); baseGeometry?.dispose(); baseGeometry = null; baseAssetView = null; baseOriginalMaterials.clear(); }
@@ -109,6 +123,7 @@ onMounted(() => {
         baseGeometry = geometry(mesh); const base = new Mesh(baseGeometry, baseMaterial); base.renderOrder = 2; baseGroup.add(base);
       }
       updateBase();
+      updateText();
     }
     function updateBase() {
       tool.baseTransform.decompose(baseGroup.position, baseGroup.quaternion, baseGroup.scale);
@@ -154,7 +169,8 @@ onMounted(() => {
         const modelBounds = new Box3().setFromBufferAttribute(sourceGeometry.getAttribute('position') as BufferAttribute);
         modelBounds.min.multiplyScalar(tool.scale); modelBounds.max.multiplyScalar(tool.scale);
         const baseBounds = new Box3().setFromObject(baseGroup);
-        modelBounds.union(baseBounds); modelBounds.getCenter(target); distance = Math.max(modelBounds.getSize(new Vector3()).length(), 1);
+        modelBounds.union(baseBounds); if (textGroup.visible && textGroup.children.length) modelBounds.union(new Box3().setFromObject(textGroup));
+        modelBounds.getCenter(target); distance = Math.max(modelBounds.getSize(new Vector3()).length(), 1);
       }
       controls.target.copy(target); camera.up.set(0, 1, 0);
       camera.far = Math.max(diagonal * 100, distance * 100); camera.updateProjectionMatrix(); controls.maxDistance = Math.max(diagonal, distance) * 10;
@@ -235,32 +251,19 @@ onMounted(() => {
     disposers.push(watch(() => [tool.baseShape, tool.baseAsset], refreshBase));
     disposers.push(watch(() => [tool.baseWidth, tool.baseDepth, tool.baseHeight], () => { if (tool.baseIsAsset) updateBase(); else refreshBase(); }));
     disposers.push(watch(() => [tool.baseTransform, tool.baseColor, tool.baseAssetOriginal], updateBase));
+    disposers.push(watch(() => [tool.textMeshData, tool.textAdded], refreshText, { immediate: true }));
+    disposers.push(watch(() => [tool.textTransform, tool.textSelected, tool.textColor, tool.mode, tool.source], updateText));
     disposers.push(watch(() => [tool.plane, tool.planeCenter, tool.rotation, tool.view, tool.mode], appearance));
     const resize = new ResizeObserver(() => {
       const w = host.value?.clientWidth ?? 0, h = host.value?.clientHeight ?? 0; if (!w || !h) return;
       renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); gizmo.update();
     }); resize.observe(host.value);
     disposers.push(() => resize.disconnect());
-    const screenPivot = new Vector3();
-    function positionGizmo() {
-      if (!tool.rotating || !host.value) return;
-      const w = host.value.clientWidth, h = host.value.clientHeight;
-      screenPivot.fromArray(tool.planeCenter).project(camera);
-      const x = (screenPivot.x + 1) * w / 2, y = (1 - screenPivot.y) * h / 2;
-      // The transform ring has a screen-relative radius. Keep its controls beside
-      // the ring and inside the canvas, including after pan/zoom or a resize.
-      const radius = h * 0.18, cardWidth = Math.min(218, w - 24);
-      const desiredX = x + radius + 16;
-      const left = Math.round(Math.max(12, Math.min(w - cardWidth - 12, desiredX + cardWidth < w - 12 ? desiredX : x - radius - cardWidth - 16)));
-      const top = Math.round(Math.max(106, Math.min(h - 140, y - 58)));
-      const visibility = screenPivot.z > -1 && screenPivot.z < 1 ? 'visible' : 'hidden';
-      if (gizmoPosition.value.left !== left + 'px' || gizmoPosition.value.top !== top + 'px' || gizmoPosition.value.visibility !== visibility) gizmoPosition.value = { left: left + 'px', top: top + 'px', visibility };
-    }
     function render() {
       frame = requestAnimationFrame(render); if (!tool.dragging) controls.update();
-      positionGizmo();
       // Do not draw the ground grid in front of the model when inspecting its underside.
       if (floor) floor.visible = camera.position.y >= floor.position.y;
+      baseControls.update();
       renderer.render(scene, camera); gizmo.render();
     }
     render();
@@ -271,6 +274,7 @@ onBeforeUnmount(() => cleanup());
 <template>
   <div class="base-view">
     <div ref="host" class="base-canvas" />
+    <output v-if="gizmoFeedback" class="base-gizmo-feedback" :style="{ left: gizmoFeedback.x + 'px', top: gizmoFeedback.y + 'px' }" :aria-label="gizmoFeedback.kind === 'rotation' ? t('Base Y rotation', '底座 Y 轴旋转') : t('Scale', '缩放')">{{ gizmoFeedback.kind === 'rotation' ? `Y ${gizmoFeedback.value.toFixed(1)}°` : `${gizmoFeedback.value.toFixed(2)}×` }}</output>
     <div class="base-view-top">
       <div v-if="tool.mode === 'flatten'" class="base-view-tabs" role="group" :aria-label="t('Base processing view', '底面处理视图')">
         <button :class="{ active: tool.view === 'preview' }" @click="tool.view = 'preview'">{{ t('Cut preview', '切割预览') }}</button>
@@ -278,19 +282,13 @@ onBeforeUnmount(() => cleanup());
       </div>
       <button class="base-fit" :disabled="!tool.source" @click="fit">{{ t('Reset view', '重置视角') }}</button>
     </div>
-    <div v-if="tool.source && tool.mode === 'flatten'" class="base-legend">
-      <span v-if="tool.view === 'preview'"><i class="base-retained" />{{ t('Keep', '保留') }}</span>
-      <span v-if="tool.view === 'preview'"><i class="base-removed" />{{ t('Remove', '删除') }}</span>
-      <span v-if="tool.view === 'preview'"><i class="base-sealed" />{{ t('Cut surface', '切面') }}</span>
-      <span v-if="tool.view === 'result' && tool.result?.stats.capFaces"><i class="base-sealed" />{{ t('New cap', '新增封口') }}</span>
-    </div>
-    <BasePlaneGizmo v-if="tool.mode === 'flatten' && tool.rotating && tool.view === 'preview' && !tool.busy" :tool="tool" :style="gizmoPosition" />
-    <div v-if="tool.mode === 'add' && tool.source" class="base-view-hint">{{ tool.baseSelected ? t('Drag arrows to move the base · Shift: 1 mm snap · Esc: finish', '拖动箭头移动底座 · Shift：1 mm 吸附 · Esc：完成') : t('Click the base to move · Drag elsewhere to orbit', '单击底座显示移动控件 · 拖动其他区域观察模型') }}</div>
-    <div v-else-if="!tool.rotating" class="base-view-hint">{{ tool.view === 'preview' ? t('Click the cut plane to rotate · Drag to orbit', '单击切平面调整角度 · 拖动观察模型') : t('Actual processed geometry · Export from the top bar', '真实处理结果 · 可从顶部导出') }}</div>
+    <div v-if="tool.mode === 'add' && tool.source" class="base-view-hint">{{ tool.textSelected && tool.textSurfaceHeld ? t('Keeping the last fit · Move inward or scale text down', '已保留最近贴合 · 请向内移动或缩小文字') : tool.textSelected && tool.textSurfaceAttached && tool.textSnapped ? t('Fitted to surface · Drag along the base · Pull away to detach', '已贴合表面 · 可沿底座拖动 · 拖远解除吸附') : tool.textSelected ? t('Arrows: move · Corners: scale · Drag onto the base to fit its surface', '箭头移动 · 角点缩放 · 拖到底座表面自动贴合') : tool.baseSelected ? t('Arrows: move · Corners: scale · Y ring: rotate', '箭头移动 · 角点缩放 · Y 环旋转') : tool.textAdded ? t('Click the base or text to show controls · Drag elsewhere to orbit', '单击底座或文字显示编辑控件 · 拖动其他区域观察模型') : t('Click the base to move, scale and rotate · Drag elsewhere to orbit', '单击底座显示移动、缩放和旋转控件 · 拖动其他区域观察模型') }}</div>
+    <div v-else class="base-view-hint">{{ tool.view === 'preview' ? t('Select X, Y or Z to set the cut plane · Drag to orbit', '选择 X、Y 或 Z 设置切面 · 拖动观察模型') : t('Actual processed geometry · Export from the top bar', '真实处理结果 · 可从顶部导出') }}</div>
     <div v-if="!tool.source" class="base-empty">{{ t('Import a model from the top bar to begin', '从顶部导入模型开始处理') }}</div>
     <div v-if="error" class="base-view-error" role="alert">{{ error }}</div>
   </div>
 </template>
 <style scoped>
-.base-view,.base-canvas{position:absolute;inset:0}.base-view{background:radial-gradient(ellipse at 50% 42%,#34353c 0,#202127 45%,#14151a 85%);border-radius:20px;overflow:hidden}.base-canvas :deep(canvas){display:block;width:100%;height:100%}.base-view-top{position:absolute;top:18px;left:20px;right:20px;display:flex;justify-content:space-between;gap:12px;pointer-events:none}.base-view-tabs{display:flex;background:#15161cbb;border:1px solid #ffffff12;border-radius:12px;padding:4px;gap:3px;pointer-events:auto;backdrop-filter:blur(12px)}.base-view-tabs button{color:#9b9eac;font-size:12px;padding:8px 14px;border-radius:8px}.base-view-tabs button.active{background:#ffffff12;color:#f8df70}.base-mode-label{padding:9px 13px;border:1px solid #ffffff12;border-radius:10px;background:#15161cbb;color:#f8df70;font-size:12px;backdrop-filter:blur(12px)}.base-fit{pointer-events:auto;border:1px solid #ffffff18;border-radius:9px;background:#17181caa;padding:6px 12px;font-size:11px;color:#bfc1ce}.base-legend{position:absolute;left:22px;top:78px;display:flex;gap:16px;color:#b0b3c2;font-size:11px;pointer-events:none}.base-legend span{display:flex;align-items:center;gap:6px}.base-legend i{width:7px;height:7px;border-radius:50%}.base-retained{background:#d9dce5}.base-removed{background:#e87d80}.base-sealed{background:#e0c66f}.base-view-hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:#17181fca;border:1px solid #ffffff12;border-radius:24px;padding:10px 18px;max-width:90%;text-align:center;font-size:11px;color:#9fa4b7;pointer-events:none;white-space:nowrap}.base-empty{position:absolute;inset:50% 0 auto;text-align:center;color:#8b90a2;font-size:14px;pointer-events:none}.base-view-error{position:absolute;bottom:80px;left:24px;color:#f0a6a0;font-size:12px}@media(max-width:1000px){.base-view-tabs button{padding:8px}.base-fit{display:none}.base-view-hint{white-space:normal;width:90%}}
+.base-view,.base-canvas{position:absolute;inset:0}.base-view{background:radial-gradient(ellipse at 50% 42%,#34353c 0,#202127 45%,#14151a 85%);border-radius:20px;overflow:hidden}.base-canvas :deep(canvas){display:block;width:100%;height:100%}.base-view-top{position:absolute;top:18px;left:20px;right:20px;display:flex;justify-content:space-between;gap:12px;pointer-events:none}.base-view-tabs{display:flex;background:#15161cbb;border:1px solid #ffffff12;border-radius:12px;padding:4px;gap:3px;pointer-events:auto;backdrop-filter:blur(12px)}.base-view-tabs button{color:#9b9eac;font-size:12px;padding:8px 14px;border-radius:8px}.base-view-tabs button.active{background:#ffffff12;color:#f8df70}.base-mode-label{padding:9px 13px;border:1px solid #ffffff12;border-radius:10px;background:#15161cbb;color:#f8df70;font-size:12px;backdrop-filter:blur(12px)}.base-fit{pointer-events:auto;border:1px solid #ffffff18;border-radius:9px;background:#17181caa;padding:6px 12px;font-size:11px;color:#bfc1ce}.base-view-hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:#17181fca;border:1px solid #ffffff12;border-radius:24px;padding:10px 18px;max-width:90%;text-align:center;font-size:11px;color:#9fa4b7;pointer-events:none;white-space:nowrap}.base-empty{position:absolute;inset:50% 0 auto;text-align:center;color:#8b90a2;font-size:14px;pointer-events:none}.base-view-error{position:absolute;bottom:80px;left:24px;color:#f0a6a0;font-size:12px}@media(max-width:1000px){.base-view-tabs button{padding:8px}.base-fit{display:none}.base-view-hint{white-space:normal;width:90%}}
+.base-gizmo-feedback{position:absolute;pointer-events:none;padding:6px 10px;border:1px solid #ffdb5755;border-radius:7px;background:#202126ed;color:#ffdb57;font-size:12px;font-variant-numeric:tabular-nums;box-shadow:0 3px 12px #0004}
 </style>
